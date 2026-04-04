@@ -4,6 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from db import db
 from keyboards.reply import get_main_menu, get_role_keyboard, get_driver_menu, get_language_keyboard
+from locales import locales
 
 router = Router()
 
@@ -31,7 +32,7 @@ async def command_start_handler(message: types.Message, state: FSMContext, _):
     else:
         # Existing user - show menu based on role
         if user['role'] == 'driver':
-            await message.answer(_("driver_welcome", full_name=full_name), reply_markup=get_driver_menu(_, user['is_online']))
+            await message.answer(_("driver_welcome", full_name=full_name), reply_markup=get_driver_menu(_,))
         elif user['role'] == 'user':
              await message.answer(_("customer_welcome", full_name=full_name), reply_markup=get_main_menu(_))
         else:
@@ -43,7 +44,7 @@ async def select_language(message: types.Message, state: FSMContext, _):
     await db.update_user_language(message.from_user.id, lang_code)
     
     # Update translation function for the next message in this handler
-    from locales import locales
+
     new_gettext = lambda key, **kwargs: locales.get(key, lang_code, **kwargs)
     
     await state.clear()

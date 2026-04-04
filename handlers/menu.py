@@ -1,6 +1,5 @@
 from aiogram import Router, types, F
 from db import db
-from locales import locales
 
 router = Router()
 

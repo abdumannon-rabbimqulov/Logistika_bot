@@ -55,12 +55,10 @@ def get_role_keyboard(_):
     )
     return keyboard
 
-def get_driver_menu(_, is_online=False):
+def get_driver_menu(_):
     """Driver's main menu."""
-    status_text = _("driver_menu_offline") if is_online else _("driver_menu_online")
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text=status_text)],
             [KeyboardButton(text=_("driver_menu_search")), KeyboardButton(text=_("driver_menu_active"))],
             [KeyboardButton(text=_("driver_menu_vehicles")), KeyboardButton(text=_("main_menu_profile"))]
         ],
