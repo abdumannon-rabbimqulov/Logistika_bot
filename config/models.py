@@ -1,11 +1,13 @@
-from sqlalchemy import DateTime, func
 from datetime import datetime, timezone
 from enum import Enum as PyEnum
+
 from sqlalchemy import (
     BigInteger, Integer, String, Boolean,
-    Numeric, Float, DateTime, ForeignKey, Enum, Index
+    Numeric, Float, DateTime, ForeignKey, Enum
 )
+from sqlalchemy import func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from config import Base
 
 
@@ -82,3 +84,4 @@ class Driver(Base):
 
     def __repr__(self) -> str:
         return f"<Driver(id={self.id}, truck_number='{self.truck_number}', type='{self.truck_type}')>"
+
