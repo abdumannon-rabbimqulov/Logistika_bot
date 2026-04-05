@@ -56,8 +56,8 @@ class Driver(Base):
     capacity_m3: Mapped[float] = mapped_column(Numeric(6, 2), nullable=True)
 
     # Holat va Reyting
-    current_city: Mapped[str] = mapped_column(String(100), index=True)
-    is_available: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    current_city: Mapped[str] = mapped_column(String(300), index=True)
+    is_available: Mapped[bool] = mapped_column(Boolean, default=True)
     rating: Mapped[float] = mapped_column(Numeric(3, 2), default=5.0)
     total_trips: Mapped[int] = mapped_column(Integer, default=0)
     docs_verified: Mapped[bool] = mapped_column(Boolean, default=False)
