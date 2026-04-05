@@ -1,7 +1,7 @@
 import logging
 from aiogram import Router, types, F, Bot
 from aiogram.fsm.context import FSMContext
-from config import client, MODEL_NAME, SYSTEM_INSTRUCTION
+from config.config import client, MODEL_NAME, SYSTEM_INSTRUCTION
 from google.genai import types as genai_types
 
 router = Router()

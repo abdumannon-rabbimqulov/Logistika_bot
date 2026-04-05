@@ -2,7 +2,7 @@ from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from keyboards.reply import get_main_menu, get_cargo_type_keyboard, get_confirmation_keyboard
-from db import db
+from config.database import db
 
 router = Router()
 

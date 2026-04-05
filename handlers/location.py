@@ -1,5 +1,5 @@
 from aiogram import Router, types, F
-from db import db
+from config.database import db
 from keyboards.reply import get_driver_menu
 
 router = Router()

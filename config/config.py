@@ -1,6 +1,9 @@
 import os
 from dotenv import load_dotenv
 from google import genai
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.orm import DeclarativeBase
+
 
 load_dotenv()
 
@@ -26,14 +29,19 @@ Sizning vazifalaringiz:
 6. Muloqot tilini foydalanuvchi tanlagan tilda (O'zbek yoki Rus) davom ettiring.
 """
 
-# Database configuration
-DB_CONFIG = {
-    "user": os.getenv('USER', 'postgres'),
-    "password": os.getenv('PASSWORD', 'postgres'),
-    "database": os.getenv('DB', 'logistika_db'),
-    "host": os.getenv('DB_HOST', "127.0.0.1"),
-    "port": int(os.getenv('DB_PORT', 5432))
-}
+
+
+DATABASE_URL = os.getenv("DB_URL")
+
+engine = create_async_engine(DATABASE_URL, echo=True)
+async_session = async_sessionmaker(engine, expire_on_commit=False)
+
+class Base(DeclarativeBase):
+    pass
+
+async def init_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN is not set in .env file")
