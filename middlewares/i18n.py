@@ -1,7 +1,7 @@
 from typing import Any, Awaitable, Callable, Dict
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, User
-from db import db
+from config.database import db
 from locales import locales
 
 class I18nMiddleware(BaseMiddleware):

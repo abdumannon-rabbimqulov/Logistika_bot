@@ -6,7 +6,6 @@ from google.genai import types as genai_types
 
 router = Router()
 
-# Takrorlangan config ni bir joyga chiqardik
 def get_gemini_config() -> genai_types.GenerateContentConfig:
     return genai_types.GenerateContentConfig(
         system_instruction=SYSTEM_INSTRUCTION,
