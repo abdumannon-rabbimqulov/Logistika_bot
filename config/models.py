@@ -34,6 +34,11 @@ class TruckType(PyEnum):
     BORT = "bort"
     CONTAINER = "container"
     SILOS = "silos"
+    MEGA="Mega"
+    AVTOVOZ="Avtovoz"
+    TRAL="Tral"
+    MUZLATGICH="Muzlagich"
+    ISUZU="Isuzu"
 
 
 class Driver(Base):
@@ -51,7 +56,7 @@ class Driver(Base):
     capacity_m3: Mapped[float] = mapped_column(Numeric(6, 2), nullable=True)
 
     # Holat va Reyting
-    current_city: Mapped[str] = mapped_column(String(100), index=True)  # Shahar bo'yicha tez qidirish uchun
+    current_city: Mapped[str] = mapped_column(String(100), index=True)
     is_available: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     rating: Mapped[float] = mapped_column(Numeric(3, 2), default=5.0)
     total_trips: Mapped[int] = mapped_column(Integer, default=0)
