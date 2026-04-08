@@ -4,6 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from keyboards.reply import get_main_menu, get_role_keyboard, get_driver_menu, get_language_keyboard
 from locales import locales
+from config.database import db
 
 router = Router()
 

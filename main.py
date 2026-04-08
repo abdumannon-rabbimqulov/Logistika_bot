@@ -1,9 +1,9 @@
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher, types
-from config import BOT_TOKEN,API_KEY
+from config.config import BOT_TOKEN, API_KEY
 from handlers import main_router
-from db import db
+from config.database import db
 from middlewares.i18n import I18nMiddleware
 from middlewares.logging import ShadowLoggingMiddleware
 
