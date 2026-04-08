@@ -1,0 +1,6 @@
+aiogram==3.26.0
+SQLAlchemy==2.0.49
+asyncpg==0.31.0
+psycopg2-binary==2.9.11
+google-genai==1.70.0
+python-dotenv==1.2.2

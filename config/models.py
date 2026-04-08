@@ -53,6 +53,8 @@ class TruckType(Base):
     def __repr__(self) -> str:
         return f"<TruckType(id={self.id}, name='{self.name}')>"
 
+
+
 class Driver(Base):
     __tablename__ = "drivers"
 
@@ -256,4 +258,3 @@ class AnnouncementOffer(Base):
     def __repr__(self) -> str:
         return f"<AnnOffer(id={self.id}, price={self.offered_price}, status={self.status})>"
 
-    
