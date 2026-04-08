@@ -2,7 +2,6 @@ from aiogram import Router, types, F, Bot
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from db import db
 from keyboards.reply import get_main_menu, get_role_keyboard, get_driver_menu, get_language_keyboard
 from locales import locales
 
