@@ -1,5 +1,5 @@
 from aiogram import Router, types, F
-from config.database import db
+from database.db import db
 
 router = Router()
 

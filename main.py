@@ -3,9 +3,9 @@ import logging
 from aiogram import Bot, Dispatcher, types
 from config.config import BOT_TOKEN, API_KEY
 from handlers import main_router
-from config.database import db
 from middlewares.i18n import I18nMiddleware
 from middlewares.logging import ShadowLoggingMiddleware
+from database.db import db
 
 async def main():
     # Logging configuration
