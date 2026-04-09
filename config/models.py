@@ -23,16 +23,14 @@ class User(Base):
     role:       Mapped[str | None] = mapped_column(String(20), default="guest")
     phone_number: Mapped[str | None] = mapped_column(String(20))
     balance:    Mapped[float] = mapped_column(Numeric(10, 2), default=0.0)
-    created_at: Mapped[datetime] =mapped_column(DateTime,
-        server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         server_default=func.now(),
         onupdate=func.now()
     )
-    
-    driver = relationship("Driver", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
+    driver = relationship("Driver", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 
 class TruckType(Base):
@@ -54,14 +52,14 @@ class TruckType(Base):
         return f"<TruckType(id={self.id}, name='{self.name}')>"
 
 
-
 class Driver(Base):
     __tablename__ = "drivers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), unique=True, nullable=False)
 
-    truck_type: Mapped[TruckType] = mapped_column(Integer, ForeignKey("truck_types.id"), nullable=False)
+    # ✅ FIX 1: Mapped[TruckType] → Mapped[int], ustun nomi truck_type_id ga o'zgartirildi
+    truck_type_id: Mapped[int] = mapped_column(Integer, ForeignKey("truck_types.id"), nullable=False)
     truck_number: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
 
     capacity_ton: Mapped[float] = mapped_column(Numeric(6, 2), nullable=True)
@@ -87,92 +85,79 @@ class Driver(Base):
     truck_type_obj: Mapped["TruckType"] = relationship("TruckType", back_populates="drivers")
     announcements: Mapped[list["DriverAnnouncement"]] = relationship("DriverAnnouncement", back_populates="driver")
 
+    # ✅ FIX 3: OrderOffer.driver back_populates="offers" uchun relationship qo'shildi
+    offers: Mapped[list["OrderOffer"]] = relationship("OrderOffer", back_populates="driver")
+
     def __repr__(self) -> str:
-        return f"<Driver(id={self.id}, truck_number='{self.truck_number}', type='{self.truck_type}')>"
-
-
+        return f"<Driver(id={self.id}, truck_number='{self.truck_number}', type='{self.truck_type_id}')>"
 
 
 class OrderStatus(enum.Enum):
-    PENDING = "pending"  # Haydovchi qidirilmoqda
-    ACCEPTED = "accepted"  # Haydovchi qabul qildi
-    IN_PROGRESS = "in_progress"  # Yuk yo'lda
-    COMPLETED = "completed"  # Yuk yetkazildi
-    CANCELLED = "cancelled"  # Bekor qilindi
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
 
 
 class Order(Base):
     __tablename__ = "orders"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-
-    # Yuk beruvchi (Customer)
     customer_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
-
-    # Qabul qilgan haydovchi (Boshida bo'sh bo'lishi mumkin)
     driver_id: Mapped[int] = mapped_column(Integer, ForeignKey("drivers.id"), nullable=True)
 
-    # Yuk ma'lumotlari
     cargo_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    weight: Mapped[float] = mapped_column(Numeric(6, 2), nullable=False)  # Tonnalarda
-    volume: Mapped[float] = mapped_column(Numeric(6, 2), nullable=True)  # m3 larda
+    weight: Mapped[float] = mapped_column(Numeric(6, 2), nullable=False)
+    volume: Mapped[float] = mapped_column(Numeric(6, 2), nullable=True)
 
-    # Marshrut
     from_city: Mapped[str] = mapped_column(String(), nullable=False, index=True)
     to_city: Mapped[str] = mapped_column(String(), nullable=False, index=True)
     distance_km: Mapped[float] = mapped_column(Numeric(7, 2), nullable=True)
 
-    # Kerakli mashina turi (Dinamik TruckType jadvaliga bog'lanadi)
     required_truck_type_id: Mapped[int] = mapped_column(Integer, ForeignKey("truck_types.id"), nullable=False)
 
-    # Moliyaviy qism
-    price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)  # Kelishilgan narx
+    price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(10), default="UZS")
 
-    # Muddatlar
-    pickup_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)  # Yukni olish vaqti
-    delivery_date: Mapped[datetime] = mapped_column(DateTime, nullable=True)  # Yetkazish vaqti
+    pickup_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    delivery_date: Mapped[datetime] = mapped_column(DateTime, nullable=True)
 
-    # Status
     status: Mapped[OrderStatus] = mapped_column(
         SQLEnum(OrderStatus), default=OrderStatus.PENDING, nullable=False
     )
 
-    # Vaqtlar
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc),
                                                  onupdate=lambda: datetime.now(timezone.utc))
 
-    # Relationship-lar
     customer = relationship("User", foreign_keys=[customer_id], backref="customer_orders")
     driver = relationship("Driver", foreign_keys=[driver_id], backref="driver_orders")
     truck_type = relationship("TruckType")
+
+    # ✅ FIX 2: "Offer" → "OrderOffer" (to'g'ri model nomi)
+    offers: Mapped[list["OrderOffer"]] = relationship("OrderOffer", back_populates="order")
 
     def __repr__(self) -> str:
         return f"<Order(id={self.id}, cargo='{self.cargo_name}', status={self.status})>"
 
 
-
 class OfferStatus(enum.Enum):
-    PENDING = "pending"  # Mijoz javobini kutmoqda
-    ACCEPTED = "accepted"  # Mijozga ma'qul keldi
-    REJECTED = "rejected"  # Mijoz rad etdi
-    CANCELLED = "cancelled"  # Haydovchi qaytib oldi
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    CANCELLED = "cancelled"
 
 
 class OrderOffer(Base):
     __tablename__ = "order_offers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-
     order_id: Mapped[int] = mapped_column(Integer, ForeignKey("orders.id"), nullable=False)
     driver_id: Mapped[int] = mapped_column(Integer, ForeignKey("drivers.id"), nullable=False)
 
     offered_price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
-
-    # Yukni qachon olib keta olishi haqida qo'shimcha ma'lumot
     estimated_arrival_time: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-
     comment: Mapped[str] = mapped_column(String(500), nullable=True)
 
     status: Mapped[OfferStatus] = mapped_column(
@@ -188,40 +173,30 @@ class OrderOffer(Base):
         return f"<Offer(id={self.id}, price={self.offered_price}, status={self.status})>"
 
 
-
-
 class DriverAnnouncement(Base):
     __tablename__ = "driver_announcements"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     driver_id: Mapped[int] = mapped_column(Integer, ForeignKey("drivers.id"), nullable=False)
 
-    # Qayerdan qayerga boradi
     from_city: Mapped[str] = mapped_column(String(), nullable=False, index=True)
     to_city: Mapped[str] = mapped_column(String(), nullable=False, index=True)
 
-    # Qachon yo'lga chiqadi
     departure_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
-    # Qo'shimcha ma'lumot (masalan: "Yarim fura joy bor" yoki "Faqat naqdga")
     description: Mapped[str] = mapped_column(String(500), nullable=True)
 
-    # E'lon holati
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc),
                                                  onupdate=lambda: datetime.now(timezone.utc))
 
-    # Relationship
     driver = relationship("Driver", back_populates="announcements")
     offers: Mapped[list["AnnouncementOffer"]] = relationship("AnnouncementOffer", back_populates="announcement")
 
     def __repr__(self) -> str:
         return f"<Announcement(from='{self.from_city}', to='{self.to_city}', active={self.is_active})>"
-
-
-
 
 
 class AnnouncementOfferStatus(enum.Enum):
@@ -235,15 +210,10 @@ class AnnouncementOffer(Base):
     __tablename__ = "announcement_offers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-
-    # Qaysi e'longa taklif berilmoqda
     announcement_id: Mapped[int] = mapped_column(Integer, ForeignKey("driver_announcements.id"), nullable=False)
-
     customer_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
 
     cargo_description: Mapped[str] = mapped_column(String(500), nullable=False)
-
-
     offered_price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
 
     status: Mapped[AnnouncementOfferStatus] = mapped_column(
@@ -257,4 +227,3 @@ class AnnouncementOffer(Base):
 
     def __repr__(self) -> str:
         return f"<AnnOffer(id={self.id}, price={self.offered_price}, status={self.status})>"
-
