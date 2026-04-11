@@ -8,7 +8,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from config.config import Base
-from order_models import OrderOffer
+from database.order_models import OrderOffer
 
 
 class TruckType(Base):

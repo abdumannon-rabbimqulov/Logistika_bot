@@ -1,4 +1,5 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+import os
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 
 def get_language_keyboard():
     """Keyboard for selecting language."""
@@ -13,8 +14,10 @@ def get_language_keyboard():
 
 def get_main_menu(_):
     """Returns the main menu keyboard for users."""
+    webapp_url = os.getenv("WEBAPP_URL", "https://logistika-ai.vercel.app")
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
+            [KeyboardButton(text="🌐 Mini App", web_app=WebAppInfo(url=webapp_url))],
             [KeyboardButton(text=_("main_menu_order")), KeyboardButton(text=_("main_menu_my_loads"))],
             [KeyboardButton(text=_("main_menu_profile")), KeyboardButton(text=_("main_menu_info"))]
         ],
@@ -57,8 +60,10 @@ def get_role_keyboard(_):
 
 def get_driver_menu(_):
     """Driver's main menu."""
+    webapp_url = os.getenv("WEBAPP_URL", "https://logistika-ai.vercel.app")
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
+            [KeyboardButton(text="🌐 Mini App", web_app=WebAppInfo(url=webapp_url))],
             [KeyboardButton(text=_("driver_menu_search")), KeyboardButton(text=_("driver_menu_active"))],
             [KeyboardButton(text=_("driver_menu_vehicles")), KeyboardButton(text=_("main_menu_profile"))]
         ],

@@ -35,7 +35,6 @@ class DatabaseHelper:
     async def update_location(self, user_id: int, lat: float, lon: float):
         async with async_session() as session:
             return await crud.update_location_db(session, user_id, lat, lon)
-            
     async def create_order(self, customer_id: int, data_dict: dict):
         async with async_session() as session:
             schema = OrderCreateSchema(
@@ -47,5 +46,17 @@ class DatabaseHelper:
                 price=float(data_dict.get("price", 0))
             )
             return await crud.create_order_db(session, schema)
+
+    async def get_user_orders(self, user_id: int):
+        async with async_session() as session:
+            return await crud.get_user_orders_db(session, user_id)
+
+    async def get_available_orders(self):
+        async with async_session() as session:
+            return await crud.get_available_orders_db(session)
+
+    async def cancel_order(self, order_id: int, user_id: int):
+        async with async_session() as session:
+            return await crud.cancel_order_db(session, order_id, user_id)
 
 db = DatabaseHelper()

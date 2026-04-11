@@ -86,3 +86,27 @@ async def create_order_db(session: AsyncSession, data: OrderCreateSchema):
     session.add(new_order)
     await session.commit()
     return new_order
+
+async def get_user_orders_db(session: AsyncSession, user_id: int):
+    result = await session.execute(
+        select(Order).where(Order.customer_id == user_id).order_by(Order.created_at.desc())
+    )
+    return result.scalars().all()
+
+async def get_available_orders_db(session: AsyncSession):
+    # Orders that are pending and don't have a driver yet
+    result = await session.execute(
+        select(Order).where(Order.status == 'PENDING', Order.driver_id == None).order_by(Order.created_at.desc())
+    )
+    return result.scalars().all()
+
+async def cancel_order_db(session: AsyncSession, order_id: int, user_id: int):
+    result = await session.execute(
+        select(Order).where(Order.id == order_id, Order.customer_id == user_id)
+    )
+    order = result.scalar_one_or_none()
+    if order:
+        order.status = 'CANCELLED'
+        await session.commit()
+        return True
+    return False
