@@ -2,7 +2,7 @@ from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from keyboards.reply import get_main_menu, get_cargo_type_keyboard, get_confirmation_keyboard
-from db import db
+from database.db import db
 
 router = Router()
 
@@ -69,8 +69,9 @@ async def process_price(message: types.Message, state: FSMContext, _):
 
 @router.message(OrderStates.confirming, F.text.in_(["✅ Tasdiqlash", "✅ Подтвердить"]))
 async def confirm_order(message: types.Message, state: FSMContext, _):
-    # In a real app, we would save to the database here
-    # await db.create_order(data)
+    data = await state.get_data()
+    # Ma'lumotlarni bazaga saqlaymiz
+    await db.create_order(message.from_user.id, data)
     await state.clear()
     await message.answer(_("order_created_msg"), reply_markup=get_main_menu(_))
 

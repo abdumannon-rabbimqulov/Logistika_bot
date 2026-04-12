@@ -1,55 +1,33 @@
-from aiogram import Router, types, F, Bot
+from aiogram import Router, types, F
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
-from db import db
-from keyboards.reply import get_main_menu, get_role_keyboard, get_driver_menu, get_language_keyboard
+from database.db import db
+from keyboards.reply import get_language_keyboard, get_role_keyboard, get_main_menu, get_driver_menu
 
 router = Router()
 
-class StartState(StatesGroup):
-    language = State()
-
 @router.message(CommandStart())
-async def command_start_handler(message: types.Message, state: FSMContext, _):
+async def cmd_start(message: types.Message, state: FSMContext, _):
+    await state.clear()
     user_id = message.from_user.id
-    full_name = message.from_user.full_name
-    username = message.from_user.username
-
-    # Find or add user
     user = await db.get_user(user_id)
     
     if not user:
-        # First time user - ask for language
-        await state.set_state(StartState.language)
-        await message.answer(
-            f"Salom, {full_name}!\nLogistika botimizga xush kelibsiz.\nIltimos, muloqot tilini tanlang / Пожалуйста, выберите язык:",
-            reply_markup=get_language_keyboard()
-        )
-        # Add to DB with default 'uz' for now
-        await db.add_user_to_db(user_id, full_name, username)
+        # New user
+        await message.answer("Xush kelibsiz! Tilni tanlang / Добро пожаловать! Выберите язык:", reply_markup=get_language_keyboard())
     else:
-        # Existing user - show menu based on role
-        if user['role'] == 'driver':
-            await message.answer(_("driver_welcome", full_name=full_name), reply_markup=get_driver_menu(_, user['is_online']))
-        elif user['role'] == 'user':
-             await message.answer(_("customer_welcome", full_name=full_name), reply_markup=get_main_menu(_))
+        # Existing user
+        if user.role == 'driver':
+            await message.answer(_("welcome"), reply_markup=get_driver_menu(_, is_online=False))
         else:
-            await message.answer(_("select_role"), reply_markup=get_role_keyboard(_))
+            await message.answer(_("welcome"), reply_markup=get_main_menu(_))
 
-@router.message(StartState.language, F.text.in_(["🇺🇿 O'zbekcha", "🇷🇺 Русский"]))
-async def select_language(message: types.Message, state: FSMContext, _):
-    lang_code = "uz" if "O'zbekcha" in message.text else "ru"
-    await db.update_user_language(message.from_user.id, lang_code)
-    
-    # Update translation function for the next message in this handler
-    from locales import locales
-    new_gettext = lambda key, **kwargs: locales.get(key, lang_code, **kwargs)
-    
-    await state.clear()
-    await message.answer(new_gettext("select_role"), reply_markup=get_role_keyboard(new_gettext))
+@router.message(F.text.in_(["🇺🇿 O'zbekcha", "🇷🇺 Русский"]))
+async def select_language(message: types.Message, _):
+    # This usually triggers role selection next
+    await message.answer(_("select_role"), reply_markup=get_role_keyboard(_))
 
-@router.message(F.text.in_(["🙋‍♂️ Yuk egasi (Mijoz)", "🙋‍♂️ Грузовладелец (Клиент)"]))
-async def set_customer_role(message: types.Message, _):
+@router.message(F.text.in_(["👤 Mijoz", "👤 Клиент"]))
+async def select_customer(message: types.Message, _):
     await db.update_user_role(message.from_user.id, 'user')
-    await message.answer(_("customer_registered"), reply_markup=get_main_menu(_))
+    await message.answer(_("welcome"), reply_markup=get_main_menu(_))
