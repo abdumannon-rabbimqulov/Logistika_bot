@@ -15,7 +15,7 @@ async def update_user_role_db(session: AsyncSession, user_id: int, role: str):
     await session.commit()
 
 async def add_vehicle_db(session: AsyncSession, data: VehicleCreateSchema):
-    # 1. Ensure TruckType exists
+
     result = await session.execute(select(TruckType).where(TruckType.name == data.type))
     truck_type = result.scalar_one_or_none()
     if not truck_type:
