@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     BigInteger, Integer, String, Boolean,
-    Numeric, Float, DateTime, ForeignKey, Enum as SQLEnum
+    Numeric, Float, DateTime, ForeignKey, Enum as SQLEnum, func
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,7 +23,7 @@ class TruckType(Base):
     height: Mapped[float] = mapped_column(Numeric(5, 2), nullable=True)
     pallet_capacity: Mapped[int] = mapped_column(Integer, nullable=True)
     description: Mapped[str] = mapped_column(String(200), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
 
     drivers: Mapped[list["Driver"]] = relationship("Driver", back_populates="truck_type_obj")
@@ -56,9 +56,9 @@ class Driver(Base):
     last_longitude: Mapped[float] = mapped_column(Float, nullable=True)
     last_location_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc),
-                                                 onupdate=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(),
+                                                 onupdate=func.now())
 
     user = relationship("User", back_populates="driver")
     truck_type_obj: Mapped["TruckType"] = relationship("TruckType", back_populates="drivers")
@@ -86,9 +86,9 @@ class DriverAnnouncement(Base):
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc),
-                                                 onupdate=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(),
+                                                 onupdate=func.now())
 
     driver = relationship("Driver", back_populates="announcements")
     offers: Mapped[list["AnnouncementOffer"]] = relationship("AnnouncementOffer", back_populates="announcement")
@@ -118,7 +118,7 @@ class AnnouncementOffer(Base):
         SQLEnum(AnnouncementOfferStatus), default=AnnouncementOfferStatus.PENDING, nullable=False
     )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
     announcement = relationship("DriverAnnouncement", back_populates="offers")
     customer = relationship("User")

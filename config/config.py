@@ -11,20 +11,23 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 API_KEY = os.getenv('API_KEY')
+WEBAPP_URL = os.getenv('WEBAPP_URL')
 
 client = genai.Client(api_key=API_KEY)
 MODEL_NAME = "gemini-flash-latest"
 
-# Admin usernames (@ belgisisiz, vergul bilan ajratilgan)
-_raw = os.getenv("ADMIN_USERNAMES", "")
-ADMIN_USERNAMES: set[str] = {u.strip().lower() for u in _raw.split(",") if u.strip()}
+# Admin sozlamalari
+ADMIN_USERNAMES: set[str] = {u.strip().lower() for u in os.getenv("ADMIN_USERNAMES", "").split(",") if u.strip()}
+ADMIN_IDS: set[int] = {int(i.strip()) for i in os.getenv("ADMIN", "").split(",") if i.strip()}
 
 
-def is_admin(username: str | None) -> bool:
-    """Foydalanuvchi admin ekanligini tekshiradi."""
-    if not username:
-        return False
-    return username.lower() in ADMIN_USERNAMES
+def is_admin(user_id: int, username: str | None = None) -> bool:
+    """Foydalanuvchi admin ekanligini tekshiradi (ID yoki Username orqali)."""
+    if user_id in ADMIN_IDS:
+        return True
+    if username and username.lower() in ADMIN_USERNAMES:
+        return True
+    return False
 
 
 SYSTEM_INSTRUCTION = """

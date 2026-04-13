@@ -16,7 +16,7 @@ async def create_truck_type(
     return await create(db=db,data=data)
 
 
-@router.get("/truck-type-get_all",response_model=TruckTypeResponse,status_code=status.HTTP_200_OK)
+@router.get("/truck-type-get_all",response_model=list[TruckTypeResponse],status_code=status.HTTP_200_OK)
 async def get_all_truck(
         db:AsyncSession=Depends(get_db)
 ):
