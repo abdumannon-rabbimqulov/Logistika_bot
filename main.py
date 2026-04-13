@@ -1,11 +1,10 @@
 import asyncio
 import logging
-from aiogram import Bot, Dispatcher, types
-from config.config import BOT_TOKEN, API_KEY
+from aiogram import Bot, Dispatcher
+from config.config import BOT_TOKEN, engine
 from handlers import main_router
 from middlewares.i18n import I18nMiddleware
 from middlewares.logging import ShadowLoggingMiddleware
-from ai.db import db
 
 async def main():
     logging.basicConfig(
@@ -24,13 +23,11 @@ async def main():
     dp.include_router(main_router)
 
 
-    await db.connect()
-
     try:
         logging.info("🚀 Bot ishga tushirildi...")
         await dp.start_polling(bot)
     finally:
-        await db.close()
+        await engine.dispose()
         await bot.session.close()
 
 if __name__ == "__main__":
