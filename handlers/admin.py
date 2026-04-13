@@ -8,8 +8,8 @@ router = Router()
 @router.message(Command("admin"))
 async def admin_command(message: types.Message):
     """Admin panelga kirish buyrug'i."""
-    if not is_admin(message.from_user.id, message.from_user.username):
-        return  # Admin bo'lmasa javob bermaymiz
+    if not is_admin(message.from_user.id):
+        return
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(

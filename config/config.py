@@ -16,16 +16,11 @@ WEBAPP_URL = os.getenv('WEBAPP_URL')
 client = genai.Client(api_key=API_KEY)
 MODEL_NAME = "gemini-flash-latest"
 
-# Admin sozlamalari
-ADMIN_USERNAMES: set[str] = {u.strip().lower() for u in os.getenv("ADMIN_USERNAMES", "").split(",") if u.strip()}
 ADMIN_IDS: set[int] = {int(i.strip()) for i in os.getenv("ADMIN", "").split(",") if i.strip()}
 
 
-def is_admin(user_id: int, username: str | None = None) -> bool:
-    """Foydalanuvchi admin ekanligini tekshiradi (ID yoki Username orqali)."""
+def is_admin(user_id: int) -> bool:
     if user_id in ADMIN_IDS:
-        return True
-    if username and username.lower() in ADMIN_USERNAMES:
         return True
     return False
 
