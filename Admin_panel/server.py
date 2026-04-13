@@ -1,7 +1,9 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.ext.asyncio import AsyncSession
 import database as db
+from config.config import get_db
 from driver.router import router as driver_router
 import uvicorn
 import os
@@ -28,43 +30,47 @@ app.add_middleware(
 )
 
 @app.get("/api/stats")
-async def get_stats():
+async def get_stats(session: AsyncSession = Depends(get_db)):
     """Boshqaruv paneli uchun umumiy statistika."""
     try:
-        stats = await db.get_stats()
+        stats = await db.get_stats(session=session)
         return stats
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/users")
-async def get_users(limit: int = 100):
+async def get_users(limit: int = 100, session: AsyncSession = Depends(get_db)):
     """Foydalanuvchilar ro'yxatini qaytaradi."""
     try:
-        users = await db.get_all_users(limit=limit)
+        users = await db.get_all_users(limit=limit, session=session)
         return users
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/users/{user_id}/ban")
-async def ban_user(user_id: int):
+async def ban_user(user_id: int, session: AsyncSession = Depends(get_db)):
     """Foydalanuvchini bloklash."""
     try:
-        success = await db.ban_user(user_id)
+        success = await db.ban_user(user_id, session=session)
         if success:
+            await session.commit()
             return {"status": "success", "message": f"User {user_id} banned"}
         raise HTTPException(status_code=404, detail="User not found")
     except Exception as e:
+        await session.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/users/{user_id}/unban")
-async def unban_user(user_id: int):
+async def unban_user(user_id: int, session: AsyncSession = Depends(get_db)):
     """Foydalanuvchi blokini ochish."""
     try:
-        success = await db.unban_user(user_id)
+        success = await db.unban_user(user_id, session=session)
         if success:
+            await session.commit()
             return {"status": "success", "message": f"User {user_id} unbanned"}
         raise HTTPException(status_code=404, detail="User not found")
     except Exception as e:
+        await session.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")

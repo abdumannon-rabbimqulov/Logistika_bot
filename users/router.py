@@ -36,8 +36,6 @@ async def login(
 
     if data.phone_number:
         user = await crud.get_user_by_phone(db, data.phone_number)
-    if user is None and data.username:
-        user = await crud.get_user_by_username(db, data.username)
 
     if user is None or not verify_password(data.password, user.password):
         raise HTTPException(
@@ -54,9 +52,6 @@ async def login(
     return Token(access_token=token)
 
 
-# ──────────────────────────────────────────────
-#  PROFIL  →  GET /auth/me
-# ──────────────────────────────────────────────
 
 @router.get(
     "/me",
@@ -69,9 +64,6 @@ async def get_my_profile(
     return current_user
 
 
-# ──────────────────────────────────────────────
-#  PROFIL TAHRIRLASH  →  PATCH /auth/me
-# ──────────────────────────────────────────────
 
 @router.patch(
     "/me",

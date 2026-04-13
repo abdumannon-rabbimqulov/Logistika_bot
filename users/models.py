@@ -13,9 +13,9 @@ class User(Base):
     __tablename__ = "users"
 
     id:         Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    username:   Mapped[str | None] = mapped_column(String(32))
+    username:   Mapped[str | None] = mapped_column(String(32),nullable=True)
     full_name:  Mapped[str] = mapped_column(String(128))
-    password:   Mapped[str] = mapped_column(String(), nullable=False)
+    password:   Mapped[str] = mapped_column(String(), nullable=True)
     is_active:  Mapped[bool] = mapped_column(default=True)
     language:   Mapped[str]  = mapped_column(String(2), default="uz")
     is_banned:  Mapped[bool] = mapped_column(default=False)
@@ -28,6 +28,8 @@ class User(Base):
         server_default=func.now(),
         onupdate=func.now()
     )
+    token: Mapped[str | None] = mapped_column(String(), nullable=True)
+    token_expires: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     driver = relationship("Driver", back_populates="user", uselist=False, cascade="all, delete-orphan")
 

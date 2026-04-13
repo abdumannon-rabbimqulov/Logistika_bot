@@ -7,9 +7,7 @@ from models import User
 from schemas import UserUpdate
 
 
-# ──────────────────────────────────────────────
-#  READ
-# ──────────────────────────────────────────────
+
 
 async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
     result = await db.execute(select(User).where(User.id == user_id))
@@ -30,9 +28,7 @@ async def get_user_by_username(db: AsyncSession, username: str) -> Optional[User
     return result.scalar_one_or_none()
 
 
-# ──────────────────────────────────────────────
-#  UPDATE
-# ──────────────────────────────────────────────
+
 
 async def update_user(
     db: AsyncSession,
@@ -57,18 +53,14 @@ async def update_password(
     return user
 
 
-# ──────────────────────────────────────────────
-#  DELETE
-# ──────────────────────────────────────────────
+
 
 async def delete_user(db: AsyncSession, user: User) -> None:
     await db.delete(user)
     await db.commit()
 
 
-# ──────────────────────────────────────────────
-#  DEACTIVATE  (o'chirish o'rniga faolsizlashtirish)
-# ──────────────────────────────────────────────
+
 
 async def deactivate_user(db: AsyncSession, user: User) -> User:
     user.is_active = False
