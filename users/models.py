@@ -15,6 +15,7 @@ class User(Base):
     id:         Mapped[int] = mapped_column(BigInteger, primary_key=True)
     username:   Mapped[str | None] = mapped_column(String(32))
     full_name:  Mapped[str] = mapped_column(String(128))
+    password:   Mapped[str] = mapped_column(String(), nullable=False)
     is_active:  Mapped[bool] = mapped_column(default=True)
     language:   Mapped[str]  = mapped_column(String(2), default="uz")
     is_banned:  Mapped[bool] = mapped_column(default=False)

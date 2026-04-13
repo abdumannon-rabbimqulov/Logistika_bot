@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from google import genai
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
+from passlib.context import CryptContext
 
 
 load_dotenv()
@@ -70,3 +71,14 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN is not set in .env file")
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 kun
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
