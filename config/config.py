@@ -10,10 +10,22 @@ from sqlalchemy.orm import DeclarativeBase
 load_dotenv()
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-API_KEY=os.getenv('API_KEY')
+API_KEY = os.getenv('API_KEY')
 
 client = genai.Client(api_key=API_KEY)
 MODEL_NAME = "gemini-flash-latest"
+
+# Admin usernames (@ belgisisiz, vergul bilan ajratilgan)
+_raw = os.getenv("ADMIN_USERNAMES", "")
+ADMIN_USERNAMES: set[str] = {u.strip().lower() for u in _raw.split(",") if u.strip()}
+
+
+def is_admin(username: str | None) -> bool:
+    """Foydalanuvchi admin ekanligini tekshiradi."""
+    if not username:
+        return False
+    return username.lower() in ADMIN_USERNAMES
+
 
 SYSTEM_INSTRUCTION = """
 Siz "Logistika AI" - premium darajadagi aqlli logistika yordamchisisiz. 
@@ -36,12 +48,13 @@ TOOL CALL QOIDALARI:
 
 DATABASE_URL = os.getenv("DB_URL")
 
-engine = create_async_engine(DATABASE_URL, echo=True)
+engine = create_async_engine(DATABASE_URL, echo=False)
 async_session = async_sessionmaker(
-    engine=engine,
+    engine,
     class_=AsyncSession,
     expire_on_commit=False,
 )
+
 
 class Base(DeclarativeBase):
     pass

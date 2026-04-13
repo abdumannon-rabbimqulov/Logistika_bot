@@ -1,10 +1,10 @@
 import asyncio
 import logging
+
 from aiogram import Bot, Dispatcher
 from config.config import BOT_TOKEN, engine
 from handlers import main_router
-from middlewares.i18n import I18nMiddleware
-from middlewares.logging import ShadowLoggingMiddleware
+
 
 async def main():
     logging.basicConfig(
@@ -15,13 +15,7 @@ async def main():
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher()
 
-    dp.message.middleware(ShadowLoggingMiddleware())
-    dp.callback_query.middleware(ShadowLoggingMiddleware())
-    dp.message.middleware(I18nMiddleware())
-    dp.callback_query.middleware(I18nMiddleware())
-
     dp.include_router(main_router)
-
 
     try:
         logging.info("🚀 Bot ishga tushirildi...")
@@ -29,6 +23,7 @@ async def main():
     finally:
         await engine.dispose()
         await bot.session.close()
+
 
 if __name__ == "__main__":
     try:

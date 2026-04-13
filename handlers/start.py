@@ -1,33 +1,31 @@
-from aiogram import Router, types, F
+from aiogram import Router, types
 from aiogram.filters import CommandStart
-from aiogram.fsm.context import FSMContext
 
-from keyboards.reply import get_language_keyboard, get_role_keyboard, get_main_menu, get_driver_menu
 import database as db
 
 router = Router()
 
 
 @router.message(CommandStart())
-async def cmd_start(message: types.Message, state: FSMContext, _):
-    await state.clear()
-    user_id = message.from_user.id
-    user = await db.get_user(user_id)
+async def cmd_start(message: types.Message):
+    tg_user = message.from_user
 
-    if not user:
-        # Yangi foydalanuvchi — til tanlash
+    lang = tg_user.language_code if tg_user.language_code in ("uz", "ru") else "uz"
+
+    user, created = await db.get_or_create_user(
+        user_id=tg_user.id,
+        full_name=tg_user.full_name,
+        username=tg_user.username,
+        language=lang,
+    )
+
+    if created:
         await message.answer(
-            "Xush kelibsiz! Tilni tanlang / Добро пожаловать! Выберите язык:",
-            reply_markup=get_language_keyboard()
+            f"Xush kelibsiz, {tg_user.full_name}! 👋\n"
+            f"Siz ro'yxatdan o'tdingiz."
         )
     else:
-        # Mavjud foydalanuvchi — roliga qarab menyu
-        if user.role == 'driver':
-            await message.answer(_("welcome"), reply_markup=get_driver_menu(_, is_online=False))
-        else:
-            await message.answer(_("welcome"), reply_markup=get_main_menu(_))
-
-
-@router.message(F.text.in_(["🇺🇿 O'zbekcha", "🇷🇺 Русский"]))
-async def select_language(message: types.Message, _):
-    await message.answer(_("select_role"), reply_markup=get_role_keyboard(_))
+        await message.answer(
+            f"Salom, {tg_user.full_name}! 👋\n"
+            f"Botga qaytib kelganingizdan xursandmiz."
+        )
