@@ -1,4 +1,4 @@
-from database.db import db
+from ai.db import db
 import logging
 
 async def create_order_action(user_id: int, from_city: str, to_city: str, cargo_type: str, weight: float, price: float):

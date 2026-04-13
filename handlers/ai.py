@@ -30,4 +30,3 @@ async def ai_voice_handler(message: types.Message):
     or just try to process if the agent supports it.
     """
     await message.answer("Ovozli xabaringiz qabul qilindi. Hozircha matnli xabarlardan foydalaning, ovozli xizmat integratsiya qilinmoqda.")
-    # In future: download file, send to Gemini as Part

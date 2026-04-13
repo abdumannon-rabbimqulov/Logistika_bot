@@ -5,7 +5,7 @@ from config.config import BOT_TOKEN, API_KEY
 from handlers import main_router
 from middlewares.i18n import I18nMiddleware
 from middlewares.logging import ShadowLoggingMiddleware
-from database.db import db
+from ai.db import db
 
 async def main():
     logging.basicConfig(

@@ -8,7 +8,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from config.config import Base
-from database.order_models import OrderOffer
+from order.models import OrderOffer
 
 
 class TruckType(Base):
@@ -36,7 +36,6 @@ class Driver(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), unique=True, nullable=False)
 
-    # ✅ FIX 1: Mapped[TruckType] → Mapped[int], ustun nomi truck_type_id ga o'zgartirildi
     truck_type_id: Mapped[int] = mapped_column(Integer, ForeignKey("truck_types.id"), nullable=False)
     truck_number: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
 

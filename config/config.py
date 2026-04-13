@@ -1,4 +1,6 @@
 import os
+from typing import AsyncGenerator
+
 from dotenv import load_dotenv
 from google import genai
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
@@ -35,14 +37,26 @@ TOOL CALL QOIDALARI:
 DATABASE_URL = os.getenv("DB_URL")
 
 engine = create_async_engine(DATABASE_URL, echo=True)
-async_session = async_sessionmaker(engine, expire_on_commit=False)
+async_session = async_sessionmaker(
+    engine=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
 
 class Base(DeclarativeBase):
     pass
 
-async def init_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
 
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    async with async_session() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN is not set in .env file")

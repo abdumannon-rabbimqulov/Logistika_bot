@@ -1,4 +1,4 @@
-from database.db import db
+from ai.db import db
 import logging
 
 async def set_driver_status_action(user_id: int, status: bool):
