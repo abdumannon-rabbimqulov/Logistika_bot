@@ -3,6 +3,7 @@ from config.config import engine,Base
 from users.models import User
 from driver.models import Driver,DriverAnnouncement,TruckType,AnnouncementOffer
 from order.models import OrderOffer,Order
+from driver.router import router as driver_router
 
 app = FastAPI(title="FastAPI")
 
@@ -10,3 +11,5 @@ app = FastAPI(title="FastAPI")
 async def startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+app.include_router(driver_router)

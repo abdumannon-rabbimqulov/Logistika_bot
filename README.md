@@ -39,3 +39,14 @@ To'liq ro'yxati `requirements.txt` faylida keltirilgan (quyida eng asosiylari):
 1. Loyiha papkasida `.env` faylini yarating va quyidagi turdagi o'zgaruvchilarni kiriting (masalan, `BOT_TOKEN`, `API_KEY` yoki DB uchun `DB_URL`).
 2. Virtual muhitga kutubxonalarni o'rnating: `pip install -r requirements.txt`
 3. Botni ishga tushiring: `python main.py`
+
+# Sqlalchemyda migrations
+
+````
+alembic revision --autogenerate -m "initial"
+````
+
+# Sqlalchemy migrate
+````
+alembic upgrade head
+````

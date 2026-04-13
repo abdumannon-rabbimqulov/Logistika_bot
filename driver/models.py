@@ -23,6 +23,8 @@ class TruckType(Base):
     height: Mapped[float] = mapped_column(Numeric(5, 2), nullable=True)
     pallet_capacity: Mapped[int] = mapped_column(Integer, nullable=True)
     description: Mapped[str] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
 
     drivers: Mapped[list["Driver"]] = relationship("Driver", back_populates="truck_type_obj")
 

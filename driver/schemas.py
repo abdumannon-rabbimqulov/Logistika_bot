@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 
@@ -30,5 +32,6 @@ class TruckTypeUpdate(BaseModel):
 
 class TruckTypeResponse(TruckTypeBase):
     id: int
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
