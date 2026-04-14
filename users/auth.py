@@ -6,12 +6,11 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from crud import get_user_by_id
+from users.crud import get_user_by_id
 from config.config import (get_db,
         SECRET_KEY,ALGORITHM,pwd_context,
         ACCESS_TOKEN_EXPIRE_MINUTES
         )
-
 
 
 
@@ -50,9 +49,7 @@ def decode_token(token: str) -> TokenData:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-# ──────────────────────────────────────────────
-#  Dependency — joriy foydalanuvchini olish
-# ──────────────────────────────────────────────
+
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
@@ -72,3 +69,4 @@ async def get_current_user(
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Akkaunt faol emas.")
     return user
+

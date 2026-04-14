@@ -1,16 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import crud
-from auth import (
+from users.crud import (
+    get_user_by_phone,get_user_by_username,
+    update_user,update_password,deactivate_user
+)
+from users.auth import (
     create_access_token,
     get_current_user,
     hash_password,
     verify_password,
 )
 from config.config import get_db
-from models import User
-from schemas import (
+from users.models import User
+from users.schemas import (
     ChangePasswordRequest,
     LoginRequest,
     Token,
@@ -35,7 +38,7 @@ async def login(
     user: User | None = None
 
     if data.phone_number:
-        user = await crud.get_user_by_phone(db, data.phone_number)
+        user = await get_user_by_phone(db, data.phone_number)
 
     if user is None or not verify_password(data.password, user.password):
         raise HTTPException(
@@ -77,7 +80,7 @@ async def update_my_profile(
 ):
     # username yoki phone boshqa foydalanuvchiga tegishli emasligini tekshirish
     if data.username and data.username != current_user.username:
-        existing = await crud.get_user_by_username(db, data.username)
+        existing = await get_user_by_username(db, data.username)
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -85,14 +88,14 @@ async def update_my_profile(
             )
 
     if data.phone_number and data.phone_number != current_user.phone_number:
-        existing = await crud.get_user_by_phone(db, data.phone_number)
+        existing = await get_user_by_phone(db, data.phone_number)
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Bu telefon raqam allaqachon ro'yxatdan o'tgan.",
             )
 
-    return await crud.update_user(db, current_user, data)
+    return await update_user(db, current_user, data)
 
 
 # ──────────────────────────────────────────────
@@ -121,7 +124,7 @@ async def change_password(
         )
 
     new_hash = hash_password(data.new_password)
-    await crud.update_password(db, current_user, new_hash)
+    await update_password(db, current_user, new_hash)
     return {"detail": "Parol muvaffaqiyatli o'zgartirildi."}
 
 
@@ -142,5 +145,5 @@ async def delete_my_account(
     Foydalanuvchi akkauntini to'liq o'chirish o'rniga
     is_active = False qilib qo'yamiz (xavfsizroq).
     """
-    await crud.deactivate_user(db, current_user)
+    await deactivate_user(db, current_user)
     return {"detail": "Akkaunt muvaffaqiyatli deaktivatsiya qilindi."}
