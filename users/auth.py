@@ -54,10 +54,6 @@ async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Har qanday himoyalangan route uchun dependency.
-    Ishlatish:  current_user = Depends(get_current_user)
-    """
 
 
     token_data = decode_token(token)

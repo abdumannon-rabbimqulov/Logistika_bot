@@ -9,12 +9,10 @@ import database as db
 
 router = Router()
 
-# Ro'yxatdan o'tish holatlari
 class Registration(StatesGroup):
     language = State()
     phone_number = State()
 
-# Til tugmalari matni → kod
 LANG_MAP = {
     "🇺🇿 O'zbekcha": "uz",
     "🇷🇺 Русский": "ru",
@@ -23,14 +21,10 @@ LANG_MAP = {
 
 @router.message(CommandStart())
 async def cmd_start(message: types.Message, state: FSMContext):
-    """
-    /start komandasi: foydalanuvchini bazadan tekshiradi.
-    Agar yangi bo'lsa yoki ma'lumotlari kam bo'lsa, ro'yxatdan o'tkazadi.
-    """
+
     user = await db.get_user(message.from_user.id)
 
     if user and user.phone_number:
-        # Foydalanuvchi allaqachon to'liq ro'yxatdan o'tgan - tokenni yangilash
         token, expires = create_access_token({"sub": str(message.from_user.id), "role": user.role or "guest"})
         await db.update_user_token(message.from_user.id, token, expires)
 
