@@ -15,11 +15,9 @@ from config.config import (get_db,
 
 
 def hash_password(plain: str) -> str:
-    """Ochiq parolni bcrypt bilan hash qiladi."""
     return pwd_context.hash(plain)
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Parolni tekshiradi."""
     return pwd_context.verify(plain, hashed)
 
 
