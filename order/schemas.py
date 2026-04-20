@@ -7,9 +7,6 @@ from pydantic import BaseModel, Field
 from models import OfferStatus, OrderStatus
 
 
-# ──────────────────────────────────────────────
-#  ORDER SCHEMAS
-# ──────────────────────────────────────────────
 
 class OrderBase(BaseModel):
     cargo_name: str = Field(..., max_length=200)
@@ -29,12 +26,10 @@ class OrderBase(BaseModel):
 
 
 class OrderCreate(OrderBase):
-    """Customer yangi buyurtma yaratganda ishlatiladi."""
     pass
 
 
 class OrderUpdate(BaseModel):
-    """Faqat o'zgartirilishi kerak bo'lgan maydonlar yuboriladi."""
     cargo_name: Optional[str] = Field(None, max_length=200)
     weight: Optional[Decimal] = Field(None, gt=0, max_digits=6, decimal_places=2)
     volume: Optional[Decimal] = Field(None, max_digits=6, decimal_places=2)
@@ -50,7 +45,6 @@ class OrderUpdate(BaseModel):
 
 
 class OrderStatusUpdate(BaseModel):
-    """Faqat statusni o'zgartirish uchun."""
     status: OrderStatus
 
 
@@ -71,9 +65,6 @@ class OrderReadWithOffers(OrderRead):
     model_config = {"from_attributes": True}
 
 
-# ──────────────────────────────────────────────
-#  ORDER OFFER SCHEMAS
-# ──────────────────────────────────────────────
 
 class OrderOfferBase(BaseModel):
     offered_price: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
@@ -82,7 +73,6 @@ class OrderOfferBase(BaseModel):
 
 
 class OrderOfferCreate(OrderOfferBase):
-    """Driver offer yubormoqchi bo'lganda ishlatiladi."""
     pass
 
 
@@ -94,7 +84,6 @@ class OrderOfferUpdate(BaseModel):
 
 
 class OrderOfferStatusUpdate(BaseModel):
-    """Faqat offer statusini o'zgartirish uchun."""
     status: OfferStatus
 
 
@@ -108,5 +97,4 @@ class OrderOfferRead(OrderOfferBase):
     model_config = {"from_attributes": True}
 
 
-# Forward reference resolve
 OrderReadWithOffers.model_rebuild()
