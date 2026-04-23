@@ -14,9 +14,6 @@ from schemas import (
 
 router = APIRouter()
 
-# ──────────────────────────────────────────────
-#  Helpers
-# ──────────────────────────────────────────────
 
 async def _get_order_or_404(order_id: int, db: AsyncSession):
     order = await crud.get_order(db, order_id)
@@ -38,9 +35,6 @@ async def _get_offer_or_404(offer_id: int, db: AsyncSession):
     return offer
 
 
-# ──────────────────────────────────────────────
-#  ORDER ROUTES
-# ──────────────────────────────────────────────
 
 @router.post(
     "/orders",
@@ -160,9 +154,6 @@ async def delete_order(
     await crud.delete_order(db, order)
 
 
-# ──────────────────────────────────────────────
-#  ORDER OFFER ROUTES
-# ──────────────────────────────────────────────
 
 @router.post(
     "/orders/{order_id}/offers",
