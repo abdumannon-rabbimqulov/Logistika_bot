@@ -4,6 +4,7 @@ from users.models import User
 from driver.models import Driver,DriverAnnouncement,TruckType,AnnouncementOffer
 from order.models import OrderOffer,Order
 from driver.router import router as driver_router
+from order.router import router as order_router
 from users.router import router as auth_router
 
 app = FastAPI(title="FastAPI")
@@ -14,4 +15,5 @@ async def startup():
         await conn.run_sync(Base.metadata.create_all)
 
 app.include_router(driver_router, prefix="/api")
+app.include_router(order_router, prefix="/api")
 app.include_router(auth_router, prefix="/api/auth", tags=["Auth"])

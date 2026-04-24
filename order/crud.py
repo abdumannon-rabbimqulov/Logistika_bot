@@ -4,8 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from models import OfferStatus, Order, OrderOffer, OrderStatus
-from schemas import (
+from order.models import OfferStatus, Order, OrderOffer, OrderStatus
+from order.schemas import (
     OrderCreate, OrderOfferCreate, OrderOfferUpdate, OrderUpdate,
 )
 

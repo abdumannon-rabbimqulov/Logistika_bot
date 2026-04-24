@@ -4,7 +4,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from models import OfferStatus, OrderStatus
+from order.models import OfferStatus, OrderStatus
 
 
 

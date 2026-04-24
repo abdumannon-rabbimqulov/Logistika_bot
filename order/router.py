@@ -3,16 +3,18 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import crud
+from order import crud
 from config.config import get_db
-from models import OfferStatus, OrderStatus
-from schemas import (
+from order.models import OfferStatus, OrderStatus
+from order.schemas import (
     OrderCreate, OrderOfferCreate, OrderOfferRead, OrderOfferStatusUpdate,
     OrderOfferUpdate, OrderRead, OrderReadWithOffers, OrderStatusUpdate,
     OrderUpdate,
 )
+from users.auth import get_current_active_user
+from users.models import User
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_active_user)])
 
 
 async def _get_order_or_404(order_id: int, db: AsyncSession):
@@ -45,10 +47,10 @@ async def _get_offer_or_404(offer_id: int, db: AsyncSession):
 )
 async def create_order(
     data: OrderCreate,
-    customer_id: int = Query(..., description="Buyurtmachi ID (auth dan olinadi)"),
+    current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await crud.create_order(db, customer_id=customer_id, data=data)
+    return await crud.create_order(db, customer_id=current_user.id, data=data)
 
 
 @router.get(
@@ -165,11 +167,21 @@ async def delete_order(
 async def create_offer(
     order_id: int,
     data: OrderOfferCreate,
-    driver_id: int = Query(..., description="Driver ID (auth dan olinadi)"),
+    current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
+    if not current_user.driver:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sizda driver profili mavjud emas.",
+        )
     await _get_order_or_404(order_id, db)
-    return await crud.create_offer(db, order_id=order_id, driver_id=driver_id, data=data)
+    return await crud.create_offer(
+        db,
+        order_id=order_id,
+        driver_id=current_user.driver.id,
+        data=data,
+    )
 
 
 @router.get(
