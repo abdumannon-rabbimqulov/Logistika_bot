@@ -60,3 +60,5 @@ async def delete(db: AsyncSession, pk: int) -> bool:
     except Exception as exc:
         await db.rollback()
         raise exc
+
+

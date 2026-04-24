@@ -35,3 +35,65 @@ class TruckTypeResponse(TruckTypeBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+"""
+DRIVER SCHEMAS ==========================================
+"""
+
+
+
+class DriverBase(BaseModel):
+    truck_type_id: int
+    truck_number: str
+    capacity_ton: Optional[float] = Field(None, description="Yuk ko'tarish quvvati (tonnada)")
+    capacity_m3: Optional[float] = Field(None, description="Yuk hajmi (m3)")
+    current_city: str
+    is_available: bool = True
+
+
+class DriverCreate(DriverBase):
+    user_id: int
+
+
+# 3. Driver ma'lumotlarini yangilash uchun (PATCH /drivers/{id})
+class DriverUpdate(BaseModel):
+    truck_type_id: Optional[int] = None
+    truck_number: Optional[str] = None
+    capacity_ton: Optional[float] = None
+    capacity_m3: Optional[float] = None
+    current_city: Optional[str] = None
+    is_available: Optional[bool] = None
+    is_live_location_active: Optional[bool] = None
+    last_latitude: Optional[float] = None
+    last_longitude: Optional[float] = None
+
+
+# 4. API orqali qaytariladigan to'liq ma'lumot (Response)
+class DriverResponse(DriverBase):
+    id: int
+    user_id: int
+    rating: float
+    total_trips: int
+    docs_verified: bool
+
+    # Location ma'lumotlari
+    is_live_location_active: bool
+    last_latitude: Optional[float] = None
+    last_longitude: Optional[float] = None
+    last_location_at: Optional[datetime] = None
+
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# 5. Qisqacha ma'lumot (Masalan, ro'yxatda ko'rsatish uchun)
+class DriverShortResponse(BaseModel):
+    id: int
+    truck_number: str
+    rating: float
+    is_available: bool
+    current_city: str
+
+    model_config = ConfigDict(from_attributes=True)
