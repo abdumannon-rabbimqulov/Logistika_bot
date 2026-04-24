@@ -21,6 +21,7 @@ async def create_user(
     full_name: str,
     username: str | None = None,
     language: str = "uz",
+    phone_number: str | None = None,
 ) -> User:
     async with async_session() as session:
         user = User(
@@ -28,6 +29,7 @@ async def create_user(
             full_name=full_name,
             username=username,
             language=language,
+            phone_number=phone_number,
         )
         session.add(user)
         await session.commit()
@@ -40,12 +42,13 @@ async def get_or_create_user(
     full_name: str,
     username: str | None = None,
     language: str = "uz",
+    phone_number: str | None = None,
 ) -> tuple[User, bool]:
 
     user = await get_user(user_id)
     if user:
         return user, False
-    user = await create_user(user_id, full_name, username, language)
+    user = await create_user(user_id, full_name, username, language, phone_number)
     return user, True
 
 
@@ -53,5 +56,27 @@ async def update_user_language(user_id: int, language: str) -> None:
     async with async_session() as session:
         await session.execute(
             update(User).where(User.id == user_id).values(language=language)
+        )
+        await session.commit()
+
+
+async def update_user_profile_from_tg(
+    user_id: int,
+    full_name: str,
+    username: str | None,
+    language: str,
+    phone_number: str | None = None,
+) -> None:
+    values = {
+        "full_name": full_name,
+        "username": username,
+        "language": language,
+    }
+    if phone_number:
+        values["phone_number"] = phone_number
+
+    async with async_session() as session:
+        await session.execute(
+            update(User).where(User.id == user_id).values(**values)
         )
         await session.commit()

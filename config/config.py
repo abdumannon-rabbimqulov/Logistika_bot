@@ -2,10 +2,15 @@ import os
 from typing import AsyncGenerator
 
 from dotenv import load_dotenv
-from google import genai
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 from passlib.context import CryptContext
+import logging
+
+try:
+    from google import genai
+except ImportError:  # optional dependency in local runs
+    genai = None
 
 
 load_dotenv()
@@ -14,7 +19,7 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 API_KEY = os.getenv('API_KEY')
 WEBAPP_URL = os.getenv('WEBAPP_URL')
 
-client = genai.Client(api_key=API_KEY)
+client = genai.Client(api_key=API_KEY) if genai and API_KEY else None
 MODEL_NAME = "gemini-flash-latest"
 
 ADMIN_IDS: set[int] = {int(i.strip()) for i in os.getenv("ADMIN", "").split(",") if i.strip()}
@@ -71,27 +76,3 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN is not set in .env file")
-
-from dotenv import load_dotenv
-
-load_dotenv()
-
-
-import jwt
-from datetime import datetime, timedelta, timezone
-
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-def create_access_token(data: dict):
-    """
-    JWT token yaratadi.
-    """
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt, expire

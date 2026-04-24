@@ -42,7 +42,6 @@ def run_migrations_online() -> None:
     """Asinxron rejimda migratsiyani yurgizish."""
     asyncio.run(run_async_migrations())
 
-# Offline rejim (shart emas, lekin qolsin)
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(

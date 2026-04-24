@@ -26,16 +26,21 @@ class User(Base):
     full_name:  Mapped[str] = mapped_column(String(128))
     password:   Mapped[str] = mapped_column(String(), nullable=True)
     is_active:  Mapped[bool] = mapped_column(default=True)
-    language:   Mapped[str]  = mapped_column(String(2), default="uz")
+    language:   Mapped[str]  = mapped_column(String(10), default="uz")
     is_banned:  Mapped[bool] = mapped_column(default=False)
     role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole),
+        Enum(
+            UserRole,
+            name="userrole",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
         default=UserRole.GUEST,
         server_default=UserRole.GUEST.value
     )
 
     phone_number: Mapped[str | None] = mapped_column(String(20))
     balance:    Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0.0)
+    bio:        Mapped[str| None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
@@ -44,15 +49,3 @@ class User(Base):
     )
 
     driver = relationship("Driver", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    tokens = relationship("UserTokens", back_populates="user", uselist=False, cascade="all, delete-orphan")
-
-
-
-class UserTokens(Base):
-    __tablename__ = "usertokens"
-    id :           Mapped[int] = mapped_column(BigInteger,primary_key=True)
-    user_id :      Mapped[int] = mapped_column(BigInteger,ForeignKey("users.id"),nullable=False)
-    access_token : Mapped[str| None] = mapped_column(String(),nullable=True)
-    refresh_token : Mapped[str| None] = mapped_column(String(),nullable=True)
-    token_expires : Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    user = relationship("User", back_populates="tokens")

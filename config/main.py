@@ -13,5 +13,5 @@ async def startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-app.include_router(driver_router)
-app.include_router(auth_router, prefix="/auth", tags=["Auth"])
+app.include_router(driver_router, prefix="/api")
+app.include_router(auth_router, prefix="/api/auth", tags=["Auth"])

@@ -10,9 +10,7 @@ from schemas import (
 )
 
 
-# ──────────────────────────────────────────────
-#  ORDER CRUD
-# ──────────────────────────────────────────────
+
 
 async def create_order(
     db: AsyncSession,
@@ -108,9 +106,7 @@ async def delete_order(db: AsyncSession, order: Order) -> None:
     await db.commit()
 
 
-# ──────────────────────────────────────────────
-#  ORDER OFFER CRUD
-# ──────────────────────────────────────────────
+
 
 async def create_offer(
     db: AsyncSession,
