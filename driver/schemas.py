@@ -88,7 +88,6 @@ class DriverResponse(DriverBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-# 5. Qisqacha ma'lumot (Masalan, ro'yxatda ko'rsatish uchun)
 class DriverShortResponse(BaseModel):
     id: int
     truck_number: str

@@ -1,6 +1,9 @@
 import enum
 from datetime import datetime
 from decimal import Decimal
+from typing import Optional
+from ai.models import Chat,Rating,AICommand
+
 from sqlalchemy import (
     BigInteger, String, Numeric, DateTime, ForeignKey, Enum
 )
@@ -49,3 +52,11 @@ class User(Base):
     )
 
     driver = relationship("Driver", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    chats            : Mapped[list["Chat"]]      = relationship(back_populates="user",   lazy="select")
+    ratings_given: Mapped[list["Rating"]] = relationship(
+        foreign_keys="[Rating.rated_by_user]",
+        back_populates="rater_user", lazy="select")
+    ratings_received: Mapped[list["Rating"]] = relationship(
+        foreign_keys="[Rating.target_user]",
+        back_populates="target_user_obj", lazy="select")
+    ai_commands: Mapped[list["AICommand"]] = relationship(back_populates="user", lazy="select")

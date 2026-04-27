@@ -1,6 +1,7 @@
 import enum
 from datetime import datetime, timezone
-
+from typing import Optional
+from ai.models import Chat,Rating
 from sqlalchemy import (
     BigInteger, Integer, String, Boolean,
     Numeric, Float, DateTime, ForeignKey, Enum as SQLEnum, func
@@ -66,6 +67,13 @@ class Driver(Base):
 
     # ✅ FIX 3: OrderOffer.driver back_populates="offers" uchun relationship qo'shildi
     offers: Mapped[list["OrderOffer"]] = relationship("OrderOffer", back_populates="driver")
+    chats: Mapped[list["Chat"]] = relationship(back_populates="driver", lazy="select")
+    ratings_given: Mapped[list["Rating"]] = relationship(
+        foreign_keys="[Rating.rated_by_driver]",
+        back_populates="rater_driver", lazy="select")
+    ratings_received: Mapped[list["Rating"]] = relationship(
+        foreign_keys="[Rating.target_driver]",
+        back_populates="target_driver_obj", lazy="select")
 
     def __repr__(self) -> str:
         return f"<Driver(id={self.id}, truck_number='{self.truck_number}', type='{self.truck_type_id}')>"
