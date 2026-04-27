@@ -2,10 +2,10 @@ import enum
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
-from ai.models import Chat,Rating,AICommand
+from ai.models import Chat, Rating, AICommand
 
 from sqlalchemy import (
-    BigInteger, String, Numeric, DateTime, ForeignKey, Enum
+    BigInteger, String, Numeric, DateTime, ForeignKey, Enum, Boolean, Integer, Text
 )
 
 from sqlalchemy import func
@@ -13,19 +13,57 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from config.config import Base
 
+
 class UserRole(str, enum.Enum):
-    ADMIN = "admin"
+    ADMIN  = "admin"
     SENDER = "sender"
     DRIVER = "driver"
-    GUEST = "guest"
+    GUEST  = "guest"
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# EMAIL OTP — Tasdiqlash kodlari (DB da saqlanadi)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class EmailOTP(Base):
+    """
+    Ro'yxatdan o'tish jarayonida email ga yuborilgan
+    OTP kodlarni saqlash uchun jadval.
+
+    Hayot sikli:
+      1. /register → yozuv yaratiladi (is_used=False)
+      2. /verify-email → is_used=True qilinadi
+      3. Muddati o'tgan yozuvlar vaqti-vaqti bilan tozalanadi
+    """
+    __tablename__ = "email_otps"
+
+    id         : Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email      : Mapped[str]           = mapped_column(String(254), nullable=False, index=True)
+    code       : Mapped[str]           = mapped_column(String(10),  nullable=False)
+
+    # Parol bu yerda hashed holda saqlanadi (user yaratilgunga qadar)
+    hashed_pw  : Mapped[str]           = mapped_column(Text, nullable=False)
+    full_name  : Mapped[str]           = mapped_column(String(128), nullable=False)
+    language   : Mapped[str]           = mapped_column(String(10),  default="uz")
+
+    is_used    : Mapped[bool]          = mapped_column(Boolean, default=False)
+    expires_at : Mapped[datetime]      = mapped_column(DateTime, nullable=False)
+    created_at : Mapped[datetime]      = mapped_column(DateTime, server_default=func.now())
+
+    def is_valid(self) -> bool:
+        """Kod muddati o'tmagan va hali ishlatilmagan."""
+        return not self.is_used and datetime.utcnow() < self.expires_at
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# USER
+# ═══════════════════════════════════════════════════════════════════════════
 
 class User(Base):
     __tablename__ = "users"
 
     id:         Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    username:   Mapped[str | None] = mapped_column(String(32),nullable=True)
+    username:   Mapped[str | None] = mapped_column(String(32), nullable=True)
     full_name:  Mapped[str] = mapped_column(String(128))
     password:   Mapped[str] = mapped_column(String(), nullable=True)
     is_active:  Mapped[bool] = mapped_column(default=True)
@@ -42,8 +80,9 @@ class User(Base):
     )
 
     phone_number: Mapped[str | None] = mapped_column(String(20))
+    email:        Mapped[str | None] = mapped_column(String(100), unique=True)
     balance:    Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0.0)
-    bio:        Mapped[str| None] = mapped_column(String(500))
+    bio:        Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
@@ -60,3 +99,4 @@ class User(Base):
         foreign_keys="[Rating.target_user]",
         back_populates="target_user_obj", lazy="select")
     ai_commands: Mapped[list["AICommand"]] = relationship(back_populates="user", lazy="select")
+

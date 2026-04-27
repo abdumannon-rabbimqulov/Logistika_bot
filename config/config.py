@@ -7,6 +7,15 @@ from sqlalchemy.orm import DeclarativeBase
 from passlib.context import CryptContext
 import logging
 
+# ──────────────────────────────────────────────
+# EMAIL (SMTP) SOZLAMALARI
+# ──────────────────────────────────────────────
+# Bu yerda email yuborish uchun kerakli barcha
+# sozlamalar .env faylidan o'qiladi.
+# Gmail uchun: App Password yarating va
+# EMAIL_PASSWORD ga yozing (parol emas!)
+# ──────────────────────────────────────────────
+
 try:
     from google import genai
 except ImportError:  # optional dependency in local runs
@@ -15,14 +24,40 @@ except ImportError:  # optional dependency in local runs
 
 load_dotenv()
 
+# ──────────────────────────────────────────────
+# TELEGRAM BOT SOZLAMALARI
+# Telegram bot bilan bog'liq barcha o'zgaruvchilar
+# ──────────────────────────────────────────────
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-API_KEY = os.getenv('API_KEY')
 WEBAPP_URL = os.getenv('WEBAPP_URL')
+ADMIN_IDS: set[int] = {int(i.strip()) for i in os.getenv("ADMIN", "").split(",") if i.strip()}
 
+# ──────────────────────────────────────────────
+# GEMINI AI SOZLAMALARI
+# ──────────────────────────────────────────────
+API_KEY = os.getenv('API_KEY')
 client = genai.Client(api_key=API_KEY) if genai and API_KEY else None
 MODEL_NAME = "gemini-flash-latest"
 
-ADMIN_IDS: set[int] = {int(i.strip()) for i in os.getenv("ADMIN", "").split(",") if i.strip()}
+# ──────────────────────────────────────────────
+# EMAIL (SMTP) O'ZGARUVCHILARI
+# Bular .env faylida ko'rsatilishi kerak:
+#   EMAIL_HOST      - SMTP server (masalan: smtp.gmail.com)
+#   EMAIL_PORT      - SMTP port (Gmail: 587)
+#   EMAIL_USERNAME  - Yuboruvchi email manzili
+#   EMAIL_PASSWORD  - App Password (Gmail uchun)
+#   EMAIL_FROM      - Xatda ko'rinadigan "From" manzili
+#   EMAIL_USE_TLS   - TLS ishlatish (True yoki False)
+# ──────────────────────────────────────────────
+EMAIL_HOST      = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT      = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_USERNAME  = os.getenv("EMAIL_USERNAME", "")
+EMAIL_PASSWORD  = os.getenv("EMAIL_PASSWORD", "")
+EMAIL_FROM      = os.getenv("EMAIL_FROM", EMAIL_USERNAME)
+EMAIL_USE_TLS   = os.getenv("EMAIL_USE_TLS", "True").lower() in ("true", "1", "yes")
+
+# OTP kod amal qilish vaqti (soniyalarda, standart: 10 daqiqa)
+EOTP_EXPIRE_SECONDS = int(os.getenv("EMAIL_OTP_EXPIRE", "600"))
 
 
 def is_admin(user_id: int) -> bool:
@@ -74,5 +109,10 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
         finally:
             await session.close()
-if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN is not set in .env file")
+# ──────────────────────────────────────────────
+# BOT TOKEN TEKSHIRUVI
+# Agar faqat FastAPI ishlatmoqchi bo'lsangiz,
+# quyidagi 2 qatorni comment ga oling:
+# ──────────────────────────────────────────────
+# if not BOT_TOKEN:
+#     raise ValueError("BOT_TOKEN is not set in .env file")

@@ -5,3 +5,9 @@ psycopg2-binary==2.9.11
 google-genai==1.70.0
 python-dotenv==1.2.2
 PyJWT==2.10.1
+# Email va auth uchun zarur paketlar
+pydantic[email]>=2.0.0
+fastapi>=0.100.0
+passlib[bcrypt]>=1.7.4
+python-jose[cryptography]>=3.3.0
+aiosmtplib>=2.0.0
