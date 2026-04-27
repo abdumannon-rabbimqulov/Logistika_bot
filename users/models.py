@@ -1,8 +1,6 @@
 import enum
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
-from ai.models import Chat, Rating, AICommand
 
 from sqlalchemy import (
     BigInteger, String, Numeric, DateTime, ForeignKey, Enum, Boolean, Integer, Text

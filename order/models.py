@@ -86,6 +86,18 @@ class Order(Base):
         back_populates="order",
     )
 
+    chat       : Mapped["Chat"] = relationship(
+        "Chat",
+        back_populates="order",
+        uselist=False,
+    )
+
+    rating     : Mapped["Rating"] = relationship(
+        "Rating",
+        back_populates="order",
+        uselist=False,
+    )
+
     # ── Helper property lar ──────────────────────
 
     @property

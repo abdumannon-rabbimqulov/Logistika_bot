@@ -20,7 +20,6 @@ from sqlalchemy.orm import (
 from sqlalchemy.sql import func
 
 
-from users.models import User
 from driver.models import Driver
 from order.models import Order
 from config.config import Base

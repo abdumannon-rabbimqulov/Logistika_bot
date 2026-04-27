@@ -10,8 +10,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from config.config import Base
 
-from order.models import OrderOffer
-from ai.models import Chat,Rating
 
 # ═══════════════════════════════════════════════
 # ENUM lar
