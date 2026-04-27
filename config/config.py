@@ -111,8 +111,6 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 # ──────────────────────────────────────────────
 # BOT TOKEN TEKSHIRUVI
-# Agar faqat FastAPI ishlatmoqchi bo'lsangiz,
-# quyidagi 2 qatorni comment ga oling:
 # ──────────────────────────────────────────────
-# if not BOT_TOKEN:
-#     raise ValueError("BOT_TOKEN is not set in .env file")
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN is not set in .env file")

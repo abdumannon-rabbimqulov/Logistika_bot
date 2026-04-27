@@ -1,116 +1,158 @@
-from driver.models import Driver, TruckType
-from driver.schemas import TruckTypeCreate, TruckTypeUpdate
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Sequence, Optional
+from sqlalchemy import select, update, delete
+from typing import List, Optional
+from driver.models import (
+    TruckType, Driver, DriverDocument,
+    DriverAnnouncement, AnnouncementWaypoint, AnnouncementOffer
+)
+from driver.schemas import (
+    TruckTypeCreate, TruckTypeUpdate,
+    DriverCreate, DriverUpdate,
+    DriverDocumentCreate, DriverDocumentUpdate,
+    DriverAnnouncementCreate, DriverAnnouncementUpdate,
+    AnnouncementOfferCreate, AnnouncementOfferUpdate
+)
 
+# --- TruckType CRUD ---
 
-# ═══════════════════════════════════════════════════════════════════════════
-# DRIVER CRUD
-# ═══════════════════════════════════════════════════════════════════════════
+async def create_truck_type(db: AsyncSession, data: TruckTypeCreate) -> TruckType:
+    obj = TruckType(**data.model_dump())
+    db.add(obj)
+    await db.commit()
+    await db.refresh(obj)
+    return obj
+
+async def get_truck_type(db: AsyncSession, pk: int) -> Optional[TruckType]:
+    result = await db.execute(select(TruckType).where(TruckType.id == pk))
+    return result.scalar_one_or_none()
+
+async def get_all_truck_types(db: AsyncSession) -> List[TruckType]:
+    result = await db.execute(select(TruckType))
+    return result.scalars().all()
+
+async def update_truck_type(db: AsyncSession, pk: int, data: TruckTypeUpdate) -> Optional[TruckType]:
+    await db.execute(update(TruckType).where(TruckType.id == pk).values(**data.model_dump(exclude_unset=True)))
+    await db.commit()
+    return await get_truck_type(db, pk)
+
+async def delete_truck_type(db: AsyncSession, pk: int) -> bool:
+    await db.execute(delete(TruckType).where(TruckType.id == pk))
+    await db.commit()
+    return True
+
+# --- Driver CRUD ---
+
+async def create_driver(db: AsyncSession, data: DriverCreate) -> Driver:
+    obj = Driver(**data.model_dump())
+    db.add(obj)
+    await db.commit()
+    await db.refresh(obj)
+    return obj
+
+async def get_driver(db: AsyncSession, pk: int) -> Optional[Driver]:
+    result = await db.execute(select(Driver).where(Driver.id == pk))
+    return result.scalar_one_or_none()
 
 async def get_driver_by_user_id(db: AsyncSession, user_id: int) -> Optional[Driver]:
-    """User ID orqali driver profilini topadi."""
-    result = await db.execute(
-        select(Driver).where(Driver.user_id == user_id)
-    )
+    result = await db.execute(select(Driver).where(Driver.user_id == user_id))
     return result.scalar_one_or_none()
 
+async def get_all_drivers(db: AsyncSession) -> List[Driver]:
+    result = await db.execute(select(Driver))
+    return result.scalars().all()
 
-async def create_driver(
-    db: AsyncSession,
-    *,
-    user_id: int,
-    truck_type_id: int,
-    truck_number: str,
-    current_city: str,
-    truck_brand: Optional[str] = None,
-    truck_year: Optional[int] = None,
-    capacity_ton: Optional[float] = None,
-    capacity_m3: Optional[float] = None,
-) -> Driver:
-    """
-    Ro'yxatdan o'tish uchun driver profili yaratadi.
-    Hujjatlar va boshqa tafsilotlar keyinroq qo'shiladi.
-    """
-    driver = Driver(
-        user_id=user_id,
-        truck_type_id=truck_type_id,
-        truck_number=truck_number,
-        current_city=current_city,
-        truck_brand=truck_brand,
-        truck_year=truck_year,
-        capacity_ton=capacity_ton,
-        capacity_m3=capacity_m3,
-        is_available=True,
-        docs_verified=False,
-        is_blocked=False,
-    )
-    db.add(driver)
-    try:
-        await db.commit()
-        await db.refresh(driver)
-        return driver
-    except Exception as exc:
-        await db.rollback()
-        raise exc
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# TRUCK TYPE CRUD
-# ═══════════════════════════════════════════════════════════════════════════
-
-async def create(db: AsyncSession, data: TruckTypeCreate) -> TruckType:
-    truck = TruckType(**data.model_dump())
-    db.add(truck)
-    try:
-        await db.commit()
-        await db.refresh(truck)
-        return truck
-    except Exception as exc:
-        await db.rollback()
-        raise exc
-
-
-async def update(db: AsyncSession, pk: int, data: TruckTypeUpdate) -> Optional[TruckType]:
-    result = await db.execute(select(TruckType).where(TruckType.id == pk))
-    db_result = result.scalar_one_or_none()
-
-    if not db_result:
-        return None
-
-    update_data = data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_result, key, value)
-
+async def update_driver(db: AsyncSession, pk: int, data: DriverUpdate) -> Optional[Driver]:
+    await db.execute(update(Driver).where(Driver.id == pk).values(**data.model_dump(exclude_unset=True)))
     await db.commit()
-    await db.refresh(db_result)
-    return db_result
+    return await get_driver(db, pk)
 
+# --- DriverDocument CRUD ---
 
-async def get_all(db: AsyncSession) -> Sequence[TruckType]:
-    result = await db.execute(select(TruckType))
-    db_result = result.scalars().all()
-    return db_result
+async def create_document(db: AsyncSession, data: DriverDocumentCreate) -> DriverDocument:
+    obj = DriverDocument(**data.model_dump())
+    db.add(obj)
+    await db.commit()
+    await db.refresh(obj)
+    return obj
 
-
-async def get_one(db: AsyncSession, pk: int) -> Optional[TruckType]:
-    result = await db.execute(select(TruckType).where(TruckType.id == pk))
+async def get_document(db: AsyncSession, pk: int) -> Optional[DriverDocument]:
+    result = await db.execute(select(DriverDocument).where(DriverDocument.id == pk))
     return result.scalar_one_or_none()
 
+async def get_driver_documents(db: AsyncSession, driver_id: int) -> List[DriverDocument]:
+    result = await db.execute(select(DriverDocument).where(DriverDocument.driver_id == driver_id))
+    return result.scalars().all()
 
-async def delete(db: AsyncSession, pk: int) -> bool:
-    result = await db.execute(select(TruckType).where(TruckType.id == pk))
-    truck = result.scalar_one_or_none()
+async def update_document(db: AsyncSession, pk: int, data: DriverDocumentUpdate) -> Optional[DriverDocument]:
+    await db.execute(update(DriverDocument).where(DriverDocument.id == pk).values(**data.model_dump(exclude_unset=True)))
+    await db.commit()
+    return await get_document(db, pk)
 
-    if not truck:
-        return False
+# --- DriverAnnouncement CRUD ---
 
-    await db.delete(truck)
+async def create_announcement(db: AsyncSession, data: DriverAnnouncementCreate) -> DriverAnnouncement:
+    waypoints_data = data.waypoints
+    ann_dict = data.model_dump()
+    del ann_dict['waypoints']
+    
+    obj = DriverAnnouncement(**ann_dict)
+    db.add(obj)
+    await db.flush()  # To get obj.id
+    
+    for wp_data in waypoints_data:
+        wp = AnnouncementWaypoint(announcement_id=obj.id, **wp_data.model_dump())
+        db.add(wp)
+    
+    await db.commit()
+    await db.refresh(obj)
+    return obj
 
-    try:
-        await db.commit()
-        return True
-    except Exception as exc:
-        await db.rollback()
-        raise exc
+async def get_announcement(db: AsyncSession, pk: int) -> Optional[DriverAnnouncement]:
+    # Need to load waypoints
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(
+        select(DriverAnnouncement)
+        .options(selectinload(DriverAnnouncement.waypoints))
+        .where(DriverAnnouncement.id == pk)
+    )
+    return result.scalar_one_or_none()
+
+async def get_all_announcements(db: AsyncSession, driver_id: Optional[int] = None) -> List[DriverAnnouncement]:
+    from sqlalchemy.orm import selectinload
+    stmt = select(DriverAnnouncement).options(selectinload(DriverAnnouncement.waypoints))
+    if driver_id:
+        stmt = stmt.where(DriverAnnouncement.driver_id == driver_id)
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+async def update_announcement(db: AsyncSession, pk: int, data: DriverAnnouncementUpdate) -> Optional[DriverAnnouncement]:
+    await db.execute(update(DriverAnnouncement).where(DriverAnnouncement.id == pk).values(**data.model_dump(exclude_unset=True)))
+    await db.commit()
+    return await get_announcement(db, pk)
+
+# --- AnnouncementOffer CRUD ---
+
+async def create_announcement_offer(db: AsyncSession, data: AnnouncementOfferCreate) -> AnnouncementOffer:
+    obj = AnnouncementOffer(**data.model_dump())
+    db.add(obj)
+    await db.commit()
+    await db.refresh(obj)
+    return obj
+
+async def get_announcement_offer(db: AsyncSession, pk: int) -> Optional[AnnouncementOffer]:
+    result = await db.execute(select(AnnouncementOffer).where(AnnouncementOffer.id == pk))
+    return result.scalar_one_or_none()
+
+async def get_announcement_offers(db: AsyncSession, announcement_id: int) -> List[AnnouncementOffer]:
+    result = await db.execute(select(AnnouncementOffer).where(AnnouncementOffer.announcement_id == announcement_id))
+    return result.scalars().all()
+
+async def update_announcement_offer(db: AsyncSession, pk: int, data: AnnouncementOfferUpdate) -> Optional[AnnouncementOffer]:
+    update_data = data.model_dump(exclude_unset=True)
+    if 'counter_price' in update_data:
+        from datetime import datetime, timezone
+        update_data['counter_at'] = datetime.now(timezone.utc)
+    
+    await db.execute(update(AnnouncementOffer).where(AnnouncementOffer.id == pk).values(**update_data))
+    await db.commit()
+    return await get_announcement_offer(db, pk)

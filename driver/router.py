@@ -1,76 +1,181 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from typing import List, Optional
 from config.config import get_db
-from driver.crud import (
-    create,
-    delete,
-    get_all,
-    get_one,
-    update,
-)
-from driver.schemas import TruckTypeCreate, TruckTypeResponse, TruckTypeUpdate
-from users.auth import get_current_active_user
+from driver import crud, schemas
+from users.auth import get_current_user
+from users.models import User, UserRole
 
-router = APIRouter(
-    prefix="/driver",
-    tags=["Drivers"],
-    dependencies=[Depends(get_current_active_user)],
-)
+router = APIRouter(prefix="/drivers", tags=["Haydovchilar (Drivers)"])
 
-@router.post("/truck-type-create", response_model=TruckTypeResponse, status_code=status.HTTP_201_CREATED)
-async def create_truck_type(
-    data: TruckTypeCreate,
-    db: AsyncSession = Depends(get_db),
-):
-    return await create(db=db, data=data)
+# --- TruckType Endpoints ---
 
+@router.post("/truck-types", response_model=schemas.TruckTypeResponse, status_code=status.HTTP_201_CREATED, summary="Yangi mashina turi qo'shish")
+async def create_truck_type(data: schemas.TruckTypeCreate, db: AsyncSession = Depends(get_db)):
+    """Tizimga yangi yuk mashinasi turini (masalan: Fura, Refrijerator) qo'shish."""
+    # In a real app, maybe only Admin can do this
+    return await crud.create_truck_type(db, data)
 
-@router.get("/truck-type-get_all", response_model=list[TruckTypeResponse], status_code=status.HTTP_200_OK)
-async def get_all_truck(
-    db: AsyncSession = Depends(get_db),
-):
-    return await get_all(db=db)
+@router.get("/truck-types", response_model=List[schemas.TruckTypeResponse], summary="Barcha mashina turlarini olish")
+async def list_truck_types(db: AsyncSession = Depends(get_db)):
+    """Tizimdagi barcha mavjud yuk mashinasi turlari ro'yxatini qaytaradi."""
+    return await crud.get_all_truck_types(db)
 
-@router.put("/truck-type-update/{pk}", response_model=TruckTypeResponse, status_code=status.HTTP_200_OK)
-async def truck_update(
-    pk: int,
-    data: TruckTypeUpdate,
-    db: AsyncSession = Depends(get_db),
-):
-    updated = await update(db, pk, data)
-    if updated is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Bunday turdagi yuk mashinasi topilmadi",
-        )
-    return updated
+@router.get("/truck-types/{pk}", response_model=schemas.TruckTypeResponse, summary="Mashina turi tafsilotlari")
+async def get_truck_type(pk: int, db: AsyncSession = Depends(get_db)):
+    """ID bo'yicha bitta mashina turi haqida to'liq ma'lumot olish."""
+    obj = await crud.get_truck_type(db, pk)
+    if not obj:
+        raise HTTPException(status_code=404, detail="Truck type not found")
+    return obj
 
+@router.patch("/truck-types/{pk}", response_model=schemas.TruckTypeResponse, summary="Mashina turini tahrirlash")
+async def update_truck_type(pk: int, data: schemas.TruckTypeUpdate, db: AsyncSession = Depends(get_db)):
+    """Mavjud mashina turi ma'lumotlarini yangilash."""
+    obj = await crud.update_truck_type(db, pk, data)
+    if not obj:
+        raise HTTPException(status_code=404, detail="Truck type not found")
+    return obj
 
-@router.get("/get_truck_type/{pk}", response_model=TruckTypeResponse)
-async def get_truck_type(
-    pk: int,
-    db: AsyncSession = Depends(get_db),
-):
-    db_result = await get_one(db=db, pk=pk)
-    if db_result is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Bunday turdagi yuk mashinasi topilmadi"
-        )
-    return db_result
-
-
-
-@router.delete("/delete_truck_type/{pk}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_truck_type(
-    pk: int,
-    db: AsyncSession = Depends(get_db),
-):
-    success = await delete(db=db, pk=pk)
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="O'chirish uchun bunday turdagi yuk mashinasi topilmadi"
-        )
+@router.delete("/truck-types/{pk}", status_code=status.HTTP_204_NO_CONTENT, summary="Mashina turini o'chirish")
+async def delete_truck_type(pk: int, db: AsyncSession = Depends(get_db)):
+    """Mashina turini tizimdan o'chirish."""
+    await crud.delete_truck_type(db, pk)
     return None
+
+# --- Driver Profile Endpoints ---
+
+@router.post("/profile", response_model=schemas.DriverResponse, status_code=status.HTTP_201_CREATED, summary="Haydovchi profilini yaratish")
+async def create_driver_profile(
+    data: schemas.DriverCreate, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Foydalanuvchi uchun haydovchi profilini ochish."""
+    # Check if user already has a driver profile
+    existing = await crud.get_driver_by_user_id(db, current_user.id)
+    if existing:
+        raise HTTPException(status_code=400, detail="Driver profile already exists")
+    
+    # Ensure user_id in data matches current_user
+    if data.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to create profile for another user")
+    
+    return await crud.create_driver(db, data)
+
+@router.get("/me", response_model=schemas.DriverResponse, summary="Mening haydovchi profilim")
+async def get_my_driver_profile(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Tizimga kirgan haydovchining shaxsiy profilini ko'rish."""
+    obj = await crud.get_driver_by_user_id(db, current_user.id)
+    if not obj:
+        raise HTTPException(status_code=404, detail="Driver profile not found")
+    return obj
+
+@router.patch("/me", response_model=schemas.DriverResponse, summary="Profilni tahrirlash")
+async def update_my_driver_profile(
+    data: schemas.DriverUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Haydovchi o'z profil ma'lumotlarini yangilashi."""
+    driver = await crud.get_driver_by_user_id(db, current_user.id)
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver profile not found")
+    return await crud.update_driver(db, driver.id, data)
+
+# --- DriverDocument Endpoints ---
+
+@router.post("/documents", response_model=schemas.DriverDocumentResponse, status_code=status.HTTP_201_CREATED, summary="Hujjat yuklash")
+async def upload_document(
+    data: schemas.DriverDocumentCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Guvohnoma yoki texpasport yuklash."""
+    # Verify driver_id belongs to current_user
+    driver = await crud.get_driver(db, data.driver_id)
+    if not driver or driver.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    return await crud.create_document(db, data)
+
+@router.get("/documents", response_model=List[schemas.DriverDocumentResponse], summary="Mening hujjatlarim")
+async def list_my_documents(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Siz yuklagan barcha hujjatlar ro'yxati."""
+    driver = await crud.get_driver_by_user_id(db, current_user.id)
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver profile not found")
+    return await crud.get_driver_documents(db, driver.id)
+
+# --- DriverAnnouncement Endpoints ---
+
+@router.post("/announcements", response_model=schemas.DriverAnnouncementResponse, status_code=status.HTTP_201_CREATED, summary="Safar e'loni berish")
+async def create_announcement(
+    data: schemas.DriverAnnouncementCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Haydovchi tomonidan safar rejasini e'lon qilish."""
+    driver = await crud.get_driver(db, data.driver_id)
+    if not driver or driver.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    return await crud.create_announcement(db, data)
+
+@router.get("/announcements", response_model=List[schemas.DriverAnnouncementResponse], summary="E'lonlar ro'yxati")
+async def list_announcements(
+    driver_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Barcha haydovchilarning safar e'lonlarini ko'rish."""
+    return await crud.get_all_announcements(db, driver_id)
+
+@router.get("/announcements/{pk}", response_model=schemas.DriverAnnouncementResponse, summary="E'lon tafsilotlari")
+async def get_announcement(pk: int, db: AsyncSession = Depends(get_db)):
+    """Bitta e'lon haqida to'liq ma'lumot."""
+    obj = await crud.get_announcement(db, pk)
+    if not obj:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    return obj
+
+# --- AnnouncementOffer Endpoints ---
+
+@router.post("/announcements/{announcement_id}/offers", response_model=schemas.AnnouncementOfferResponse, status_code=status.HTTP_201_CREATED, summary="E'longa taklif berish")
+async def make_offer_on_announcement(
+    announcement_id: int,
+    data: schemas.AnnouncementOfferBase,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Mijoz haydovchi e'loniga o'z yukini taklif qilishi."""
+    offer_data = schemas.AnnouncementOfferCreate(
+        announcement_id=announcement_id,
+        customer_id=current_user.id,
+        **data.model_dump()
+    )
+    return await crud.create_announcement_offer(db, offer_data)
+
+@router.get("/announcements/{announcement_id}/offers", response_model=List[schemas.AnnouncementOfferResponse], summary="E'longa kelgan takliflar")
+async def list_offers_on_announcement(
+    announcement_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Haydovchi o'z e'loniga kelgan barcha takliflarni ko'rishi."""
+    return await crud.get_announcement_offers(db, announcement_id)
+
+@router.patch("/offers/{pk}", response_model=schemas.AnnouncementOfferResponse, summary="Taklifni yangilash")
+async def update_offer(
+    pk: int,
+    data: schemas.AnnouncementOfferUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Taklif statusini o'zgartirish."""
+    return await crud.update_announcement_offer(db, pk, data)
