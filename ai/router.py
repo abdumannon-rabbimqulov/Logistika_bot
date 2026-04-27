@@ -171,20 +171,23 @@ async def delete_message(
     await manager.broadcast({"event": "message_deleted", "message_id": message_id}, chat_id)
     return None
 
+from config.config import get_db, async_session, UPLOAD_DIR, STATIC_PATH
+
+# ...
+
 @router.post("/upload", response_model=dict, summary="Media yuklash")
 async def upload_file(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user)
 ):
-    upload_dir = "uploads"
-    if not os.path.exists(upload_dir):
-        os.makedirs(upload_dir)
     file_ext = os.path.splitext(file.filename)[1]
     unique_filename = f"{uuid.uuid4()}{file_ext}"
-    file_path = os.path.join(upload_dir, unique_filename)
+    file_path = os.path.join(UPLOAD_DIR, unique_filename)
+    
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-    return {"url": f"/static/uploads/{unique_filename}", "filename": file.filename}
+        
+    return {"url": f"{STATIC_PATH}/{unique_filename}", "filename": file.filename}
 
 @router.post("/ratings", response_model=schemas.RatingResponse, summary="Baho berish")
 async def submit_rating(

@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from config.config import engine,Base
+from config.config import engine, Base, UPLOAD_DIR, STATIC_PATH
 # MUHIM: Barcha modellarni modul darajasida import qilish 
 # (shunda ular registry'ga ro'yxatdan o'tadi va circular import bo'lmaydi)
 import users.models
@@ -19,12 +19,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 
-app = FastAPI(title="FastAPI")
+app = FastAPI(title="Logistika AI API")
 
-# Uploads papkasini yaratish va static qilib ulash
-if not os.path.exists("uploads"):
-    os.makedirs("uploads")
-app.mount("/static/uploads", StaticFiles(directory="uploads"), name="uploads")
+# Uploads papkasini static qilib ulash
+app.mount(STATIC_PATH, StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,

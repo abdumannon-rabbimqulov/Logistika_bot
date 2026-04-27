@@ -73,16 +73,16 @@ class AICommandStatus(str, Enum):
 # --- Attachment Schemas ---
 
 class AttachmentBase(BaseModel):
-    file_type: AttachmentType
-    file_url: str = Field(..., max_length=512)
-    original_name: Optional[str] = Field(None, max_length=255)
-    mime_type: Optional[str] = Field(None, max_length=100)
-    file_size: Optional[int] = None
+    file_type: AttachmentType = Field(..., example=AttachmentType.IMAGE)
+    file_url: str = Field(..., max_length=512, example="/static/uploads/photo_2024.jpg")
+    original_name: Optional[str] = Field(None, max_length=255, example="yuk_holati.jpg")
+    mime_type: Optional[str] = Field(None, max_length=100, example="image/jpeg")
+    file_size: Optional[int] = Field(None, example=102400)
     thumbnail_url: Optional[str] = Field(None, max_length=512)
-    width: Optional[int] = None
-    height: Optional[int] = None
-    duration_sec: Optional[int] = None
-    transcript: Optional[str] = None
+    width: Optional[int] = Field(None, example=1280)
+    height: Optional[int] = Field(None, example=720)
+    duration_sec: Optional[int] = Field(None, example=15)
+    transcript: Optional[str] = Field(None, example="Salom, men yetib keldim")
     transcript_lang: str = "uz"
 
 class AttachmentCreate(AttachmentBase):
@@ -97,17 +97,29 @@ class AttachmentResponse(AttachmentBase):
 # --- Message Schemas ---
 
 class MessageBase(BaseModel):
-    sender_id: Optional[int] = None
-    sender_type: SenderType
-    message_type: MessageType = MessageType.TEXT
-    content: Optional[str] = None
+    sender_id: Optional[int] = Field(None, example=1)
+    sender_type: SenderType = Field(..., example=SenderType.USER)
+    message_type: MessageType = Field(MessageType.TEXT, example=MessageType.TEXT)
+    content: Optional[str] = Field(None, example="Salom, yuklarim tayyor")
     is_read: bool = False
     is_ai_response: bool = False
     is_ai_command: bool = False
 
 class MessageCreate(MessageBase):
-    chat_id: int
+    chat_id: int = Field(..., example=10)
     attachments: Optional[List[AttachmentCreate]] = None
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "chat_id": 10,
+                "sender_id": 1,
+                "sender_type": "user",
+                "content": "Assalomu alaykum, yukni qachon olib ketasiz?",
+                "message_type": "text"
+            }
+        }
+    )
 
 class MessageUpdate(BaseModel):
     is_read: Optional[bool] = None
@@ -116,8 +128,8 @@ class MessageUpdate(BaseModel):
 class MessageResponse(MessageBase):
     id: int
     chat_id: int
-    ai_sentiment: Optional[float] = None
-    ai_flagged: bool
+    ai_sentiment: Optional[float] = Field(None, example=0.85)
+    ai_flagged: bool = False
     ai_flag_reason: Optional[str] = None
     created_at: datetime
     edited_at: Optional[datetime] = None
@@ -127,14 +139,26 @@ class MessageResponse(MessageBase):
 # --- Chat Schemas ---
 
 class ChatBase(BaseModel):
-    category: ChatCategory = ChatCategory.CONVERSATION
-    status: ChatStatus = ChatStatus.OPEN
-    title: Optional[str] = Field(None, max_length=255)
+    category: ChatCategory = Field(ChatCategory.CONVERSATION, example=ChatCategory.CONVERSATION)
+    status: ChatStatus = Field(ChatStatus.OPEN, example=ChatStatus.OPEN)
+    title: Optional[str] = Field(None, max_length=255, example="Toshkent-Andijon safari bo'yicha muloqot")
 
 class ChatCreate(ChatBase):
-    user_id: Optional[int] = None
-    driver_id: Optional[int] = None
-    order_id: Optional[int] = None
+    user_id: Optional[int] = Field(None, example=1)
+    driver_id: Optional[int] = Field(None, example=2)
+    order_id: Optional[int] = Field(None, example=100)
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "category": "conversation",
+                "title": "Haydovchi bilan suhbat",
+                "user_id": 1,
+                "driver_id": 2,
+                "order_id": 50
+            }
+        }
+    )
 
 class ChatUpdate(BaseModel):
     status: Optional[ChatStatus] = None
@@ -154,16 +178,16 @@ class ChatResponse(ChatBase):
 # --- AIAnalysis Schemas ---
 
 class AIAnalysisBase(BaseModel):
-    analysis_type: AIAnalysisType
+    analysis_type: AIAnalysisType = Field(..., example=AIAnalysisType.SENTIMENT)
     model_used: str = "gemini-flash-latest"
-    confidence: Optional[float] = None
-    summary: Optional[str] = None
+    confidence: Optional[float] = Field(None, example=0.98)
+    summary: Optional[str] = Field(None, example="Foydalanuvchi suhbatdan mamnun")
     detected_issues: Optional[List[Any]] = None
     complaint_valid: Optional[bool] = None
-    sentiment_score: Optional[float] = None
-    toxicity_score: Optional[float] = None
-    verdict: Optional[AIVerdict] = None
-    recommendation: Optional[str] = None
+    sentiment_score: Optional[float] = Field(None, example=0.9)
+    toxicity_score: Optional[float] = Field(None, example=0.01)
+    verdict: Optional[AIVerdict] = Field(None, example=AIVerdict.VALID)
+    recommendation: Optional[str] = Field(None, example="Hech qanday chora ko'rish shart emas")
     raw_response: Optional[dict] = None
 
 class AIAnalysisCreate(AIAnalysisBase):
@@ -180,13 +204,13 @@ class AIAnalysisResponse(AIAnalysisBase):
 # --- AICommand Schemas ---
 
 class AICommandBase(BaseModel):
-    command_type: AICommandType
-    raw_input: Optional[str] = None
-    parameters: Optional[dict] = None
+    command_type: AICommandType = Field(..., example=AICommandType.FIND_ORDER)
+    raw_input: Optional[str] = Field(None, example="Menga Toshkentdagi yuklarni topib ber")
+    parameters: Optional[dict] = Field(None, example={"city": "Toshkent"})
 
 class AICommandCreate(AICommandBase):
     message_id: Optional[int] = None
-    user_id: int
+    user_id: int = Field(..., example=1)
 
 class AICommandUpdate(BaseModel):
     status: Optional[AICommandStatus] = None
@@ -208,16 +232,15 @@ class AICommandResponse(AICommandBase):
 # --- Rating Schemas ---
 
 class RatingCriteria(BaseModel):
-    # Dynamic criteria, e.g., {"politeness": 5, "cleanliness": 4}
-    scores: dict
+    scores: dict = Field(..., example={"xushmuomalalik": 5, "tezlik": 4})
 
 class RatingBase(BaseModel):
-    order_id: int
-    target_type: RatingTarget
+    order_id: int = Field(..., example=50)
+    target_type: RatingTarget = Field(..., example=RatingTarget.DRIVER)
     target_user: Optional[int] = None
-    target_driver: Optional[int] = None
-    score: int = Field(..., ge=1, le=5)
-    comment: Optional[str] = None
+    target_driver: Optional[int] = Field(None, example=2)
+    score: int = Field(..., ge=1, le=5, example=5)
+    comment: Optional[str] = Field(None, example="Juda yaxshi haydovchi, yukni vaqtida olib keldi")
     criteria_scores: Optional[dict] = None
 
 class RatingCreate(RatingBase):
@@ -226,16 +249,15 @@ class RatingCreate(RatingBase):
 
 class RatingUpdate(BaseModel):
     comment: Optional[str] = None
-    # Usually rating score is not updated, but we can allow it
     score: Optional[int] = Field(None, ge=1, le=5)
 
 class RatingResponse(RatingBase):
     id: int
     rated_by_user: Optional[int]
     rated_by_driver: Optional[int]
-    ai_verified: bool
-    ai_sentiment_score: Optional[float]
-    ai_verdict: Optional[AIVerdict]
-    is_suspicious: bool
+    ai_verified: bool = True
+    ai_sentiment_score: Optional[float] = Field(None, example=0.95)
+    ai_verdict: Optional[AIVerdict] = Field(None, example=AIVerdict.VALID)
+    is_suspicious: bool = False
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)

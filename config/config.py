@@ -110,6 +110,16 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         finally:
             await session.close()
 # ──────────────────────────────────────────────
+# MEDIA VA UPLOADS SOZLAMALARI
+# ──────────────────────────────────────────────
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+STATIC_PATH = "/static/uploads"
+
+# Papka mavjudligini tekshirish
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
+
 # BOT TOKEN TEKSHIRUVI
 # ──────────────────────────────────────────────
 if not BOT_TOKEN:
