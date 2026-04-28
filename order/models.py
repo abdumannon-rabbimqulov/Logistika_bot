@@ -1,3 +1,4 @@
+from __future__ import annotations
 import enum
 from datetime import datetime, timezone
 
@@ -6,10 +7,13 @@ from sqlalchemy import (
     ForeignKey, Enum as SQLEnum, Text, SmallInteger,Boolean
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from driver.models import Driver
 from config.config import Base
-from ai.models import Chat,Rating
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ai.models import Chat, Rating
+    from driver.models import Driver
 
 
 class OrderStatus(enum.Enum):

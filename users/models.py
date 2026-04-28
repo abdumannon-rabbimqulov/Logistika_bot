@@ -1,3 +1,4 @@
+from __future__ import annotations
 import enum
 from datetime import datetime
 from decimal import Decimal
@@ -5,12 +6,14 @@ from decimal import Decimal
 from sqlalchemy import (
     BigInteger, String, Numeric, DateTime, ForeignKey, Enum, Boolean, Integer, Text
 )
+from config.config import Base
 
 from sqlalchemy import func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from typing import TYPE_CHECKING
 
-from config.config import Base
-from ai.models import Chat,Rating,AICommand
+if TYPE_CHECKING:
+    from ai.models import Chat,Rating,AICommand
 
 class UserRole(str, enum.Enum):
     ADMIN  = "admin"

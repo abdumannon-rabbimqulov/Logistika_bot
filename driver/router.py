@@ -56,10 +56,7 @@ async def create_driver_profile(
     existing = await crud.get_driver_by_user_id(db, current_user.id)
     if existing:
         raise HTTPException(status_code=400, detail="Driver profile already exists")
-    
-    # Ensure user_id in data matches current_user
-    if data.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to create profile for another user")
+
     
     return await crud.create_driver(db, data)
 

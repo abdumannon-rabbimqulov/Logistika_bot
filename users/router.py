@@ -1,25 +1,3 @@
-"""
-Auth Router — To'liq email autentifikatsiya tizimi
-═══════════════════════════════════════════════════════════════════════════
-Register qadamlari:
-  1. POST /register        → Email + parol + ism → OTP email ga yuboriladi
-  2. POST /verify-email    → OTP tasdiqlanadi → User yaratiladi → Token
-  3. POST /select-role     → "driver" yoki "sender" tanlanadi
-  4. POST /driver-profile  → (faqat driver) Mashina ma'lumotlari kiritiladi
-
-Login:
-  POST /login-email        → Email + parol → JWT tokens
-
-Boshqa:
-  POST /login              → Telefon + parol (eski usul)
-  POST /refresh            → Refresh token → yangi tokenlar
-  GET  /me                 → O'z profili
-  PATCH /me                → Profilni tahrirlash
-  PATCH /me/password       → Parolni o'zgartirish
-  DELETE /me               → Akkauntni o'chirish
-═══════════════════════════════════════════════════════════════════════════
-"""
-
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession

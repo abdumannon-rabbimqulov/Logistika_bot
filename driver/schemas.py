@@ -76,9 +76,9 @@ class TruckTypeResponse(TruckTypeBase):
 # --- Driver Schemas ---
 
 class DriverBase(BaseModel):
-    truck_type_id: int = Field(..., example=1)
-    truck_number: str = Field(..., max_length=20, example="01 A 777 AA")
-    truck_brand: Optional[str] = Field(None, max_length=100, example="Mercedes-Benz Actros")
+    truck_type_id: int = Field()
+    truck_number: str = Field()
+    truck_brand: Optional[str]=None
     truck_year: Optional[int] = Field(None, example=2022)
     capacity_ton: Optional[Decimal] = Field(None, example=20.0)
     capacity_m3: Optional[Decimal] = Field(None, example=86.0)

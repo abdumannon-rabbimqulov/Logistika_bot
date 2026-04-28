@@ -1,3 +1,4 @@
+from __future__ import annotations
 import enum
 from datetime import datetime, timezone
 
@@ -9,10 +10,11 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from config.config import Base
+from typing import TYPE_CHECKING
 
-
-from ai.models import Chat,Rating
-from order.models import OrderOffer
+if TYPE_CHECKING:
+    from ai.models import Chat,Rating
+    from order.models import OrderOffer
 # ═══════════════════════════════════════════════
 # ENUM lar
 # ═══════════════════════════════════════════════
@@ -87,19 +89,12 @@ class Driver(Base):
     id      : Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id : Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), unique=True, nullable=False)
 
-    # Yuk mashinasi
     truck_type_id  : Mapped[int]     = mapped_column(Integer, ForeignKey("truck_types.id"), nullable=False)
     truck_number   : Mapped[str]     = mapped_column(String(20), unique=True, nullable=False)
-    truck_brand    : Mapped[str|None]= mapped_column(String(100), nullable=True)   # Mercedes, MAN, Volvo
-    truck_year     : Mapped[int|None]= mapped_column(SmallInteger, nullable=True)  # Ishlab chiqarilgan yil
+    truck_year     : Mapped[int|None]= mapped_column(SmallInteger, nullable=True)
 
-    # Qo'shimcha sig'im (agar truck_type dan farq qilsa)
-    capacity_ton   : Mapped[float|None] = mapped_column(Numeric(6, 2), nullable=True)
-    capacity_m3    : Mapped[float|None] = mapped_column(Numeric(6, 2), nullable=True)
-
-    # Joylashuv
-    current_city   : Mapped[str]     = mapped_column(String(300), index=True)
-    current_region : Mapped[str|None]= mapped_column(String(100), nullable=True)
+    current_city   : Mapped[str|None]     = mapped_column(String(300))
+    current_region : Mapped[str|None]= mapped_column(String(100))
 
     # Real-time GPS
     is_live_location_active  : Mapped[bool]         = mapped_column(Boolean,  default=False)
@@ -111,9 +106,8 @@ class Driver(Base):
     # Statistika
     rating          : Mapped[float] = mapped_column(Numeric(3, 2), default=5.0)
     total_trips     : Mapped[int]   = mapped_column(Integer, default=0)
-    total_km        : Mapped[float] = mapped_column(Numeric(10, 2), default=0)    # Umumiy bosib o'tilgan yo'l
-    cancel_count    : Mapped[int]   = mapped_column(Integer, default=0)            # Bekor qilishlar soni
-    on_time_percent : Mapped[float] = mapped_column(Numeric(5, 2), default=100.0) # O'z vaqtida yetkazish %
+    cancel_count    : Mapped[int]   = mapped_column(Integer, default=0)
+    on_time_percent : Mapped[float] = mapped_column(Numeric(5, 2), default=100.0)
 
     # Holat
     is_available  : Mapped[bool] = mapped_column(Boolean, default=True)

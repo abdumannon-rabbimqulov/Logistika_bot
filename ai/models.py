@@ -1,10 +1,4 @@
-"""
-Mukkammal Rating & Chat System — SQLAlchemy 2.0 Mapped Style
-=============================================================
-Mavjud modellar:  User, Driver, Order
-Yangi modellar:   Chat, Message, Attachment, Rating,
-                  AIAnalysis, AICommand + barcha Enum lar
-"""
+from __future__ import annotations
 import enum
 from datetime import datetime
 from typing import Optional
@@ -18,9 +12,12 @@ from sqlalchemy.orm import (
 )
 from sqlalchemy.sql import func
 
+from typing import TYPE_CHECKING
 
-from driver.models import Driver
-from order.models import Order
+if TYPE_CHECKING:
+    from driver.models import Driver
+    from order.models import Order
+    from users.models import User
 from config.config import Base
 
 
