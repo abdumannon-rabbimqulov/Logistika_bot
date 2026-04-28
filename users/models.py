@@ -10,7 +10,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from config.config import Base
-
+from ai.models import Chat,Rating,AICommand
 
 class UserRole(str, enum.Enum):
     ADMIN  = "admin"

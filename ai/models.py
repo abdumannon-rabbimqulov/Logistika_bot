@@ -5,7 +5,6 @@ Mavjud modellar:  User, Driver, Order
 Yangi modellar:   Chat, Message, Attachment, Rating,
                   AIAnalysis, AICommand + barcha Enum lar
 """
-
 import enum
 from datetime import datetime
 from typing import Optional
@@ -110,7 +109,6 @@ class Chat(Base):
 
     id        : Mapped[str]            = mapped_column(Integer, primary_key=True, autoincrement=True)
 
-    # Foreign keys
     user_id   : Mapped[Optional[str]]  = mapped_column(Integer, ForeignKey("users.id"),   nullable=True)
     driver_id : Mapped[Optional[str]]  = mapped_column(Integer, ForeignKey("drivers.id"), nullable=True)
     order_id  : Mapped[Optional[str]]  = mapped_column(Integer, ForeignKey("orders.id"),  nullable=True, unique=True)
@@ -126,7 +124,11 @@ class Chat(Base):
     updated_at : Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     closed_at  : Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    user        : Mapped[Optional["User"]]       = relationship(back_populates="chats")
+    user: Mapped["User"] = relationship(
+        "User",
+        back_populates="chats",
+        lazy="selectin"
+    )
     driver      : Mapped[Optional["Driver"]]     = relationship(back_populates="chats")
     order       : Mapped[Optional["Order"]]      = relationship(back_populates="chat")
     messages    : Mapped[list["Message"]]        = relationship(

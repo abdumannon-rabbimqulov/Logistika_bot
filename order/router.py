@@ -26,13 +26,18 @@ async def list_orders(
     customer_id: Optional[int] = None,
     driver_id: Optional[int] = None,
     status: Optional[str] = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Tizimdagi barcha yuk buyurtmalarini ko'rish. Filtrlar mavjud."""
     return await crud.get_all_orders(db, customer_id, driver_id, status)
 
 @router.get("/{pk}", response_model=schemas.OrderResponse, summary="Buyurtma tafsilotlari")
-async def get_order(pk: int, db: AsyncSession = Depends(get_db)):
+async def get_order(
+    pk: int, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Bitta buyurtma haqida barcha ma'lumotlarni ko'rish."""
     obj = await crud.get_order(db, pk)
     if not obj:
@@ -97,8 +102,20 @@ async def create_offer(
     return await crud.create_order_offer(db, offer_create)
 
 @router.get("/{order_id}/offers", response_model=List[schemas.OrderOfferResponse], summary="Buyurtmaga kelgan takliflar")
-async def list_order_offers(order_id: int, db: AsyncSession = Depends(get_db)):
+async def list_order_offers(
+    order_id: int, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Ma'lum bir yuk uchun kelgan barcha takliflarni ko'rish."""
+    order = await crud.get_order(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Check if user is the owner of the order
+    if order.customer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Sizga ushbu buyurtma takliflarini ko'rish ruxsat etilmagan")
+
     return await crud.get_order_offers(db, order_id)
 
 @router.patch("/offers/{pk}", response_model=schemas.OrderOfferResponse, summary="Taklifni yangilash")

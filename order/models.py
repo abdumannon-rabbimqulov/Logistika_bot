@@ -8,6 +8,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from driver.models import Driver
 from config.config import Base
+from ai.models import Chat,Rating
 
 
 
@@ -257,7 +258,7 @@ class OrderOffer(Base):
     distance_to_pickup_km : Mapped[float | None] = mapped_column(Numeric(7, 2), nullable=True)
 
     # Qaysi yuk mashinasi bilan boradi
-    truck_id : Mapped[int | None] = mapped_column(Integer, ForeignKey("trucks.id"), nullable=True)
+    truck_id : Mapped[int | None] = mapped_column(Integer, ForeignKey("truck_types.id"), nullable=True)
 
     # ── Qo'shimcha ──────────────────────────────────────────────────────────
     comment : Mapped[str | None] = mapped_column(String(500), nullable=True)

@@ -131,13 +131,18 @@ async def create_announcement(
 @router.get("/announcements", response_model=List[schemas.DriverAnnouncementResponse], summary="E'lonlar ro'yxati")
 async def list_announcements(
     driver_id: Optional[int] = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Barcha haydovchilarning safar e'lonlarini ko'rish."""
     return await crud.get_all_announcements(db, driver_id)
 
 @router.get("/announcements/{pk}", response_model=schemas.DriverAnnouncementResponse, summary="E'lon tafsilotlari")
-async def get_announcement(pk: int, db: AsyncSession = Depends(get_db)):
+async def get_announcement(
+    pk: int, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Bitta e'lon haqida to'liq ma'lumot."""
     obj = await crud.get_announcement(db, pk)
     if not obj:
@@ -168,6 +173,14 @@ async def list_offers_on_announcement(
     current_user: User = Depends(get_current_user)
 ):
     """Haydovchi o'z e'loniga kelgan barcha takliflarni ko'rishi."""
+    announcement = await crud.get_announcement(db, announcement_id)
+    if not announcement:
+        raise HTTPException(status_code=404, detail="E'lon topilmadi")
+    
+    driver = await crud.get_driver_by_user_id(db, current_user.id)
+    if not driver or announcement.driver_id != driver.id:
+        raise HTTPException(status_code=403, detail="Sizga ushbu e'lon takliflarini ko'rish ruxsat etilmagan")
+
     return await crud.get_announcement_offers(db, announcement_id)
 
 @router.patch("/offers/{pk}", response_model=schemas.AnnouncementOfferResponse, summary="Taklifni yangilash")
@@ -177,5 +190,15 @@ async def update_offer(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Taklif statusini o'zgartirish."""
+    """Taklif statusini o'zgartirish (qabul qilish yoki rad etish)."""
+    offer = await crud.get_announcement_offer(db, pk)
+    if not offer:
+        raise HTTPException(status_code=404, detail="Taklif topilmadi")
+    
+    announcement = await crud.get_announcement(db, offer.announcement_id)
+    driver = await crud.get_driver_by_user_id(db, current_user.id)
+    
+    if not driver or announcement.driver_id != driver.id:
+          raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
+
     return await crud.update_announcement_offer(db, pk, data)

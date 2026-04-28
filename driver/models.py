@@ -11,6 +11,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from config.config import Base
 
 
+from ai.models import Chat,Rating
+from order.models import OrderOffer
 # ═══════════════════════════════════════════════
 # ENUM lar
 # ═══════════════════════════════════════════════

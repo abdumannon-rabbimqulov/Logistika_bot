@@ -2,10 +2,10 @@ from fastapi import FastAPI
 from config.config import engine, Base, UPLOAD_DIR, STATIC_PATH
 # MUHIM: Barcha modellarni modul darajasida import qilish 
 # (shunda ular registry'ga ro'yxatdan o'tadi va circular import bo'lmaydi)
-import users.models
 import driver.models
 import order.models
 import ai.models
+import users.models
 
 from sqlalchemy.orm import configure_mappers
 configure_mappers()

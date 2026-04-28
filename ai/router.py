@@ -132,10 +132,15 @@ async def list_my_chats(
     return await crud.list_user_chats(db, current_user.id)
 
 @router.get("/chats/{chat_id}", response_model=schemas.ChatResponse, summary="Chat tafsilotlari")
-async def get_chat_details(chat_id: int, db: AsyncSession = Depends(get_db)):
+async def get_chat_details(
+    chat_id: int, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Bitta chatni barcha xabarlari (history) bilan olish."""
     chat = await crud.get_chat(db, chat_id)
-    if not chat:
-        raise HTTPException(status_code=404, detail="Chat topilmadi")
+    if not chat or chat.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Chat topilmadi yoki sizga tegishli emas")
     return chat
 
 @router.patch("/messages/{message_id}", response_model=schemas.MessageResponse, summary="Xabarni tahrirlash")
