@@ -38,18 +38,18 @@ class OfferStatus(str, Enum):
 class OrderWaypointBase(BaseModel):
     sequence: int = Field(1, description="Tartib raqami")
     waypoint_type: WaypointType = Field(WaypointType.PICKUP, description="Nuqta turi")
-    city: str = Field(..., max_length=100, example="Toshkent")
-    address: Optional[str] = Field(None, max_length=300, example="Chilonzor 19-mavze")
-    landmark: Optional[str] = Field(None, max_length=200, example="Makro supermarketi yonida")
-    latitude: Optional[float] = Field(None, example=41.311081)
-    longitude: Optional[float] = Field(None, example=69.240562)
-    distance_from_prev_km: Optional[Decimal] = Field(None, example=0)
+    city: str = Field(..., max_length=100)
+    address: Optional[str] = Field(None, max_length=300)
+    landmark: Optional[str] = Field(None, max_length=200)
+    latitude: Optional[float] = Field(None)
+    longitude: Optional[float] = Field(None)
+    distance_from_prev_km: Optional[Decimal] = Field(None)
     scheduled_arrival: Optional[datetime] = None
     scheduled_departure: Optional[datetime] = None
-    stop_duration_min: Optional[int] = Field(None, example=30)
-    contact_name: Optional[str] = Field(None, max_length=150, example="Ali Valiyev")
-    contact_phone: Optional[str] = Field(None, max_length=20, example="+998901234567")
-    note: Optional[str] = Field(None, example="Iltimos, yetkazishdan oldin qo'ngiroq qiling")
+    stop_duration_min: Optional[int] = Field(None)
+    contact_name: Optional[str] = Field(None, max_length=150)
+    contact_phone: Optional[str] = Field(None, max_length=20)
+    note: Optional[str] = Field(None)
     status: WaypointStatus = WaypointStatus.PENDING
 
 class OrderWaypointCreate(OrderWaypointBase):
@@ -67,17 +67,17 @@ class OrderWaypointResponse(OrderWaypointBase):
 # --- Order Schemas ---
 
 class OrderBase(BaseModel):
-    cargo_name: str = Field(..., max_length=200, example="Mebellar to'plami")
-    weight: Decimal = Field(..., example=2.5)
-    volume: Optional[Decimal] = Field(None, example=12.0)
-    required_truck_type_id: int = Field(..., example=1)
-    price: Decimal = Field(..., example=1500000)
-    currency: str = Field("UZS", example="UZS")
+    cargo_name: str = Field(..., max_length=200)
+    weight: Decimal = Field(...)
+    volume: Optional[Decimal] = Field(None)
+    required_truck_type_id: int = Field(...)
+    price: Decimal = Field(...)
+    currency: str = Field("UZS")
     scheduled_start: Optional[datetime] = None
     scheduled_end: Optional[datetime] = None
 
 class OrderCreate(OrderBase):
-    customer_id: int = Field(..., example=1)
+    customer_id: int = Field(...)
     waypoints: List[OrderWaypointCreate]
 
     model_config = ConfigDict(
@@ -124,7 +124,7 @@ class OrderResponse(OrderBase):
     id: int
     customer_id: int
     driver_id: Optional[int] = None
-    total_distance_km: Optional[Decimal] = Field(None, example=320)
+    total_distance_km: Optional[Decimal] = Field(None)
     status: OrderStatus
     created_at: datetime
     updated_at: datetime
@@ -134,20 +134,20 @@ class OrderResponse(OrderBase):
 # --- OrderOffer Schemas ---
 
 class OrderOfferBase(BaseModel):
-    offered_price: Decimal = Field(..., example=1400000)
+    offered_price: Decimal = Field(...)
     currency: str = "UZS"
     estimated_pickup_time: Optional[datetime] = None
     estimated_delivery_time: Optional[datetime] = None
     expires_at: Optional[datetime] = None
-    driver_latitude: Optional[float] = Field(None, example=41.3)
-    driver_longitude: Optional[float] = Field(None, example=69.2)
-    distance_to_pickup_km: Optional[Decimal] = Field(None, example=15.5)
-    truck_id: Optional[int] = Field(None, example=5)
-    comment: Optional[str] = Field(None, max_length=500, example="Men 1 soatda boraman, narxi mos kelsa")
+    driver_latitude: Optional[float] = Field(None)
+    driver_longitude: Optional[float] = Field(None)
+    distance_to_pickup_km: Optional[Decimal] = Field(None)
+    truck_id: Optional[int] = Field(None)
+    comment: Optional[str] = Field(None, max_length=500)
 
 class OrderOfferCreate(OrderOfferBase):
-    order_id: int = Field(..., example=10)
-    driver_id: int = Field(..., example=2)
+    order_id: int = Field(...)
+    driver_id: int = Field(...)
 
 class OrderOfferUpdate(BaseModel):
     counter_price: Optional[Decimal] = None

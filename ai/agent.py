@@ -1,12 +1,8 @@
-import json
 import logging
-from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from config.config import client, MODEL_NAME, SYSTEM_INSTRUCTION, async_session
 from order import crud as order_crud, schemas as order_schemas
-from driver import crud as driver_crud, schemas as driver_schemas
-from ai import crud as ai_crud, schemas as ai_schemas
-from datetime import datetime
+from driver import crud as driver_crud
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +20,7 @@ class LogistikaToolkit:
         from_city: str, 
         to_city: str, 
         price: float,
-        required_truck_type_id: int = 1
+        required_truck_type_id: int
     ) -> str:
         """
         Yangi yuk buyurtmasini yaratish.
