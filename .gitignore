@@ -13,3 +13,4 @@ venv/
 .venv/
 env/
 ENV/
+deploy.sh
