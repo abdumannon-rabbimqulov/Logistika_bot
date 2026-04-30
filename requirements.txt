@@ -12,4 +12,5 @@ passlib[bcrypt]>=1.7.4
 python-jose[cryptography]>=3.3.0
 aiosmtplib>=2.0.0
 uvicorn>=0.23.0
+alembic==1.13.1
 python-multipart>=0.0.12

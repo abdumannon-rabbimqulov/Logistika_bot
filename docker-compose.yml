@@ -1,3 +1,16 @@
+x-backend-base: &backend-base
+  build: .
+  env_file:
+    - .env
+  environment:
+    - DB_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-2103}@db:5432/${DB_NAME:-logistika_db}
+  volumes:
+    - .:/app
+    - uploads_data:/app/uploads
+  depends_on:
+    db:
+      condition: service_healthy
+
 services:
   db:
     image: postgres:15-alpine
@@ -15,38 +28,35 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: always
+
+  migrations:
+    <<: *backend-base
+    container_name: logistika_migrations
+    command: alembic upgrade head
+    restart: on-failure
 
   backend-api:
-    build: .
+    <<: *backend-base
     container_name: logistika_api
-    command: uvicorn config.main:app --host 0.0.0.0 --port 8000
-    volumes:
-      - .:/app
-      - uploads_data:/app/uploads
+    command: uvicorn config.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
-    env_file:
-      - .env
-    environment:
-      - DB_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-2103}@db:5432/${DB_NAME:-logistika_db}
     depends_on:
       db:
         condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
 
   backend-bot:
-    build: .
+    <<: *backend-base
     container_name: logistika_bot
     command: python main.py
-    volumes:
-      - .:/app
-      - uploads_data:/app/uploads
-    env_file:
-      - .env
-    environment:
-      - DB_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-2103}@db:5432/${DB_NAME:-logistika_db}
     depends_on:
       db:
         condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
 
 volumes:
   postgres_data:

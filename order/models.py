@@ -17,11 +17,11 @@ if TYPE_CHECKING:
 
 
 class OrderStatus(enum.Enum):
-    PENDING     = "pending"
-    ACCEPTED    = "accepted"
-    IN_PROGRESS = "in_progress"
-    COMPLETED   = "completed"
-    CANCELLED   = "cancelled"
+    PENDING = "pending"         # Kutilmoqda (Yangi buyurtma, hali hech kim qabul qilmagan)
+    ACCEPTED = "accepted"       # Qabul qilindi (Haydovchi yoki ijrochi tomonidan tasdiqlangan)
+    IN_PROGRESS = "in_progress" # Jarayonda (Yuk yo'lda yoki ish bajarilmoqda)
+    COMPLETED = "completed"     # Yakunlandi (Yuk manzilga yetib bordi va topshirildi)
+    CANCELLED = "cancelled"     # Bekor qilindi (Mijoz yoki tizim tomonidan to'xtatildi)
 
 
 
@@ -133,9 +133,6 @@ class Order(Base):
         return f"<Order(id={self.id}, cargo='{self.cargo_name}', stops={stops}, status={self.status})>"
 
 
-# ═══════════════════════════════════════════════
-# ORDER WAYPOINT — Har bir to'xtash nuqtasi
-# ═══════════════════════════════════════════════
 
 class OrderWaypoint(Base):
     __tablename__ = "order_waypoints"
@@ -146,13 +143,10 @@ class OrderWaypoint(Base):
     # Tartib raqami: 1 → 2 → 3 → ... (shu tartibda boriladi)
     sequence : Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
-    # Nuqta turi
     waypoint_type : Mapped[WaypointType] = mapped_column(
         SQLEnum(WaypointType), nullable=False
     )
 
-    # Manzil
-    city        : Mapped[str]        = mapped_column(String(100), nullable=False, index=True)
     address     : Mapped[str | None] = mapped_column(String(300), nullable=True)
     landmark    : Mapped[str | None] = mapped_column(String(200), nullable=True)  # Mo'ljal
 
@@ -206,7 +200,7 @@ class OrderWaypoint(Base):
     def __repr__(self) -> str:
         return (
             f"<Waypoint(order={self.order_id}, seq={self.sequence}, "
-            f"city='{self.city}', type={self.waypoint_type.value}, status={self.status.value})>"
+            f"address={self.address} type={self.waypoint_type.value}, status={self.status.value})>"
         )
 
 
@@ -238,11 +232,6 @@ class OrderOffer(Base):
     offered_price    : Mapped[float]          = mapped_column(Numeric(12, 2), nullable=False)
     currency         : Mapped[str]            = mapped_column(String(10),     default="UZS")
 
-    # Mijoz qarshi taklif bersa (muzokarа)
-    counter_price    : Mapped[float | None]   = mapped_column(Numeric(12, 2), nullable=True)
-    counter_comment  : Mapped[str | None]     = mapped_column(String(500),    nullable=True)
-    counter_at       : Mapped[datetime | None]= mapped_column(DateTime,       nullable=True)
-
     # ── Vaqt ────────────────────────────────────────────────────────────────
     # Birinchi nuqtaga (yuk olish) qachon yetib boradi
     estimated_pickup_time    : Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -253,25 +242,13 @@ class OrderOffer(Base):
     # Taklif qancha vaqt amal qiladi (shu vaqtdan keyin EXPIRED bo'ladi)
     expires_at : Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    # ── Haydovchining hozirgi holati ────────────────────────────────────────
-    # Taklif berilgan paytda haydovchi qayerda edi (GPS)
-    driver_latitude  : Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
-    driver_longitude : Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
 
     # Buyurtma birinchi nuqtasiga taxminiy masofa (km)
     distance_to_pickup_km : Mapped[float | None] = mapped_column(Numeric(7, 2), nullable=True)
 
-    # Qaysi yuk mashinasi bilan boradi
-    truck_id : Mapped[int | None] = mapped_column(Integer, ForeignKey("truck_types.id"), nullable=True)
-
     # ── Qo'shimcha ──────────────────────────────────────────────────────────
     comment : Mapped[str | None] = mapped_column(String(500), nullable=True)
 
-    # Haydovchi reytingi taklif berilgan paytda (snapshot — keyin o'zgarishi mumkin)
-    driver_rating_snapshot : Mapped[float | None] = mapped_column(Numeric(3, 2), nullable=True)
-
-    # Haydovchi bu kategoriyada nechta muvaffaqiyatli yetkazib bergan (snapshot)
-    driver_completed_orders_snapshot : Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     # Mijoz bu taklifni ko'rdimi
     is_seen       : Mapped[bool]          = mapped_column(Boolean, default=False)
@@ -296,32 +273,14 @@ class OrderOffer(Base):
     order  : Mapped["Order"]  = relationship("Order",  back_populates="offers")
     driver : Mapped["Driver"] = relationship("Driver", back_populates="offers")
 
-    # ── Helper property lar ──────────────────────────────────────────────────
 
     @property
     def is_active(self) -> bool:
-        """Taklif hali amal qiladimi"""
-        if self.status not in (OfferStatus.PENDING, OfferStatus.SEEN):
-            return False
         if self.expires_at and datetime.now(timezone.utc) > self.expires_at:
             return False
         return True
 
-    @property
-    def final_price(self) -> float:
-        """
-        Muzokara bo'lsa counter_price, bo'lmasa offered_price.
-        Qabul qilingan narx shu.
-        """
-        return float(self.counter_price or self.offered_price)
 
-    @property
-    def response_time_minutes(self) -> int | None:
-        """Mijoz qancha vaqtda qaror qildi (daqiqalarda)"""
-        if self.accepted_at and self.created_at:
-            delta = self.accepted_at - self.created_at
-            return int(delta.total_seconds() / 60)
-        return None
 
     def mark_seen(self) -> None:
         self.is_seen = True
