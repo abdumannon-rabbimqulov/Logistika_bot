@@ -241,7 +241,7 @@ class AnnouncementOfferBase(BaseModel):
     comment: Optional[str] = Field(None, max_length=500)
 
 class AnnouncementOfferCreate(AnnouncementOfferBase):
-    announcement_id: int = Field(...)
+    announcement_id: int = Field(...,)
     customer_id: int = Field(...)
 
 class AnnouncementOfferUpdate(BaseModel):

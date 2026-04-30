@@ -1,7 +1,5 @@
 from fastapi import FastAPI
 from config.config import engine, Base, UPLOAD_DIR, STATIC_PATH
-# MUHIM: Barcha modellarni modul darajasida import qilish 
-# (shunda ular registry'ga ro'yxatdan o'tadi va circular import bo'lmaydi)
 import driver.models
 import order.models
 import ai.models
@@ -40,7 +38,7 @@ async def startup():
 app.include_router(driver_router)
 app.include_router(order_router)
 app.include_router(ai_router)
-app.include_router(auth_router, prefix="/api/auth", tags=["Auth"])
+app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 
 
 

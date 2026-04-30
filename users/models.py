@@ -27,22 +27,12 @@ class UserRole(str, enum.Enum):
 # ═══════════════════════════════════════════════════════════════════════════
 
 class EmailOTP(Base):
-    """
-    Ro'yxatdan o'tish jarayonida email ga yuborilgan
-    OTP kodlarni saqlash uchun jadval.
-
-    Hayot sikli:
-      1. /register → yozuv yaratiladi (is_used=False)
-      2. /verify-email → is_used=True qilinadi
-      3. Muddati o'tgan yozuvlar vaqti-vaqti bilan tozalanadi
-    """
     __tablename__ = "email_otps"
 
     id         : Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
     email      : Mapped[str]           = mapped_column(String(254), nullable=False, index=True)
     code       : Mapped[str]           = mapped_column(String(10),  nullable=False)
 
-    # Parol bu yerda hashed holda saqlanadi (user yaratilgunga qadar)
     hashed_pw  : Mapped[str]           = mapped_column(Text, nullable=False)
     full_name  : Mapped[str]           = mapped_column(String(128), nullable=False)
     language   : Mapped[str]           = mapped_column(String(10),  default="uz")
@@ -56,9 +46,6 @@ class EmailOTP(Base):
         return not self.is_used and datetime.utcnow() < self.expires_at
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# USER
-# ═══════════════════════════════════════════════════════════════════════════
 
 class User(Base):
     __tablename__ = "users"
