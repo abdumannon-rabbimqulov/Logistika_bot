@@ -42,15 +42,15 @@ class DocumentType(str, Enum):
 # --- TruckType Schemas ---
 
 class TruckTypeBase(BaseModel):
-    name: str = Field(..., max_length=50, example="Fura (Tent)")
-    max_weight: Decimal = Field(..., example=22.0)
-    max_volume: Decimal = Field(..., example=92.0)
-    length: Optional[Decimal] = Field(None, example=13.6)
-    width: Optional[Decimal] = Field(None, example=2.45)
-    height: Optional[Decimal] = Field(None, example=2.7)
-    pallet_capacity: Optional[int] = Field(None, example=33)
-    image_url: Optional[str] = Field(None, max_length=512, example="/static/uploads/truck_tent.jpg")
-    description: Optional[str] = Field(None, max_length=200, example="Standart tentli fura, barcha turdagi yuklar uchun")
+    name: str = Field()
+    max_weight: Decimal
+    max_volume: Decimal
+    length: Optional[Decimal] = Field(None)
+    width: Optional[Decimal] = Field(None)
+    height: Optional[Decimal] = Field(None)
+    pallet_capacity: Optional[int] = Field(None)
+    image_url: Optional[str] = Field(None, max_length=512)
+    description: Optional[str] = Field(None, max_length=200)
     is_active: bool = True
 
 class TruckTypeCreate(TruckTypeBase):
@@ -78,16 +78,13 @@ class TruckTypeResponse(TruckTypeBase):
 class DriverBase(BaseModel):
     truck_type_id: int = Field()
     truck_number: str = Field()
-    truck_brand: Optional[str]=None
-    truck_year: Optional[int] = Field(None, example=2022)
-    capacity_ton: Optional[Decimal] = Field(None, example=20.0)
-    capacity_m3: Optional[Decimal] = Field(None, example=86.0)
-    current_city: str = Field(..., max_length=300, example="Toshkent")
-    current_region: Optional[str] = Field(None, max_length=100, example="Toshkent shahri")
+    truck_year: Optional[int] =None
+    current_city: Optional[str] = Field(None, max_length=300)
+    current_region: Optional[str] = Field(None, max_length=100)
     is_available: bool = True
 
 class DriverCreate(DriverBase):
-    user_id: int = Field(..., example=123)
+    user_id: int = Field()
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -122,9 +119,9 @@ class DriverUpdate(BaseModel):
 class DriverResponse(DriverBase):
     id: int
     user_id: int
-    rating: Decimal = Field(..., example=4.9)
-    total_trips: int = Field(..., example=150)
-    total_km: Decimal = Field(..., example=25400.5)
+    rating: Decimal = Field()
+    total_trips: int = Field()
+    total_km: Decimal = Field()
     docs_verified: bool
     is_blocked: bool
     created_at: datetime
@@ -134,13 +131,13 @@ class DriverResponse(DriverBase):
 # --- DriverDocument Schemas ---
 
 class DriverDocumentBase(BaseModel):
-    doc_type: DocumentType = Field(..., example=DocumentType.DRIVER_LICENSE)
-    file_url: str = Field(..., max_length=512, example="/static/uploads/docs/license_123.jpg")
-    file_name: Optional[str] = Field(None, max_length=255, example="guvohnoma.jpg")
+    doc_type: DocumentType = Field(...)
+    file_url: str = Field(...)
+    file_name: Optional[str] = Field(None)
     expires_at: Optional[datetime] = None
 
 class DriverDocumentCreate(DriverDocumentBase):
-    driver_id: int = Field(..., example=10)
+    driver_id: int = Field(...)
 
 class DriverDocumentUpdate(BaseModel):
     verification_status: Optional[DriverVerificationStatus] = None
@@ -159,15 +156,15 @@ class DriverDocumentResponse(DriverDocumentBase):
 # --- AnnouncementWaypoint Schemas ---
 
 class AnnouncementWaypointBase(BaseModel):
-    sequence: int = Field(1, example=1)
+    sequence: int = Field(1)
     waypoint_type: AnnouncementWaypointType = Field(AnnouncementWaypointType.ORIGIN)
-    city: str = Field(..., max_length=100, example="Buxoro")
-    region: Optional[str] = Field(None, max_length=100, example="Buxoro viloyati")
-    address: Optional[str] = Field(None, max_length=300, example="Markaziy dehqon bozori")
+    city: str = Field(...)
+    region: Optional[str] = Field(None)
+    address: Optional[str] = Field(None)
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     distance_from_prev_km: Optional[Decimal] = None
-    stop_duration_min: Optional[int] = Field(None, example=60)
+    stop_duration_min: Optional[int] = Field(None)
     scheduled_at: Optional[datetime] = None
     note: Optional[str] = None
 
@@ -182,18 +179,18 @@ class AnnouncementWaypointResponse(AnnouncementWaypointBase):
 # --- DriverAnnouncement Schemas ---
 
 class DriverAnnouncementBase(BaseModel):
-    price: Decimal = Field(..., example=2500000)
+    price: Decimal = Field(...)
     currency: str = Field("UZS", max_length=10)
-    available_weight: Optional[Decimal] = Field(None, example=10.5)
-    available_volume: Optional[Decimal] = Field(None, example=40.0)
+    available_weight: Optional[Decimal] = Field(None)
+    available_volume: Optional[Decimal] = Field(None)
     departure_date: datetime
     arrival_date: Optional[datetime] = None
     expires_at: Optional[datetime] = None
-    description: Optional[str] = Field(None, max_length=500, example="Toshkentga bo'sh qaytyapman, arzonroq olib ketaman")
+    description: Optional[str] = Field(None)
     status: AnnouncementStatus = AnnouncementStatus.ACTIVE
 
 class DriverAnnouncementCreate(DriverAnnouncementBase):
-    driver_id: int = Field(..., example=5)
+    driver_id: int = Field(...)
     waypoints: List[AnnouncementWaypointCreate]
 
     model_config = ConfigDict(
@@ -224,7 +221,7 @@ class DriverAnnouncementUpdate(BaseModel):
 class DriverAnnouncementResponse(DriverAnnouncementBase):
     id: int
     driver_id: int
-    total_distance_km: Optional[Decimal] = Field(None, example=1050)
+    total_distance_km: Optional[Decimal] = Field(None)
     created_at: datetime
     updated_at: datetime
     waypoints: List[AnnouncementWaypointResponse]
@@ -233,19 +230,19 @@ class DriverAnnouncementResponse(DriverAnnouncementBase):
 # --- AnnouncementOffer Schemas ---
 
 class AnnouncementOfferBase(BaseModel):
-    cargo_name: str = Field(..., max_length=200, example="Maishiy texnika")
-    cargo_description: Optional[str] = Field(None, max_length=500, example="Xolodilnik va televizorlar")
-    cargo_weight: Optional[Decimal] = Field(None, example=1.2)
-    cargo_volume: Optional[Decimal] = Field(None, example=5.0)
-    pickup_city: Optional[str] = Field(None, max_length=100, example="Urganch")
-    delivery_city: Optional[str] = Field(None, max_length=100, example="Toshkent")
-    offered_price: Decimal = Field(..., example=800000)
+    cargo_name: str = Field(...)
+    cargo_description: Optional[str] = Field(None)
+    cargo_weight: Optional[Decimal] = Field(None)
+    cargo_volume: Optional[Decimal] = Field(None)
+    pickup_city: Optional[str] = Field(None)
+    delivery_city: Optional[str] = Field(None)
+    offered_price: Decimal = Field(...)
     currency: str = "UZS"
-    comment: Optional[str] = Field(None, max_length=500, example="Yukni 2-mayda yuklash kerak")
+    comment: Optional[str] = Field(None, max_length=500)
 
 class AnnouncementOfferCreate(AnnouncementOfferBase):
-    announcement_id: int = Field(..., example=101)
-    customer_id: int = Field(..., example=50)
+    announcement_id: int = Field(...)
+    customer_id: int = Field(...)
 
 class AnnouncementOfferUpdate(BaseModel):
     counter_price: Optional[Decimal] = None

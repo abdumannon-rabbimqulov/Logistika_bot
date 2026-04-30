@@ -1,25 +1,3 @@
-"""
-Email OTP Service
-─────────────────────────────────────────────────────────────────
-Bu modul foydalanuvchi ro'yxatdan o'tishida email ga
-tasdiqlash kodi (OTP) yuborish uchun ishlatiladi.
-
-Ishlash tartibi:
-  1. /register  → email, parol, to'liq ism qabul qilinadi
-  2. 6 xonali OTP yaratiladi va Redis/xotiraga saqlanadi
-  3. Email ga HTML xat yuboriladi
-  4. /verify-email → OTP tekshiriladi va foydalanuvchi yaratiladi
-
-Sozlash uchun .env ga quyidagilarni yozing:
-  EMAIL_HOST     = smtp.gmail.com
-  EMAIL_PORT     = 587
-  EMAIL_USERNAME = sizning@gmail.com
-  EMAIL_PASSWORD = xxxx xxxx xxxx xxxx   ← App Password!
-  EMAIL_FROM     = sizning@gmail.com
-  EMAIL_USE_TLS  = True
-─────────────────────────────────────────────────────────────────
-"""
-
 import asyncio
 import logging
 import random
@@ -40,18 +18,12 @@ from config.config import (
 logger = logging.getLogger(__name__)
 
 
-# ──────────────────────────────────────────────────────────────────────
-# OTP GENERATSIYA
-# ──────────────────────────────────────────────────────────────────────
 
 def generate_otp(length: int = 6) -> str:
     """6 xonali raqamli OTP kod yaratadi."""
     return "".join(random.choices(string.digits, k=length))
 
 
-# ──────────────────────────────────────────────────────────────────────
-# EMAIL XABAR SHABLONI (HTML)
-# ──────────────────────────────────────────────────────────────────────
 
 def _build_email_html(otp_code: str, full_name: str, expire_minutes: int = 10) -> str:
     """Chiroyli HTML email shablonini qaytaradi."""

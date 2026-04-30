@@ -17,7 +17,7 @@ async def create_order(db: AsyncSession, data: OrderCreate) -> Order:
     
     obj = Order(**order_dict)
     db.add(obj)
-    await db.flush()  # To get obj.id
+    await db.flush()
     
     for wp_data in waypoints_data:
         wp = OrderWaypoint(order_id=obj.id, **wp_data.model_dump())

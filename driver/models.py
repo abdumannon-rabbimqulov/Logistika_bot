@@ -163,9 +163,7 @@ class Driver(Base):
         return f"<Driver(id={self.id}, truck='{self.truck_number}', city='{self.current_city}')>"
 
 
-# ═══════════════════════════════════════════════
-# DRIVER DOCUMENT — Haydovchi hujjatlari
-# ═══════════════════════════════════════════════
+
 
 class DocumentType(enum.Enum):
     DRIVER_LICENSE    = "driver_license"     # Haydovchilik guvohnomasi
