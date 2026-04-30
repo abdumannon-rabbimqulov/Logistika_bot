@@ -3,15 +3,15 @@ services:
     image: postgres:15-alpine
     container_name: logistika_db
     environment:
-      POSTGRES_USER: postgres
+      POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-2103}
-      POSTGRES_DB: logistika_db
+      POSTGRES_DB: ${DB_NAME:-logistika_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-logistika_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -19,18 +19,16 @@ services:
   backend-api:
     build: .
     container_name: logistika_api
-    command: uvicorn config.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn config.main:app --host 0.0.0.0 --port 8000
     volumes:
       - .:/app
+      - uploads_data:/app/uploads
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
-      - DB_URL=postgresql+asyncpg://postgres:${DB_PASSWORD:-2103}@db:5432/logistika_db
-      - BOT_TOKEN=${BOT_TOKEN}
-      - WEBAPP_URL=${WEBAPP_URL}
-      - ADMIN=${ADMIN}
-      - SECRET_KEY=${SECRET_KEY}
-      - API_KEY=${API_KEY}
+      - DB_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-2103}@db:5432/${DB_NAME:-logistika_db}
     depends_on:
       db:
         condition: service_healthy
@@ -41,28 +39,15 @@ services:
     command: python main.py
     volumes:
       - .:/app
+      - uploads_data:/app/uploads
+    env_file:
+      - .env
     environment:
-      - DB_URL=postgresql+asyncpg://postgres:${DB_PASSWORD:-2103}@db:5432/logistika_db
-      - BOT_TOKEN=${BOT_TOKEN}
-      - WEBAPP_URL=${WEBAPP_URL}
-      - ADMIN=${ADMIN}
-      - API_KEY=${API_KEY}
+      - DB_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-2103}@db:5432/${DB_NAME:-logistika_db}
     depends_on:
       db:
         condition: service_healthy
 
-  frontend:
-    build: ./logistika-ui
-    container_name: logistika_frontend
-    volumes:
-      - ./logistika-ui:/app
-      - /app/node_modules
-    ports:
-      - "5173:5173"
-    environment:
-      - VITE_API_URL=http://localhost:8000
-    depends_on:
-      - backend-api
-
 volumes:
   postgres_data:
+  uploads_data:
