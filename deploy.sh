@@ -39,4 +39,5 @@ EOF
 rm $ARCHIVE_NAME
 
 echo -e "${GREEN}✅ Deployment muvaffaqiyatli yakunlandi!${NC}"
-echo -e "${GREEN}Swagger: http://158.220.100.58:8003/docs${NC}"
+echo -e "${GREEN}Web: https://logistic.org.uz${NC}"
+echo -e "${GREEN}Swagger: https://logistic.org.uz/docs${NC}"
