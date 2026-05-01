@@ -1,4 +1,5 @@
 import os
+import logging
 from typing import AsyncGenerator
 
 from dotenv import load_dotenv
@@ -10,28 +11,67 @@ try:
 except ImportError:
     genai = None
 
+# Setup logging
+logger = logging.getLogger(__name__)
 
+# Load .env file
 load_dotenv()
 
 
-BOT_TOKEN = os.getenv('BOT_TOKEN')
-WEBAPP_URL = os.getenv('WEBAPP_URL')
-ADMIN_IDS: set[int] = {int(i.strip()) for i in os.getenv("ADMIN", "").split(",") if i.strip()}
+def get_required_env(key: str, default: str | None = None) -> str:
+    """Get environment variable with validation."""
+    value = os.getenv(key, default)
+    if not value:
+        error_msg = f"❌ CRITICAL: Environment variable '{key}' is not set. Check .env file or set it manually."
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+    return value
 
 
-API_KEY = os.getenv('API_KEY')
+def get_optional_env(key: str, default: str | None = None) -> str | None:
+    """Get optional environment variable."""
+    return os.getenv(key, default)
+
+
+# ─────────────────────────────────────────────────────────────
+# BOT & WEB CONFIGURATION
+# ─────────────────────────────────────────────────────────────
+BOT_TOKEN = get_required_env('BOT_TOKEN')
+WEBAPP_URL = get_optional_env('WEBAPP_URL', 'http://localhost:8000')
+ADMIN_IDS: set[int] = {int(i.strip()) for i in get_optional_env("ADMIN", "").split(",") if i.strip()}
+
+# ─────────────────────────────────────────────────────────────
+# AI CONFIGURATION
+# ─────────────────────────────────────────────────────────────
+API_KEY = get_optional_env('API_KEY')
 client = genai.Client(api_key=API_KEY) if genai and API_KEY else None
-MODEL_NAME = "gemini-flash-latest"
+MODEL_NAME = get_optional_env('MODEL_NAME', 'gemini-flash-latest')
 
 
-EMAIL_HOST      = os.getenv("EMAIL_HOST", "smtp.gmail.com")
-EMAIL_PORT      = int(os.getenv("EMAIL_PORT", "587"))
-EMAIL_USERNAME  = os.getenv("EMAIL_USERNAME", "")
-EMAIL_PASSWORD  = os.getenv("EMAIL_PASSWORD", "")
-EMAIL_FROM      = os.getenv("EMAIL_FROM", EMAIL_USERNAME)
-EMAIL_USE_TLS   = os.getenv("EMAIL_USE_TLS", "True").lower() in ("true", "1", "yes")
+# ─────────────────────────────────────────────────────────────
+# EMAIL CONFIGURATION
+# ─────────────────────────────────────────────────────────────
+EMAIL_HOST = get_optional_env("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(get_optional_env("EMAIL_PORT", "587"))
+EMAIL_USERNAME = get_optional_env("EMAIL_USERNAME", "")
+EMAIL_PASSWORD = get_optional_env("EMAIL_PASSWORD", "")
+EMAIL_FROM = get_optional_env("EMAIL_FROM", EMAIL_USERNAME)
+EMAIL_USE_TLS = get_optional_env("EMAIL_USE_TLS", "True").lower() in ("true", "1", "yes")
+EMAIL_OTP_EXPIRE_SECONDS = int(get_optional_env("EMAIL_OTP_EXPIRE", "120"))
 
-EOTP_EXPIRE_SECONDS = int(os.getenv("EMAIL_OTP_EXPIRE"))
+# ─────────────────────────────────────────────────────────────
+# JWT CONFIGURATION
+# ─────────────────────────────────────────────────────────────
+SECRET_KEY = get_required_env('SECRET_KEY')
+ALGORITHM = get_optional_env('ALGORITHM', 'HS256')
+ACCESS_TOKEN_EXPIRE_MINUTES = int(get_optional_env('ACCESS_TOKEN_EXPIRE_MINUTES', '60'))
+REFRESH_TOKEN_EXPIRE_DAYS = int(get_optional_env('REFRESH_TOKEN_EXPIRE_DAYS', '1'))
+
+# ─────────────────────────────────────────────────────────────
+# LOGGING & ENVIRONMENT
+# ─────────────────────────────────────────────────────────────
+ENVIRONMENT = get_optional_env('ENVIRONMENT', 'development')
+LOG_LEVEL = get_optional_env('LOG_LEVEL', 'INFO')
 
 
 def is_admin(user_id: int) -> bool:
@@ -59,9 +99,9 @@ TOOL CALL QOIDALARI:
 
 
 
-DATABASE_URL = os.getenv("DB_URL")
+DATABASE_URL = get_required_env("DB_URL")
 
-engine = create_async_engine(DATABASE_URL, echo=False)
+engine = create_async_engine(DATABASE_URL, echo=False, pool_pre_ping=True, pool_size=10, max_overflow=20)
 async_session = async_sessionmaker(
     engine,
     class_=AsyncSession,
@@ -91,5 +131,4 @@ STATIC_PATH = "/static/uploads"
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN is not set in .env file")
+logger.info(f"✅ Configuration loaded successfully. Environment: {ENVIRONMENT}")

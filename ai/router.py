@@ -22,10 +22,20 @@ router = APIRouter(prefix="/ai", tags=["Logistika AI & Chat"])
 async def websocket_info():
     """AI Agent va Chat uchun WebSocket qo'llanmasi."""
     return {
-        "url": "ws://domain/api/ai/ws/{chat_id}",
-        "events_sent_by_user": ["new_message"],
-        "events_received_from_ai": ["new_message", "ai_action"],
-        "ai_action_example": {"event": "ai_action", "action": "Order yaratilmoqda..."}
+        "url": "ws://domain/api/ai/ws/{chat_id}?token=YOUR_ACCESS_TOKEN",
+        "authentication": "JWT token debe berilishi kerak query parameter sifatida",
+        "token_example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+        "how_to_get_token": "POST /api/auth/login orqali access token olish",
+        "events_sent_by_user": [
+            {"type": "new_message", "content": "Xabar matni", "sender_id": 123}
+        ],
+        "events_received_from_ai": [
+            {"event": "new_message", "data": {...}},
+            {"event": "ai_action", "action": "Order yaratilmoqda..."}
+        ],
+        "error_codes": {
+            "1008": "Policy violation - Invalid token or no access to chat"
+        }
     }
 
 @router.websocket("/ws/{chat_id}")
@@ -33,13 +43,45 @@ async def websocket_endpoint(websocket: WebSocket, chat_id: int):
     """
     Mukkammal AI Agent va Chat interfeysi.
     Foydalanuvchi xabar yuboradi -> AI agent tahlil qiladi -> Tool ishlatadi -> Javob qaytaradi.
-    """
-    await manager.connect(websocket, chat_id)
     
-    # Kelajakda chat_id orqali user_id ni aniqlash (Hozircha query_params orqali ham olsa bo'ladi)
-    # Testing uchun bizga kamida bitta user_id kerak.
-    # Haqiqiy loyihada WebSocket ulanishidan oldin Auth qilinadi.
-    user_id = 1 # Default yoki token orqali olinadi
+    ⚠️ AUTHENTICATION: WebSocket connection token query parameter orqali yuborishi kerak:
+    ws://localhost:8000/api/ai/ws/123?token=eyJhbGc...
+    """
+    from ai.websocket import verify_websocket_token
+    
+    # ─────────────────────────────────────────────────────────────
+    # STEP 1: Token orqali user_id extract qilish
+    # ─────────────────────────────────────────────────────────────
+    token = websocket.query_params.get("token")
+    user_id = verify_websocket_token(token)
+    
+    if user_id is None:
+        # Token yaroqsiz yoki yo'q - ulanishni rad qilish
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="❌ Invalid or missing authentication token")
+        logger.warning(f"❌ WebSocket connection rejected for chat {chat_id}: Invalid token")
+        return
+    
+    # ─────────────────────────────────────────────────────────────
+    # STEP 2: Chat ga foydalanuvchi ruxsati borligini tekshirish
+    # ─────────────────────────────────────────────────────────────
+    async with async_session() as db:
+        chat_obj = await crud.get_chat(db, chat_id)
+        if not chat_obj:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="❌ Chat not found")
+            logger.warning(f"❌ WebSocket: Chat {chat_id} not found")
+            return
+        
+        # Chat ga ruxsat tekshirish (chat owner bo'lishi kerak)
+        if chat_obj.user_id != user_id and (chat_obj.driver_id != user_id if hasattr(chat_obj, 'driver_id') else True):
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="❌ Access denied")
+            logger.warning(f"❌ WebSocket: User {user_id} tried to access chat {chat_id} without permission")
+            return
+    
+    # ─────────────────────────────────────────────────────────────
+    # STEP 3: Ulanish qabul qilish
+    # ─────────────────────────────────────────────────────────────
+    await manager.connect(websocket, chat_id, user_id)
+    logger.info(f"✅ WebSocket authenticated: User {user_id} connected to chat {chat_id}")
     
     log_agent = agent.LogistikaAgent(user_id=user_id)
     
@@ -103,10 +145,11 @@ async def websocket_endpoint(websocket: WebSocket, chat_id: int):
                         }, chat_id)
 
     except WebSocketDisconnect:
-        manager.disconnect(websocket, chat_id)
+        manager.disconnect(chat_id, user_id)
+        logger.info(f"WebSocket disconnected: User {user_id} from chat {chat_id}")
     except Exception as e:
-        logger.error(f"WebSocket Error: {e}")
-        manager.disconnect(websocket, chat_id)
+        logger.error(f"❌ WebSocket Error in chat {chat_id}: {e}", exc_info=True)
+        manager.disconnect(chat_id, user_id)
 
 # ════════════════════════════════════════════════
 # REST ENDPOINTS - Qolgan amallar
