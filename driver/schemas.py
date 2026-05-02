@@ -76,28 +76,27 @@ class TruckTypeResponse(TruckTypeBase):
 # --- Driver Schemas ---
 
 class DriverBase(BaseModel):
-    truck_type_id: int = Field()
-    truck_number: str = Field()
-    truck_year: Optional[int] =None
-    current_city: Optional[str] = Field(None, max_length=300)
-    current_region: Optional[str] = Field(None, max_length=100)
-    is_available: bool = True
+    truck_type_id: int = Field(..., description="Yuk mashinasi turi ID si")
+    truck_number: str = Field(..., min_length=3, max_length=20, description="Davlat raqami (60A123BC)")
+    truck_year: Optional[int] = Field(None, ge=1980, le=2030, description="Ishlab chiqarilgan yil")
+    capacity_ton: Optional[float] = Field(None, gt=0, description="Sig'im (tonna)")
+    capacity_m3: Optional[float] = Field(None, gt=0, description="Sig'im (m³)")
+    current_city: str = Field(..., min_length=2, max_length=100, description="Hozirgi shahar")
+    phone_number: Optional[str] = Field(None, max_length=20, description="Aloqa raqami")
+
 
 class DriverCreate(DriverBase):
-    user_id: int = Field()
+    pass
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "truck_type_id": 2,
                 "truck_number": "10 Z 123 ZZ",
-                "truck_brand": "Volvo FH16",
                 "truck_year": 2021,
                 "capacity_ton": 22.5,
                 "capacity_m3": 90.0,
                 "current_city": "Namangan",
-                "current_region": "Namangan viloyati",
-                "user_id": 123
             }
         }
     )

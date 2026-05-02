@@ -24,7 +24,6 @@ from users.models import User, UserRole
 from users.telegram_auth import validate_telegram_init_data
 from users.schemas import (
     ChangePasswordRequest,
-    DriverProfileRequest,
     RefreshTokenRequest,
     SelectRoleRequest,
     TelegramWebAppLoginRequest,
@@ -36,6 +35,7 @@ from users.schemas import (
 from driver.crud import  get_driver_by_user_id
 from sqlalchemy import select as sa_select
 from driver.models import Driver as DriverModel
+from driver.schemas import DriverCreate
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -97,7 +97,7 @@ async def select_role(
     summary="Driver profili (4-qadam, faqat driver uchun)",
 )
 async def fill_driver_profile(
-    data: DriverProfileRequest,
+    data: DriverCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -128,7 +128,6 @@ async def fill_driver_profile(
         user_id=current_user.id,
         truck_type_id=data.truck_type_id,
         truck_number=data.truck_number,
-        truck_brand=data.truck_brand,
         truck_year=data.truck_year,
         capacity_ton=data.capacity_ton,
         capacity_m3=data.capacity_m3,

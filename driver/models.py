@@ -109,9 +109,7 @@ class Driver(Base):
     cancel_count    : Mapped[int]   = mapped_column(Integer, default=0)
     on_time_percent : Mapped[float] = mapped_column(Numeric(5, 2), default=100.0)
 
-    # Holat
     is_available  : Mapped[bool] = mapped_column(Boolean, default=True)
-    docs_verified : Mapped[bool] = mapped_column(Boolean, default=False)
     is_blocked    : Mapped[bool] = mapped_column(Boolean, default=False)
     block_reason  : Mapped[str|None] = mapped_column(String(300), nullable=True)
 
@@ -121,7 +119,6 @@ class Driver(Base):
     # ── Relationships ─────────────────────────────
     user           = relationship("User", back_populates="driver")
     truck_type_obj : Mapped["TruckType"]              = relationship("TruckType", back_populates="drivers")
-    documents      : Mapped[list["DriverDocument"]]   = relationship("DriverDocument",   back_populates="driver", cascade="all, delete-orphan")
     announcements  : Mapped[list["DriverAnnouncement"]] = relationship("DriverAnnouncement", back_populates="driver")
     offers         : Mapped[list["OrderOffer"]]        = relationship("OrderOffer",      back_populates="driver")
 
@@ -165,58 +162,9 @@ class Driver(Base):
 
 
 
-class DocumentType(enum.Enum):
-    DRIVER_LICENSE    = "driver_license"     # Haydovchilik guvohnomasi
-    PASSPORT          = "passport"           # Pasport
-    TRUCK_TECH_PASS   = "truck_tech_pass"    # Texnik pasport
-    TRUCK_INSURANCE   = "truck_insurance"    # Sug'urta
-    MEDICAL_CERT      = "medical_cert"       # Tibbiy ma'lumotnoma
-    OTHER             = "other"
 
 
-class DriverDocument(Base):
-    __tablename__ = "driver_documents"
 
-    id          : Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    driver_id   : Mapped[int] = mapped_column(Integer, ForeignKey("drivers.id", ondelete="CASCADE"), nullable=False)
-
-    doc_type    : Mapped[DocumentType] = mapped_column(SQLEnum(DocumentType), nullable=False)
-    file_url    : Mapped[str]          = mapped_column(String(512), nullable=False)   # S3 URL
-    file_name   : Mapped[str|None]     = mapped_column(String(255), nullable=True)
-
-    # Amal qilish muddati
-    expires_at  : Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
-    is_expired  : Mapped[bool]          = mapped_column(Boolean,  default=False)
-
-    # Admin tekshiruvi
-    verification_status : Mapped[DriverVerificationStatus] = mapped_column(
-        SQLEnum(DriverVerificationStatus),
-        default=DriverVerificationStatus.PENDING,
-        nullable=False,
-    )
-    rejection_reason    : Mapped[str|None] = mapped_column(String(300), nullable=True)
-    verified_by         : Mapped[int|None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
-    verified_at         : Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
-
-    created_at  : Mapped[datetime] = mapped_column(DateTime, default=func.now())
-
-    # Relationships
-    driver : Mapped["Driver"] = relationship("Driver", back_populates="documents")
-
-    @property
-    def is_valid(self) -> bool:
-        return (
-            self.verification_status == DriverVerificationStatus.APPROVED
-            and not self.is_expired
-        )
-
-    def __repr__(self) -> str:
-        return f"<DriverDocument(driver={self.driver_id}, type={self.doc_type.value}, status={self.verification_status.value})>"
-
-
-# ═══════════════════════════════════════════════
-# DRIVER ANNOUNCEMENT — Haydovchi e'loni
-# "Toshkentdan Samarqandga boraman, yuk bor?"
 # ═══════════════════════════════════════════════
 
 class DriverAnnouncement(Base):
