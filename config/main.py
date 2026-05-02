@@ -53,6 +53,7 @@ async def startup():
 app.include_router(driver_router)
 app.include_router(order_router)
 app.include_router(ai_router)
+
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 
 
