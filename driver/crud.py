@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 from typing import List, Optional
 from driver.models import (
-    TruckType, Driver, DriverDocument,
+    TruckType, Driver,
     DriverAnnouncement, AnnouncementWaypoint, AnnouncementOffer
 )
 from driver.schemas import (
@@ -68,25 +68,12 @@ async def update_driver(db: AsyncSession, pk: int, data: DriverUpdate) -> Option
 
 # --- DriverDocument CRUD ---
 
-async def create_document(db: AsyncSession, data: DriverDocumentCreate) -> DriverDocument:
-    obj = DriverDocument(**data.model_dump())
-    db.add(obj)
-    await db.commit()
-    await db.refresh(obj)
-    return obj
 
-async def get_document(db: AsyncSession, pk: int) -> Optional[DriverDocument]:
-    result = await db.execute(select(DriverDocument).where(DriverDocument.id == pk))
-    return result.scalar_one_or_none()
 
-async def get_driver_documents(db: AsyncSession, driver_id: int) -> List[DriverDocument]:
-    result = await db.execute(select(DriverDocument).where(DriverDocument.driver_id == driver_id))
-    return result.scalars().all()
 
-async def update_document(db: AsyncSession, pk: int, data: DriverDocumentUpdate) -> Optional[DriverDocument]:
-    await db.execute(update(DriverDocument).where(DriverDocument.id == pk).values(**data.model_dump(exclude_unset=True)))
-    await db.commit()
-    return await get_document(db, pk)
+
+
+
 
 # --- DriverAnnouncement CRUD ---
 

@@ -4,7 +4,7 @@ from typing import List, Optional
 from config.config import get_db
 from driver import crud, schemas
 from users.auth import get_current_user
-from users.models import User, UserRole
+from users.models import User
 
 router = APIRouter(prefix="/drivers", tags=["Haydovchilar (Drivers)"])
 
@@ -83,32 +83,10 @@ async def update_my_driver_profile(
         raise HTTPException(status_code=404, detail="Driver profile not found")
     return await crud.update_driver(db, driver.id, data)
 
-# --- DriverDocument Endpoints ---
 
-@router.post("/documents", response_model=schemas.DriverDocumentResponse, status_code=status.HTTP_201_CREATED, summary="Hujjat yuklash")
-async def upload_document(
-    data: schemas.DriverDocumentCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Guvohnoma yoki texpasport yuklash."""
-    # Verify driver_id belongs to current_user
-    driver = await crud.get_driver(db, data.driver_id)
-    if not driver or driver.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    
-    return await crud.create_document(db, data)
 
-@router.get("/documents", response_model=List[schemas.DriverDocumentResponse], summary="Mening hujjatlarim")
-async def list_my_documents(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Siz yuklagan barcha hujjatlar ro'yxati."""
-    driver = await crud.get_driver_by_user_id(db, current_user.id)
-    if not driver:
-        raise HTTPException(status_code=404, detail="Driver profile not found")
-    return await crud.get_driver_documents(db, driver.id)
+
+
 
 # --- DriverAnnouncement Endpoints ---
 
