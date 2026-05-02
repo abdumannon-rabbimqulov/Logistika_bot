@@ -165,15 +165,4 @@ def _send_email_sync(to_email: str, otp_code: str, full_name: str) -> None:
 # ──────────────────────────────────────────────────────────────────────
 
 async def send_otp_email(to_email: str, otp_code: str, full_name: str) -> None:
-    """
-    OTP kodini email ga asinxron yuboradi.
-
-    Args:
-        to_email:  Qabul qiluvchining email manzili
-        otp_code:  6 xonali OTP kod
-        full_name: Foydalanuvchining to'liq ismi (xatda ko'rsatiladi)
-
-    Raises:
-        Exception: SMTP ulanish yoki yuborish xatosi
-    """
     await asyncio.to_thread(_send_email_sync, to_email, otp_code, full_name)

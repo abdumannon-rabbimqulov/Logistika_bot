@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
-    BigInteger, String, Numeric, DateTime, ForeignKey, Enum, Boolean, Integer, Text
+    BigInteger, String, Numeric, DateTime, Enum
 )
 from config.config import Base
 
@@ -21,29 +21,6 @@ class UserRole(str, enum.Enum):
     DRIVER = "driver"
     GUEST  = "guest"
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# EMAIL OTP — Tasdiqlash kodlari (DB da saqlanadi)
-# ═══════════════════════════════════════════════════════════════════════════
-
-class EmailOTP(Base):
-    __tablename__ = "email_otps"
-
-    id         : Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
-    email      : Mapped[str]           = mapped_column(String(254), nullable=False, index=True)
-    code       : Mapped[str]           = mapped_column(String(10),  nullable=False)
-
-    hashed_pw  : Mapped[str]           = mapped_column(Text, nullable=False)
-    full_name  : Mapped[str]           = mapped_column(String(128), nullable=False)
-    language   : Mapped[str]           = mapped_column(String(10),  default="uz")
-
-    is_used    : Mapped[bool]          = mapped_column(Boolean, default=False)
-    expires_at : Mapped[datetime]      = mapped_column(DateTime, nullable=False)
-    created_at : Mapped[datetime]      = mapped_column(DateTime, server_default=func.now())
-
-    def is_valid(self) -> bool:
-        """Kod muddati o'tmagan va hali ishlatilmagan."""
-        return not self.is_used and datetime.utcnow() < self.expires_at
 
 
 

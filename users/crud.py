@@ -1,16 +1,13 @@
-from datetime import datetime, timedelta
 from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from users.models import User, UserRole, EmailOTP
+from users.models import User, UserRole
 from users.schemas import UserUpdate
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# USER CRUD
-# ═══════════════════════════════════════════════════════════════════════════
+
 
 async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
     result = await db.execute(select(User).where(User.id == user_id))
@@ -114,66 +111,3 @@ async def deactivate_user(db: AsyncSession, user: User) -> User:
     await db.refresh(user)
     return user
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# EMAIL OTP CRUD
-# ═══════════════════════════════════════════════════════════════════════════
-
-async def create_otp(
-    db: AsyncSession,
-    *,
-    email: str,
-    code: str,
-    hashed_pw: str,
-    full_name: str,
-    language: str = "uz",
-    expire_seconds: int = 600,
-) -> EmailOTP:
-    """
-    Yangi OTP yozuvi yaratadi.
-    Avvalgi ishlatilmagan yozuvlar avtomatik bekor qilinadi.
-    """
-    # Avvalgi aktiv OTP larni bekor qilish (qayta yuborish uchun)
-    from sqlalchemy import update as sa_update
-    await db.execute(
-        sa_update(EmailOTP)
-        .where(EmailOTP.email == email, EmailOTP.is_used == False)
-        .values(is_used=True)
-    )
-
-    otp = EmailOTP(
-        email=email,
-        code=code,
-        hashed_pw=hashed_pw,
-        full_name=full_name,
-        language=language,
-        expires_at=datetime.utcnow() + timedelta(seconds=expire_seconds),
-    )
-    db.add(otp)
-    await db.commit()
-    await db.refresh(otp)
-    return otp
-
-
-async def get_active_otp(db: AsyncSession, email: str) -> Optional[EmailOTP]:
-    """
-    Email uchun eng so'nggi aktiv (ishlatilmagan, muddati o'tmagan) OTP ni qaytaradi.
-    """
-    now = datetime.utcnow()
-    result = await db.execute(
-        select(EmailOTP)
-        .where(
-            EmailOTP.email == email,
-            EmailOTP.is_used == False,
-            EmailOTP.expires_at > now,
-        )
-        .order_by(EmailOTP.created_at.desc())
-        .limit(1)
-    )
-    return result.scalar_one_or_none()
-
-
-async def mark_otp_used(db: AsyncSession, otp: EmailOTP) -> None:
-    """OTP ni ishlatilgan deb belgilaydi."""
-    otp.is_used = True
-    await db.commit()
