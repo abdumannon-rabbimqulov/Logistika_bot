@@ -165,7 +165,9 @@ async def fill_driver_profile(
     summary="Refresh token orqali yangi tokenlar olish",
 )
 async def refresh_tokens(data: RefreshTokenRequest):
+
     payload = verify_token(data.refresh_token)
+
     if payload is None or payload.get("type") != "refresh":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -175,6 +177,13 @@ async def refresh_tokens(data: RefreshTokenRequest):
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(status_code=401, detail="Refresh token xato")
+
+    saved_token=redis_client.get(f"blacklist_refresh_{data.refresh_token}")
+    if saved_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Bu refresh token allaqachon ishlatilgan yoki yaroqsiz.",
+        )
 
     token_payload = {"sub": str(user_id)}
     return Token(
