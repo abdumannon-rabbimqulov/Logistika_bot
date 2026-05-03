@@ -37,6 +37,11 @@ from sqlalchemy import select as sa_select
 from driver.models import Driver as DriverModel
 from driver.schemas import DriverCreate
 
+import redis
+from datetime import timedelta
+
+redis_client = redis.Redis(host='logistika-redis', port=6379, db=1, decode_responses=True)
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -287,3 +292,18 @@ async def delete_my_account(
 ):
     await deactivate_user(db, current_user)
     return {"detail": "Akkaunt muvaffaqiyatli deaktivatsiya qilindi."}
+
+
+@router.post("/logout")
+async def logout(refresh_token: str,current_user: User = Depends(get_current_user)):
+    payload = verify_token(refresh_token)
+    if payload is None or payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token yaroqsiz yoki muddati tugagan.",
+        )
+    user_id = payload.get("sub")
+    if not user_id and str(user_id) != str(current_user.id):
+        raise HTTPException(status_code=401, detail="Refresh token xato")
+    redis_client.set(f"blacklist_refresh_{refresh_token}", "true", ex=timedelta(days=1))
+    return {"detail": "Muvaffaqiyatli logout qilindi."}

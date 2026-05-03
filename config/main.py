@@ -57,12 +57,7 @@ app.include_router(ai_router)
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 
 
-from fastapi.responses import RedirectResponse
 
-@app.get("/", include_in_schema=False)
-async def root():
-    """Root path documentation redirect."""
-    return RedirectResponse(url="/docs")
 
 
 # ─────────────────────────────────────────────────────────────

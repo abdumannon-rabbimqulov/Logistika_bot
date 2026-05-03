@@ -30,3 +30,25 @@ def get_phone_keyboard(lang: str = "uz"):
     )
     return keyboard
 
+
+def get_role_keyboard(lang: str = "uz"):
+    """Keyboard for selecting user role."""
+    if lang == "ru":
+        sender = "📦 Отправитель груза"
+        driver = "🚛 Водитель"
+    elif lang == "uz_cyrl":
+        sender = "📦 Юк берувчи"
+        driver = "🚛 Ҳайдовчи"
+    else:
+        sender = "📦 Yuk beruvchi"
+        driver = "🚛 Haydovchi"
+        
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=sender), KeyboardButton(text=driver)],
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    return keyboard
+

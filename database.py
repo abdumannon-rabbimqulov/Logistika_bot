@@ -23,6 +23,7 @@ async def create_user(
     username: str | None = None,
     language: str = "uz",
     phone_number: str | None = None,
+    role: str = "guest",
 ) -> User:
     async with async_session() as session:
         user = User(
@@ -31,6 +32,7 @@ async def create_user(
             username=username,
             language=language,
             phone_number=phone_number,
+            role=role,
         )
         session.add(user)
         await session.commit()
@@ -67,6 +69,7 @@ async def update_user_profile_from_tg(
     username: str | None,
     language: str,
     phone_number: str | None = None,
+    role: str | None = None,
 ) -> None:
     values = {
         "full_name": full_name,
@@ -75,6 +78,8 @@ async def update_user_profile_from_tg(
     }
     if phone_number:
         values["phone_number"] = phone_number
+    if role:
+        values["role"] = role
 
     async with async_session() as session:
         await session.execute(

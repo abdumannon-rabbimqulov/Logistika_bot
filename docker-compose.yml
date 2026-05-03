@@ -58,6 +58,17 @@ services:
       migrations:
         condition: service_completed_successfully
 
+  logistika-redis:
+    image: redis:7-alpine
+    container_name: logistika_redis
+    ports:
+      - "6381:6379"
+    restart: always
+    networks:
+      - logistika_network
+networks:
+  logistika_network:
+    driver: bridge
 volumes:
   postgres_data:
   uploads_data:

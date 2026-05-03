@@ -3,7 +3,8 @@ from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from keyboards.reply import get_language_keyboard, get_phone_keyboard
+from keyboards.reply import get_language_keyboard, get_phone_keyboard, get_role_keyboard
+from users.models import UserRole
 import database as db
 
 router = Router()
@@ -11,11 +12,21 @@ router = Router()
 class Registration(StatesGroup):
     language = State()
     phone_number = State()
+    role = State()
 
 LANG_MAP = {
     "🇺🇿 O'zbekcha": "uz",
     "🇺🇿 Ўзбекча": "uz_cyrl",
     "🇷🇺 Русский": "ru",
+}
+
+ROLE_MAP = {
+    "📦 Отправитель груза": UserRole.SENDER,
+    "🚛 Водитель": UserRole.DRIVER,
+    "📦 Юк берувчи": UserRole.SENDER,
+    "🚛 Ҳайдовчи": UserRole.DRIVER,
+    "📦 Yuk beruvchi": UserRole.SENDER,
+    "🚛 Haydovchi": UserRole.DRIVER,
 }
 
 
@@ -67,9 +78,27 @@ async def select_language(message: types.Message, state: FSMContext):
 
 @router.message(Registration.phone_number, F.contact)
 async def get_phone(message: types.Message, state: FSMContext):
+    await state.update_data(phone_number=message.contact.phone_number)
     data = await state.get_data()
     lang = data.get("language", "uz")
-    phone = message.contact.phone_number
+    
+    if lang == "ru":
+        text = "Выберите вашу роль:"
+    elif lang == "uz_cyrl":
+        text = "Ролингизни танланг:"
+    else:
+        text = "Rolingizni tanlang:"
+        
+    await message.answer(text, reply_markup=get_role_keyboard(lang))
+    await state.set_state(Registration.role)
+
+
+@router.message(Registration.role, F.text.in_(ROLE_MAP.keys()))
+async def select_role(message: types.Message, state: FSMContext):
+    role = ROLE_MAP[message.text]
+    data = await state.get_data()
+    lang = data.get("language", "uz")
+    phone = data.get("phone_number")
     
     tg_user = message.from_user
     user = await db.get_user(tg_user.id)
@@ -80,7 +109,8 @@ async def get_phone(message: types.Message, state: FSMContext):
             full_name=tg_user.full_name,
             username=tg_user.username,
             language=lang,
-            phone_number=phone
+            phone_number=phone,
+            role=role
         )
     else:
         await db.update_user_profile_from_tg(
@@ -89,6 +119,7 @@ async def get_phone(message: types.Message, state: FSMContext):
             username=tg_user.username,
             language=lang,
             phone_number=phone,
+            role=role
         )
 
     if lang == "ru":
@@ -112,6 +143,7 @@ async def get_phone(message: types.Message, state: FSMContext):
 
 @router.message(Registration.language)
 @router.message(Registration.phone_number)
+@router.message(Registration.role)
 async def skip_registration(message: types.Message):
     """Ro'yxatdan o'tish paytida boshqa narsa yozsa qayta so'rash."""
     await message.answer("Iltimos, ro'yxatdan o'tishni yakunlang (kerakli tugmani bosing).")
