@@ -48,18 +48,7 @@ client = genai.Client(api_key=API_KEY) if genai and API_KEY else None
 MODEL_NAME = get_optional_env('MODEL_NAME', 'gemini-flash-latest')
 
 
-# ─────────────────────────────────────────────────────────────
-# EMAIL CONFIGURATION
-# ─────────────────────────────────────────────────────────────
-EMAIL_HOST = get_optional_env("EMAIL_HOST", "smtp.gmail.com")
-EMAIL_PORT = int(get_optional_env("EMAIL_PORT", "587"))
-EMAIL_USERNAME = get_optional_env("EMAIL_USERNAME", "")
-EMAIL_PASSWORD = get_optional_env("EMAIL_PASSWORD", "")
-EMAIL_FROM = get_optional_env("EMAIL_FROM", EMAIL_USERNAME)
-EMAIL_USE_TLS = get_optional_env("EMAIL_USE_TLS", "True").lower() in ("true", "1", "yes")
-EMAIL_OTP_EXPIRE_SECONDS = int(get_optional_env("EMAIL_OTP_EXPIRE", "120"))
 
-# ─────────────────────────────────────────────────────────────
 # JWT CONFIGURATION
 # ─────────────────────────────────────────────────────────────
 SECRET_KEY = get_required_env('SECRET_KEY')
@@ -74,10 +63,7 @@ ENVIRONMENT = get_optional_env('ENVIRONMENT', 'development')
 LOG_LEVEL = get_optional_env('LOG_LEVEL', 'INFO')
 
 
-def is_admin(user_id: int) -> bool:
-    if user_id in ADMIN_IDS:
-        return True
-    return False
+
 
 
 SYSTEM_INSTRUCTION = """

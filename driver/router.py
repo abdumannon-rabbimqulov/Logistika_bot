@@ -5,15 +5,16 @@ from config.config import get_db
 from driver import crud, schemas
 from users.auth import get_current_user
 from users.models import User
+from Admin_panel.validation import is_admin
 
 router = APIRouter(prefix="/drivers", tags=["Haydovchilar (Drivers)"])
 
 # --- TruckType Endpoints ---
 
 @router.post("/truck-types", response_model=schemas.TruckTypeResponse, status_code=status.HTTP_201_CREATED, summary="Yangi mashina turi qo'shish")
-async def create_truck_type(data: schemas.TruckTypeCreate, db: AsyncSession = Depends(get_db)):
-    """Tizimga yangi yuk mashinasi turini (masalan: Fura, Refrijerator) qo'shish."""
-    # In a real app, maybe only Admin can do this
+async def create_truck_type(data: schemas.TruckTypeCreate, db: AsyncSession = Depends(get_db),admin: User = Depends(is_admin)):
+    if not admin:
+        raise HTTPException(status_code=403, detail="Sizda ushbu amalni bajarish uchun huquq yo'q (Admin emassiz)!")
     return await crud.create_truck_type(db, data)
 
 @router.get("/truck-types", response_model=List[schemas.TruckTypeResponse], summary="Barcha mashina turlarini olish")
@@ -30,15 +31,24 @@ async def get_truck_type(pk: int, db: AsyncSession = Depends(get_db)):
     return obj
 
 @router.patch("/truck-types/{pk}", response_model=schemas.TruckTypeResponse, summary="Mashina turini tahrirlash")
-async def update_truck_type(pk: int, data: schemas.TruckTypeUpdate, db: AsyncSession = Depends(get_db)):
+async def update_truck_type(
+        pk: int, data: schemas.TruckTypeUpdate,
+        db: AsyncSession = Depends(get_db),
+        admin: User = Depends(is_admin)):
     """Mavjud mashina turi ma'lumotlarini yangilash."""
+    if not admin:
+        raise HTTPException(status_code=403, detail="Sizda ushbu amalni bajarish uchun huquq yo'q (Admin emassiz)!")
     obj = await crud.update_truck_type(db, pk, data)
     if not obj:
         raise HTTPException(status_code=404, detail="Truck type not found")
     return obj
 
 @router.delete("/truck-types/{pk}", status_code=status.HTTP_204_NO_CONTENT, summary="Mashina turini o'chirish")
-async def delete_truck_type(pk: int, db: AsyncSession = Depends(get_db)):
+async def delete_truck_type(pk: int,
+                            db: AsyncSession = Depends(get_db)
+                            ,admin: User = Depends(is_admin)):
+    if not admin:
+        raise HTTPException(status_code=403, detail="Sizda ushbu amalni bajarish uchun huquq yo'q (Admin emassiz)!")
     """Mashina turini tizimdan o'chirish."""
     await crud.delete_truck_type(db, pk)
     return None
