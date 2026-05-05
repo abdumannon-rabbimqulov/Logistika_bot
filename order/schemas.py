@@ -38,9 +38,8 @@ class OfferStatus(str, Enum):
 class OrderWaypointBase(BaseModel):
     sequence: int = Field(1, description="Tartib raqami")
     waypoint_type: WaypointType = Field(WaypointType.PICKUP, description="Nuqta turi")
-    city: str = Field(..., max_length=100)
-    address: Optional[str] = Field(None, max_length=300)
-    landmark: Optional[str] = Field(None, max_length=200)
+    address: str = Field(..., max_length=300, description="To'liq manzil (shahar/ko'cha)")
+    landmark: Optional[str] = Field(None, max_length=200, description="Mo'ljal")
     latitude: Optional[float] = Field(None)
     longitude: Optional[float] = Field(None)
     distance_from_prev_km: Optional[Decimal] = Field(None)
@@ -77,7 +76,6 @@ class OrderBase(BaseModel):
     scheduled_end: Optional[datetime] = None
 
 class OrderCreate(OrderBase):
-    customer_id: int = Field(...)
     waypoints: List[OrderWaypointCreate]
 
     model_config = ConfigDict(
@@ -89,21 +87,18 @@ class OrderCreate(OrderBase):
                 "required_truck_type_id": 2,
                 "price": 4500000,
                 "currency": "UZS",
-                "customer_id": 1,
                 "waypoints": [
                     {
                         "sequence": 1,
                         "waypoint_type": "pickup",
-                        "city": "Toshkent",
-                        "address": "Sergeli sanoat zonasi",
+                        "address": "Toshkent, Sergeli sanoat zonasi",
                         "contact_name": "Aziz",
                         "contact_phone": "+998901112233"
                     },
                     {
                         "sequence": 2,
                         "waypoint_type": "delivery",
-                        "city": "Samarqand",
-                        "address": "Shahar markazi",
+                        "address": "Samarqand, Shahar markazi",
                         "contact_name": "Jasur",
                         "contact_phone": "+998934445566"
                     }

@@ -8,9 +8,8 @@ from driver.models import (
 from driver.schemas import (
     TruckTypeCreate, TruckTypeUpdate,
     DriverCreate, DriverUpdate,
-    DriverDocumentCreate, DriverDocumentUpdate,
     DriverAnnouncementCreate, DriverAnnouncementUpdate,
-    AnnouncementOfferCreate, AnnouncementOfferUpdate
+    AnnouncementOfferCreate, AnnouncementOfferUpdate,
 )
 
 # --- TruckType CRUD ---
@@ -42,8 +41,9 @@ async def delete_truck_type(db: AsyncSession, pk: int) -> bool:
 
 # --- Driver CRUD ---
 
-async def create_driver(db: AsyncSession, data: DriverCreate) -> Driver:
-    obj = Driver(**data.model_dump())
+async def create_driver(db: AsyncSession, data: DriverCreate, *, user_id: int) -> Driver:
+    payload = data.model_dump(exclude={"phone_number"})
+    obj = Driver(user_id=user_id, **payload)
     db.add(obj)
     await db.commit()
     await db.refresh(obj)

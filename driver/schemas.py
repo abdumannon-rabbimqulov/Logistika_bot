@@ -79,35 +79,32 @@ class DriverBase(BaseModel):
     truck_type_id: int = Field(..., description="Yuk mashinasi turi ID si")
     truck_number: str = Field(..., min_length=3, max_length=20, description="Davlat raqami (60A123BC)")
     truck_year: Optional[int] = Field(None, ge=1980, le=2030, description="Ishlab chiqarilgan yil")
-    capacity_ton: Optional[float] = Field(None, gt=0, description="Sig'im (tonna)")
-    capacity_m3: Optional[float] = Field(None, gt=0, description="Sig'im (m³)")
     current_city: str = Field(..., min_length=2, max_length=100, description="Hozirgi shahar")
-    phone_number: Optional[str] = Field(None, max_length=20, description="Aloqa raqami")
+    current_region: Optional[str] = Field(None, max_length=100, description="Viloyat / Region")
 
 
 class DriverCreate(DriverBase):
-    pass
+    # Aloqa raqami Driver modelida emas, User.phone_number ga yoziladi.
+    phone_number: Optional[str] = Field(None, max_length=20, description="Aloqa raqami (User.phone_number ga yoziladi)")
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "truck_type_id": 2,
-                "truck_number": "10 Z 123 ZZ",
+                "truck_number": "10Z123ZZ",
                 "truck_year": 2021,
-                "capacity_ton": 22.5,
-                "capacity_m3": 90.0,
                 "current_city": "Namangan",
+                "current_region": "Namangan viloyati",
+                "phone_number": "+998901112233",
             }
         }
     )
 
+
 class DriverUpdate(BaseModel):
     truck_type_id: Optional[int] = None
     truck_number: Optional[str] = Field(None, max_length=20)
-    truck_brand: Optional[str] = None
     truck_year: Optional[int] = None
-    capacity_ton: Optional[Decimal] = None
-    capacity_m3: Optional[Decimal] = None
     current_city: Optional[str] = None
     current_region: Optional[str] = None
     is_available: Optional[bool] = None
@@ -115,14 +112,22 @@ class DriverUpdate(BaseModel):
     last_latitude: Optional[float] = None
     last_longitude: Optional[float] = None
 
-class DriverResponse(DriverBase):
+
+class DriverResponse(BaseModel):
     id: int
     user_id: int
-    rating: Decimal = Field()
-    total_trips: int = Field()
-    total_km: Decimal = Field()
-    docs_verified: bool
+    truck_type_id: int
+    truck_number: str
+    truck_year: Optional[int] = None
+    current_city: Optional[str] = None
+    current_region: Optional[str] = None
+    rating: Decimal
+    total_trips: int
+    cancel_count: int
+    on_time_percent: Decimal
+    is_available: bool
     is_blocked: bool
+    block_reason: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)

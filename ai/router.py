@@ -8,6 +8,7 @@ from typing import List, Optional
 from config.config import get_db, async_session
 from ai import crud, schemas, agent
 from ai.websocket import manager
+from driver import crud as driver_crud
 from users.auth import get_current_user
 from users.models import User
 
@@ -70,9 +71,15 @@ async def websocket_endpoint(websocket: WebSocket, chat_id: int):
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="❌ Chat not found")
             logger.warning(f"❌ WebSocket: Chat {chat_id} not found")
             return
-        
-        # Chat ga ruxsat tekshirish (chat owner bo'lishi kerak)
-        if chat_obj.user_id != user_id and (chat_obj.driver_id != user_id if hasattr(chat_obj, 'driver_id') else True):
+
+        # Chat ga ruxsat: chat egasi (User) yoki chatdagi haydovchining User.id si.
+        # chat_obj.driver_id bu Driver.id (User.id emas) — Driver yozuvi orqali user_id ga taqab tekshiramiz.
+        allowed = chat_obj.user_id == user_id
+        if not allowed and chat_obj.driver_id:
+            driver = await driver_crud.get_driver(db, chat_obj.driver_id)
+            allowed = bool(driver and driver.user_id == user_id)
+
+        if not allowed:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="❌ Access denied")
             logger.warning(f"❌ WebSocket: User {user_id} tried to access chat {chat_id} without permission")
             return

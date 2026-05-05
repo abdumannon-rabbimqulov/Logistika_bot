@@ -4,6 +4,8 @@ x-backend-base: &backend-base
     - .env
   environment:
     - DB_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD:-2103}@db:5432/${DB_NAME:-logistika_db}
+    - REDIS_HOST=logistika-redis
+    - REDIS_PORT=6379
   volumes:
     - .:/app
     - uploads_data:/app/uploads

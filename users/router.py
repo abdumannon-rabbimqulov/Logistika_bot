@@ -2,7 +2,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config.config import BOT_TOKEN, get_db
+from config.config import BOT_TOKEN, get_db, REDIS_HOST, REDIS_PORT, REDIS_DB
 from users.crud import (
 
     deactivate_user,
@@ -40,7 +40,9 @@ from driver.schemas import DriverCreate
 import redis
 from datetime import timedelta
 
-redis_client = redis.Redis(host='logistika-redis', port=6379, db=1, decode_responses=True)
+redis_client = redis.Redis(
+    host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -129,22 +131,21 @@ async def fill_driver_profile(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"'{data.truck_number}' davlat raqami allaqachon ro'yxatdan o'tgan.",
         )
+
     new_driver = DriverModel(
         user_id=current_user.id,
         truck_type_id=data.truck_type_id,
         truck_number=data.truck_number,
         truck_year=data.truck_year,
-        capacity_ton=data.capacity_ton,
-        capacity_m3=data.capacity_m3,
         current_city=data.current_city,
-        is_active=True
+        current_region=data.current_region,
     )
-
     db.add(new_driver)
 
     if data.phone_number:
         current_user.phone_number = data.phone_number
-        await db.commit()
+
+    await db.commit()
 
     logger.info("Driver profili yaratildi: user_id=%s truck=%s", current_user.id, data.truck_number)
 

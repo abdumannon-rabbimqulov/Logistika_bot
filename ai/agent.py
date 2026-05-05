@@ -14,32 +14,37 @@ class LogistikaToolkit:
         self.user_id = user_id
 
     async def create_order(
-        self, 
-        cargo_name: str, 
-        weight: float, 
-        from_city: str, 
-        to_city: str, 
+        self,
+        cargo_name: str,
+        weight: float,
+        from_city: str,
+        to_city: str,
         price: float,
-        required_truck_type_id: int
+        required_truck_type_id: int,
     ) -> str:
         """
         Yangi yuk buyurtmasini yaratish.
-        Parametrlar: cargo_name (yuk nomi), weight (vazni tonnada), from_city (qayerdan), to_city (qayerga), price (narxi), required_truck_type_id (mashina turi ID).
+        Parametrlar: cargo_name (yuk nomi), weight (vazni tonnada), from_city (qayerdan),
+        to_city (qayerga), price (narxi), required_truck_type_id (mashina turi ID).
         """
         try:
-            # Pydantic schema tayyorlash
             order_data = order_schemas.OrderCreate(
-                customer_id=self.user_id,
                 cargo_name=cargo_name,
                 weight=weight,
                 price=price,
                 required_truck_type_id=required_truck_type_id,
                 waypoints=[
-                    order_schemas.OrderWaypointCreate(sequence=1, waypoint_type="pickup", city=from_city),
-                    order_schemas.OrderWaypointCreate(sequence=2, waypoint_type="delivery", city=to_city)
-                ]
+                    order_schemas.OrderWaypointCreate(
+                        sequence=1, waypoint_type="pickup", address=from_city
+                    ),
+                    order_schemas.OrderWaypointCreate(
+                        sequence=2, waypoint_type="delivery", address=to_city
+                    ),
+                ],
             )
-            order = await order_crud.create_order(self.db, order_data)
+            order = await order_crud.create_order(
+                self.db, order_data, customer_id=self.user_id
+            )
             return f"Muvaffaqiyatli! Buyurtma #{order.id} yaratildi. Yuk: {cargo_name}, Narxi: {price} UZS."
         except Exception as e:
             logger.error(f"Error creating order via AI: {e}")
@@ -52,7 +57,7 @@ class LogistikaToolkit:
             return "Hozircha mashina turlari bazada yo'q."
         res = "Mavjud yuk mashinalari:\n"
         for t in types:
-            res += f"- ID {t.id}: {t.name} ({t.max_weight_ton} tonnagacha)\n"
+            res += f"- ID {t.id}: {t.name} ({t.max_weight} tonnagacha)\n"
         return res
 
     async def list_my_orders(self) -> str:

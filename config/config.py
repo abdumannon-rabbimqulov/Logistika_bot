@@ -57,6 +57,13 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(get_optional_env('ACCESS_TOKEN_EXPIRE_MINUTES'
 REFRESH_TOKEN_EXPIRE_DAYS = int(get_optional_env('REFRESH_TOKEN_EXPIRE_DAYS', '1'))
 
 # ─────────────────────────────────────────────────────────────
+# REDIS CONFIGURATION
+# ─────────────────────────────────────────────────────────────
+REDIS_HOST = get_optional_env('REDIS_HOST', 'localhost')
+REDIS_PORT = int(get_optional_env('REDIS_PORT', '6379'))
+REDIS_DB = int(get_optional_env('REDIS_DB', '1'))
+
+# ─────────────────────────────────────────────────────────────
 # LOGGING & ENVIRONMENT
 # ─────────────────────────────────────────────────────────────
 ENVIRONMENT = get_optional_env('ENVIRONMENT', 'development')

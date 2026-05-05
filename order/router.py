@@ -12,14 +12,15 @@ router = APIRouter(prefix="/orders", tags=["Buyurtmalar (Orders)"])
 
 @router.post("/", response_model=schemas.OrderResponse, status_code=status.HTTP_201_CREATED, summary="Yangi buyurtma yaratish")
 async def create_order(
-    data: schemas.OrderCreate, 
+    data: schemas.OrderCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """Mijoz tomonidan yangi yuk tashish buyurtmasini shakllantirish."""
-    if data.customer_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    return await crud.create_order(db, data)
+    """Mijoz tomonidan yangi yuk tashish buyurtmasini shakllantirish.
+
+    `customer_id` JWT tokendan olinadi — clientdan talab qilinmaydi.
+    """
+    return await crud.create_order(db, data, customer_id=current_user.id)
 
 @router.get("/", response_model=List[schemas.OrderResponse], summary="Barcha buyurtmalar ro'yxati")
 async def list_orders(

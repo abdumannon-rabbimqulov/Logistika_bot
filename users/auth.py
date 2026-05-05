@@ -1,28 +1,23 @@
-from passlib.context import CryptContext
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
 from fastapi.security import OAuth2PasswordBearer
 from fastapi import Depends, status
 from fastapi.exceptions import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from config.config import get_db
+
+from config.config import (
+    get_db,
+    SECRET_KEY,
+    ALGORITHM,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    REFRESH_TOKEN_EXPIRE_DAYS,
+)
 from users.crud import get_user_by_id
 from users.models import User
-import os
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
-
-load_dotenv()
-
-SECRET_KEY = os.getenv("SUPER_SECRET_KEY") or os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM")
-
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"))
-REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS"))
-
 
 import bcrypt
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 def hash_password(password: str) -> str:
     salt = bcrypt.gensalt()

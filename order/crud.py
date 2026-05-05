@@ -10,22 +10,22 @@ from order.schemas import (
 
 # --- Order CRUD ---
 
-async def create_order(db: AsyncSession, data: OrderCreate) -> Order:
+async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int) -> Order:
     waypoints_data = data.waypoints
     order_dict = data.model_dump()
-    del order_dict['waypoints']
-    
-    obj = Order(**order_dict)
+    del order_dict["waypoints"]
+
+    obj = Order(customer_id=customer_id, **order_dict)
     db.add(obj)
-    await db.flush()  # To get obj.id
+    await db.flush()
 
     for wp_data in waypoints_data:
         wp = OrderWaypoint(order_id=obj.id, **wp_data.model_dump())
         db.add(wp)
-    
+
     await db.commit()
     await db.refresh(obj)
-    # Load waypoints for response
+
     result = await db.execute(
         select(Order).options(selectinload(Order.waypoints)).where(Order.id == obj.id)
     )

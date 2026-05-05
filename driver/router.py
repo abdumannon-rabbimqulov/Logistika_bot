@@ -12,9 +12,11 @@ router = APIRouter(prefix="/drivers", tags=["Haydovchilar (Drivers)"])
 # --- TruckType Endpoints ---
 
 @router.post("/truck-types", response_model=schemas.TruckTypeResponse, status_code=status.HTTP_201_CREATED, summary="Yangi mashina turi qo'shish")
-async def create_truck_type(data: schemas.TruckTypeCreate, db: AsyncSession = Depends(get_db),admin: User = Depends(is_admin)):
-    if not admin:
-        raise HTTPException(status_code=403, detail="Sizda ushbu amalni bajarish uchun huquq yo'q (Admin emassiz)!")
+async def create_truck_type(
+    data: schemas.TruckTypeCreate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(is_admin),
+):
     return await crud.create_truck_type(db, data)
 
 @router.get("/truck-types", response_model=List[schemas.TruckTypeResponse], summary="Barcha mashina turlarini olish")
@@ -32,23 +34,23 @@ async def get_truck_type(pk: int, db: AsyncSession = Depends(get_db)):
 
 @router.patch("/truck-types/{pk}", response_model=schemas.TruckTypeResponse, summary="Mashina turini tahrirlash")
 async def update_truck_type(
-        pk: int, data: schemas.TruckTypeUpdate,
-        db: AsyncSession = Depends(get_db),
-        admin: User = Depends(is_admin)):
+    pk: int,
+    data: schemas.TruckTypeUpdate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(is_admin),
+):
     """Mavjud mashina turi ma'lumotlarini yangilash."""
-    if not admin:
-        raise HTTPException(status_code=403, detail="Sizda ushbu amalni bajarish uchun huquq yo'q (Admin emassiz)!")
     obj = await crud.update_truck_type(db, pk, data)
     if not obj:
         raise HTTPException(status_code=404, detail="Truck type not found")
     return obj
 
 @router.delete("/truck-types/{pk}", status_code=status.HTTP_204_NO_CONTENT, summary="Mashina turini o'chirish")
-async def delete_truck_type(pk: int,
-                            db: AsyncSession = Depends(get_db)
-                            ,admin: User = Depends(is_admin)):
-    if not admin:
-        raise HTTPException(status_code=403, detail="Sizda ushbu amalni bajarish uchun huquq yo'q (Admin emassiz)!")
+async def delete_truck_type(
+    pk: int,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(is_admin),
+):
     """Mashina turini tizimdan o'chirish."""
     await crud.delete_truck_type(db, pk)
     return None
@@ -57,18 +59,20 @@ async def delete_truck_type(pk: int,
 
 @router.post("/profile", response_model=schemas.DriverResponse, status_code=status.HTTP_201_CREATED, summary="Haydovchi profilini yaratish")
 async def create_driver_profile(
-    data: schemas.DriverCreate, 
+    data: schemas.DriverCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Foydalanuvchi uchun haydovchi profilini ochish."""
-    # Check if user already has a driver profile
     existing = await crud.get_driver_by_user_id(db, current_user.id)
     if existing:
         raise HTTPException(status_code=400, detail="Driver profile already exists")
 
-    
-    return await crud.create_driver(db, data)
+    if data.phone_number:
+        current_user.phone_number = data.phone_number
+        await db.commit()
+
+    return await crud.create_driver(db, data, user_id=current_user.id)
 
 @router.get("/me", response_model=schemas.DriverResponse, summary="Mening haydovchi profilim")
 async def get_my_driver_profile(
