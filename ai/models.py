@@ -1,11 +1,11 @@
 from __future__ import annotations
 import enum
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from sqlalchemy import (
     String, Text, Integer, Float, Boolean,
-    DateTime, ForeignKey, Enum as SAEnum, JSON, BigInteger,
+    DateTime, Date, ForeignKey, Enum as SAEnum, JSON, BigInteger, UniqueConstraint,
 )
 from sqlalchemy.orm import (
      Mapped, mapped_column, relationship
@@ -316,3 +316,28 @@ class AICommand(Base):
     # Relationships
     message : Mapped[Optional["Message"]] = relationship(back_populates="ai_command")
     user    : Mapped["User"]              = relationship(back_populates="ai_commands")
+
+
+class AIUsage(Base):
+    __tablename__ = "ai_usage"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), index=True)
+    usage_date: Mapped[date] = mapped_column(Date, index=True)
+    requests: Mapped[int] = mapped_column(Integer, default=0)
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+
+    __table_args__ = (UniqueConstraint("user_id", "usage_date", name="uq_ai_usage_user_date"),)
+
+
+class AppSettings(Base):
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )

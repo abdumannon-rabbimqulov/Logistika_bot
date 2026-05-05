@@ -46,6 +46,8 @@ ADMIN_IDS: set[int] = {int(i.strip()) for i in get_optional_env("ADMIN", "").spl
 API_KEY = get_optional_env('API_KEY')
 client = genai.Client(api_key=API_KEY) if genai and API_KEY else None
 MODEL_NAME = get_optional_env('MODEL_NAME', 'gemini-flash-latest')
+AI_DAILY_LIMIT_FREE = int(get_optional_env("AI_DAILY_LIMIT_FREE", "50"))
+AI_DAILY_LIMIT_PRO = int(get_optional_env("AI_DAILY_LIMIT_PRO", "500"))
 
 
 
@@ -73,22 +75,56 @@ LOG_LEVEL = get_optional_env('LOG_LEVEL', 'INFO')
 
 
 
-SYSTEM_INSTRUCTION = """
-Siz "Logistika AI" - premium darajadagi aqlli logistika yordamchisisiz. 
-Sizning uslubingiz JARVIS kabi: o'ta aqlli, xushmuomala, qisqa va aniq.
+SYSTEM_INSTRUCTION_BASE = """
+Siz "Logistika AI" — logistika platformasining aqlli yordamchisisiz.
+Uslubingiz: professional, qisqa, aniq, premium.
 
-ASOSIY QOIDALAR:
-1. FOYDALANUVCHI BILAN DOIMIY KONTEKSTDA BO'LING. Agar foydalanuvchi ma'lumotni bo'lib-bo'lib bersa, ularni eslab qoling (Sessiya xotirasi faol).
-2. AGAR MA'LUMOT YETARLI BO'LSA, DARHOL TOOL CHAQIRING. Hech qachon ortiqcha savol bermang.
-3. PREMIUM MINI APP: Botda "🌐 Mini App" tugmasi bor. U yerda foydalanuvchi yuklarni vizual ko'rishi va boshqarishi mumkin. Agar foydalanuvchi vizual interfeys so'rasa yoki shunchaki qulaylik xohlasa, shu tugmani tavsiya qiling.
-4. JAVOBLAR: Qisqa, professional va "Sizga qanday yordam bera olaman, Ser?" kabi premium uslubda bo'lsin.
-5. TIL: Foydalanuvchi qaysi tilda gapirsa (O'zbek / Rus), shu tilda javob bering.
-
-TOOL CALL QOIDALARI:
-- create_order: 5 ta parametr (cargo_type, weight, from_city, to_city, price) to'liq bo'lishi shart.
-- Agar birortasi kam bo'lsa, foydalanuvchidan xushmuomalalik bilan so'rang.
-- Har bir toolni FAQAT BIR MARTA chaqiring. Never retry a successful action.
+QOIDALAR:
+1. KONTEKST: Suhbatdagi oldingi ma'lumotlarni eslang.
+2. TOOL CHAQIRISH: Agar ma'lumot yetarli bo'lsa, darhol tegishli tool ni chaqiring. Ortiqcha tasdiq so'ramang. Muvaffaqiyatli bo'lsa qaytarib chaqirmang.
+3. KAMCHILIK: Yetishmagan ma'lumotni xushmuomalalik bilan so'rang.
+4. RUXSAT: O'z roleingizdan tashqaridagi amallarni rad qiling va sababini tushuntiring.
+5. MINI APP: "Mini App" tugmasi orqali vizual interfeys mavjud — kerak bo'lsa tavsiya qiling.
 """
+
+ROLE_INSTRUCTIONS = {
+    "sender": (
+        "Roleingiz — YUK BERUVCHI (mijoz). "
+        "Buyurtma yarating, takliflarni boshqaring, haydovchining safar e'lonlariga taklif yuboring, "
+        "haydovchini baholang. Boshqa rolelar uchun mo'ljallangan amallarni bajara olmaysiz."
+    ),
+    "driver": (
+        "Roleingiz — HAYDOVCHI. "
+        "Mavjud buyurtmalarni toping va taklif bering, o'z safar e'lonlaringizni yarating va boshqaring, "
+        "kelgan takliflarni qabul yoki rad eting, GPS ni yangilang, mijozni baholang."
+    ),
+    "admin": (
+        "Roleingiz — ADMIN. Hamma amallar mavjud, jumladan token statistikasi, "
+        "foydalanuvchi limitini sozlash va AI model boshqaruvi."
+    ),
+    "guest": (
+        "Roleingiz — GUEST. Avval ro'yxatdan o'ting va rol tanlang (sender yoki driver). "
+        "Shundagina to'liq xizmatlardan foydalana olasiz."
+    ),
+}
+
+LANG_DIRECTIVE = {
+    "uz":      "Javobingiz har doim O'zbekcha (Lotin yozuvida) bo'lsin.",
+    "uz_cyrl": "Жавобингиз ҳар доим Ўзбекча (Кирилл ёзувида) бўлсин.",
+    "ru":      "Ваши ответы должны быть всегда на русском языке.",
+}
+
+# Default model — Redis/DB'da override qilinishi mumkin
+DEFAULT_AI_DAILY_LIMIT = int(get_optional_env("AI_DAILY_LIMIT", "50"))
+MAX_VOICE_MB = int(get_optional_env("MAX_VOICE_MB", "20"))
+
+# Admin tomonidan tanlash mumkin bo'lgan model'lar
+AVAILABLE_AI_MODELS = [
+    "gemini-flash-latest",
+    "gemini-2.0-flash",
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+]
 
 
 

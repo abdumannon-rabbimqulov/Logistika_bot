@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, ConfigDict
-from datetime import datetime
-from typing import Optional, List, Any
+from datetime import datetime, date
+from typing import Optional, List, Any, Literal
 from enum import Enum
 
 # --- ENUM Schemas ---
@@ -261,3 +261,56 @@ class RatingResponse(RatingBase):
     is_suspicious: bool = False
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+# ─────────────────────────────────────────────────────────────
+# WebSocket payloads (voice + AI)
+# ─────────────────────────────────────────────────────────────
+
+
+class VoiceMessageEvent(BaseModel):
+    """WebSocket'ga `{type: voice_message}` bilan keladigan payload."""
+
+    type: str = Field("voice_message")
+    audio_b64: str = Field(..., description="base64-kodlangan audio bytes")
+    mime_type: str = Field("audio/webm", description="audio/webm | audio/ogg | ...")
+    sender_id: Optional[int] = None
+
+
+# ─────────────────────────────────────────────────────────────
+# Admin schemalar (model/limit/usage)
+# ─────────────────────────────────────────────────────────────
+
+
+class SetModelRequest(BaseModel):
+    model_name: str = Field(..., min_length=2, max_length=100)
+
+
+class CurrentModelResponse(BaseModel):
+    model_name: str
+    available: List[str]
+
+
+class SetUserLimitRequest(BaseModel):
+    daily_requests: int = Field(..., ge=0, le=10_000_000)
+
+
+class SetUserTariffRequest(BaseModel):
+    tariff: Literal["free", "pro"]
+
+
+class UsageStatRow(BaseModel):
+    user_id: int
+    usage_date: date
+    requests: int
+    input_tokens: int
+    output_tokens: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UsageStatsResponse(BaseModel):
+    items: List[UsageStatRow]
+    total_requests: int
+    total_input_tokens: int
+    total_output_tokens: int
