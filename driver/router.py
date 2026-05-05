@@ -11,7 +11,7 @@ router = APIRouter(prefix="/drivers", tags=["Haydovchilar (Drivers)"])
 
 # --- TruckType Endpoints ---
 
-@router.post("/truck-types", response_model=schemas.TruckTypeResponse, status_code=status.HTTP_201_CREATED, summary="Yangi mashina turi qo'shish")
+@router.post("/truck-types", response_model=schemas.TruckTypeResponse, status_code=status.HTTP_201_CREATED, summary="Yangi mashina turi qo'shish,admin uchun")
 async def create_truck_type(
     data: schemas.TruckTypeCreate,
     db: AsyncSession = Depends(get_db),
@@ -19,12 +19,12 @@ async def create_truck_type(
 ):
     return await crud.create_truck_type(db, data)
 
-@router.get("/truck-types", response_model=List[schemas.TruckTypeResponse], summary="Barcha mashina turlarini olish")
+@router.get("/truck-types", response_model=List[schemas.TruckTypeResponse], summary="Barcha mashina turlarini olish,hamma uchun")
 async def list_truck_types(db: AsyncSession = Depends(get_db)):
     """Tizimdagi barcha mavjud yuk mashinasi turlari ro'yxatini qaytaradi."""
     return await crud.get_all_truck_types(db)
 
-@router.get("/truck-types/{pk}", response_model=schemas.TruckTypeResponse, summary="Mashina turi tafsilotlari")
+@router.get("/truck-types/{pk}", response_model=schemas.TruckTypeResponse, summary="Mashina turi tafsilotlari,hamma uchun")
 async def get_truck_type(pk: int, db: AsyncSession = Depends(get_db)):
     """ID bo'yicha bitta mashina turi haqida to'liq ma'lumot olish."""
     obj = await crud.get_truck_type(db, pk)
@@ -32,7 +32,7 @@ async def get_truck_type(pk: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Truck type not found")
     return obj
 
-@router.patch("/truck-types/{pk}", response_model=schemas.TruckTypeResponse, summary="Mashina turini tahrirlash")
+@router.patch("/truck-types/{pk}", response_model=schemas.TruckTypeResponse, summary="Mashina turini tahrirlash,admin uchun")
 async def update_truck_type(
     pk: int,
     data: schemas.TruckTypeUpdate,
@@ -45,7 +45,7 @@ async def update_truck_type(
         raise HTTPException(status_code=404, detail="Truck type not found")
     return obj
 
-@router.delete("/truck-types/{pk}", status_code=status.HTTP_204_NO_CONTENT, summary="Mashina turini o'chirish")
+@router.delete("/truck-types/{pk}", status_code=status.HTTP_204_NO_CONTENT, summary="Mashina turini o'chirish,admin uchun")
 async def delete_truck_type(
     pk: int,
     db: AsyncSession = Depends(get_db),
