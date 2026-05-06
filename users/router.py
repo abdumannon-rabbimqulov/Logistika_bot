@@ -49,59 +49,10 @@ router = APIRouter()
 
 
 
-
-
-
-
-
-@router.post(
-    "/select-role",
-    response_model=TokenWithStep,
-    summary="Rol tanlash (3-qadam): driver yoki sender",
-    description="""
-    Foydalanuvchi kim ekanini bildiradi: **driver** yoki **sender**.
-
-    - **sender** → next_step = "done" (barcha bosqichlar tugaydi)
-    - **driver** → next_step = "fill_driver_profile" (mashina ma'lumotlari kerak)
-    """,
-)
-async def select_role(
-    data: SelectRoleRequest,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    if current_user.role not in (UserRole.GUEST,):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Siz allaqachon '{current_user.role.value}' roliga egasiz.",
-        )
-
-    new_role = UserRole.DRIVER if data.role == "driver" else UserRole.SENDER
-    await update_user_role(db, current_user, new_role)
-
-    payload = {"sub": str(current_user.id)}
-
-    if new_role == UserRole.DRIVER:
-        return TokenWithStep(
-            access_token=create_access_token(payload),
-            refresh_token=create_refresh_token(payload),
-            next_step="fill_driver_profile",
-            message="Rol saqlandi! Endi yuk mashina ma'lumotlarini kiriting.",
-        )
-    else:
-        return TokenWithStep(
-            access_token=create_access_token(payload),
-            refresh_token=create_refresh_token(payload),
-            next_step="done",
-            message="Ro'yxatdan o'tish muvaffaqiyatli yakunlandi! Xush kelibsiz.",
-        )
-
-
-
 @router.post(
     "/driver-profile",
     response_model=TokenWithStep,
-    summary="Driver profili (4-qadam, faqat driver uchun)",
+    summary="Driver profili to'ldirish (faqat haydovchilar uchun",
 )
 async def fill_driver_profile(
     data: DriverCreate,

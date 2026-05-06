@@ -36,38 +36,6 @@ async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
     return result.scalar_one_or_none()
 
 
-async def create_user_by_email(
-    db: AsyncSession,
-    *,
-    full_name: str,
-    email: str,
-    hashed_password: str,
-    username: Optional[str] = None,
-    language: str = "uz",
-) -> User:
-    """
-    Email va parol orqali yangi foydalanuvchi yaratadi.
-    ID avtomatik generatsiya qilinadi (Telegram ID kerak emas).
-    """
-    import hashlib, time
-    unique_id = int(hashlib.md5(f"{email}{time.time()}".encode()).hexdigest(), 16) % (10**15)
-
-    user = User(
-        id=unique_id,
-        full_name=full_name,
-        email=email,
-        password=hashed_password,
-        username=username,
-        language=language,
-        role=UserRole.GUEST,
-        is_active=True,
-        is_banned=False,
-    )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    return user
-
 
 async def update_user_role(db: AsyncSession, user: User, role: UserRole) -> User:
     """Foydalanuvchi rolini yangilaydi."""
