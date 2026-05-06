@@ -20,7 +20,16 @@ SSH_BASE=(
     -o ControlPath="/tmp/logistika_full_%r@%h:%p"
 )
 
-echo "🚀 Deploying backend + frontend (Docker)..."
+echo "🚀 Deploying backend + frontend (Docker) + Driver SPA..."
+
+# Build driver SPA locally
+echo "🏗️  Driver SPA build..."
+cd Frontend_bot/driver
+if [ ! -d "node_modules" ]; then
+    npm ci --prefer-offline --no-audit --no-fund
+fi
+npm run build
+cd ../..
 
 echo "📤 Syncing project to ${LOGISTIKA_SSH_HOST}:${REMOTE_PROJECT_DIR}..."
 # Create directory on server
@@ -40,6 +49,13 @@ rsync -az --delete \
     --exclude '._*' \
     ./ \
     "$LOGISTIKA_SSH_HOST:$REMOTE_PROJECT_DIR/"
+
+# Rsync built driver dist for static serving under /driver/
+"${SSH_BASE[@]}" "$LOGISTIKA_SSH_HOST" "mkdir -p '$REMOTE_PROJECT_DIR/Frontend_bot/driver/dist'"
+rsync -az --delete \
+    -e "ssh -i '$SSH_KEY' -o StrictHostKeyChecking=no -o ControlMaster=auto -o ControlPersist=60s -o ControlPath=/tmp/logistika_full_%r@%h:%p" \
+    Frontend_bot/driver/dist/ \
+    "$LOGISTIKA_SSH_HOST:$REMOTE_PROJECT_DIR/Frontend_bot/driver/dist/"
 
 echo "⚙️  Restarting Docker containers and Nginx on server..."
 "${SSH_BASE[@]}" "$LOGISTIKA_SSH_HOST" bash << REMOTE
