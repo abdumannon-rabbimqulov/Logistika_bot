@@ -179,12 +179,25 @@ async def telegram_webapp_login(
         await db.commit()
         await db.refresh(user)
 
+    if user.role==UserRole.DRIVER:
+        existing_driver = await get_driver_by_user_id(db, user.id)
+        if not existing_driver:
+            logger.info("Telegram foydalanuvchisi haydovchi rolini tanlagan, lekin profil to'ldirilmagan: user_id=%s", user.id)
+            return {
+                "access_token": create_access_token({"sub": str(user.id)}),
+                "refresh_token": create_refresh_token({"sub": str(user.id)}),
+                "role": user.role,
+                "user_id": user.id,
+                "status": "need_driver_profile",
+                "message": "Haydovchi rolini tanlagansiz, lekin profil ma'lumotlaringiz to'liq emas. Iltimos, /driver-profile endpoint orqali profil ma'lumotlaringizni to'ldiring.",
+            }
+
     token_payload = {"sub": str(user.id)}
     return {
         "access_token": create_access_token(token_payload),
         "refresh_token": create_refresh_token(token_payload),
         "role": user.role,
-        "user_id": user.id
+        "user_id": user.id,
     }
 
 
