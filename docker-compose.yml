@@ -74,9 +74,11 @@ services:
     restart: always
     networks:
       - logistika_network
+
 networks:
   logistika_network:
     driver: bridge
+
 volumes:
   postgres_data:
   uploads_data:

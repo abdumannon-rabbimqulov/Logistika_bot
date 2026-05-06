@@ -1,5 +1,7 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.config import BOT_TOKEN, get_db, REDIS_HOST, REDIS_PORT, REDIS_DB
@@ -267,8 +269,15 @@ async def delete_my_account(
 
 
 @router.post("/logout")
-async def logout(data: RefreshTokenRequest, current_user: User = Depends(get_current_user)):
-    refresh_token = data.refresh_token
+async def logout(
+    data: Optional[RefreshTokenRequest] = Body(None),
+    refresh_token_query: Optional[str] = Query(None, alias="refresh_token"),
+    current_user: User = Depends(get_current_user),
+):
+    refresh_token = data.refresh_token if data else refresh_token_query
+    if not refresh_token:
+        raise HTTPException(status_code=400, detail="Refresh token talab qilinadi")
+
     payload = verify_token(refresh_token)
     if payload is None or payload.get("type") != "refresh":
         raise HTTPException(

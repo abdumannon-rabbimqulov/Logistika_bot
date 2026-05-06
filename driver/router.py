@@ -1,7 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+import shutil
+import uuid
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-from config.config import get_db
+from config.config import STATIC_PATH, UPLOAD_DIR, get_db
 from driver import crud, schemas
 from users.auth import get_current_user
 from users.models import User
@@ -23,6 +27,25 @@ async def create_truck_type(
 async def list_truck_types(db: AsyncSession = Depends(get_db)):
     """Tizimdagi barcha mavjud yuk mashinasi turlari ro'yxatini qaytaradi."""
     return await crud.get_all_truck_types(db)
+
+@router.post("/truck-types/image", response_model=dict, summary="Truck type rasmini yuklash, admin uchun")
+async def upload_truck_type_image(
+    file: UploadFile = File(...),
+    admin: User = Depends(is_admin),
+):
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Faqat image fayl yuklash mumkin")
+
+    file_ext = os.path.splitext(file.filename or "")[1].lower()
+    if file_ext not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
+        raise HTTPException(status_code=400, detail="Rasm formati noto'g'ri")
+
+    unique_filename = f"truck_type_{uuid.uuid4()}{file_ext}"
+    file_path = os.path.join(UPLOAD_DIR, unique_filename)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    return {"url": f"{STATIC_PATH}/{unique_filename}", "filename": file.filename}
 
 @router.get("/truck-types/{pk}", response_model=schemas.TruckTypeResponse, summary="Mashina turi tafsilotlari,hamma uchun")
 async def get_truck_type(pk: int, db: AsyncSession = Depends(get_db)):
