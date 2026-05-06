@@ -125,24 +125,59 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
         "roles": ["sender", "admin"],
         "declaration": _decl(
             "create_order",
-            "Yangi yuk buyurtmasini yaratadi (Toshkent->Andijon kabi).",
+            "Yangi yuk buyurtmasini yaratadi — marshrut ixtiyoriy uzunlikda (bir necha pickup/transit/delivery nuqtalar). Backend order/crud.create_order bilan bir xil ma'lumot tuzilishi.",
             {
                 "type": "object",
                 "properties": {
                     "cargo_name": {"type": "string"},
                     "weight": {"type": "number", "description": "tonna"},
-                    "from_address": {"type": "string"},
-                    "to_address": {"type": "string"},
                     "price": {"type": "number"},
                     "required_truck_type_id": {"type": "integer"},
+                    "volume": {
+                        "type": "number",
+                        "description": "m3 bo'lsa ko'rsatiladi (ixtiyoriy)",
+                    },
+                    "currency": {
+                        "type": "string",
+                        "description": "standart: UZS",
+                    },
+                    "scheduled_start": {
+                        "type": "string",
+                        "description": "ISO8601, ixtiyoriy masalan 2026-05-10T08:00:00+00:00",
+                    },
+                    "scheduled_end": {
+                        "type": "string",
+                        "description": "ISO8601, ixtiyoriy",
+                    },
+                    "waypoints": {
+                        "type": "array",
+                        "description": "Marshrut nuqtalari tartib bilan (sequence=1,2,3,...). kamida pickup va oxiriga delivery — orasiga transit mumkin.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "sequence": {"type": "integer"},
+                                "waypoint_type": {
+                                    "type": "string",
+                                    "enum": ["pickup", "delivery", "transit"],
+                                },
+                                "address": {"type": "string"},
+                                "landmark": {"type": "string"},
+                                "latitude": {"type": "number"},
+                                "longitude": {"type": "number"},
+                                "contact_name": {"type": "string"},
+                                "contact_phone": {"type": "string"},
+                                "note": {"type": "string"},
+                            },
+                            "required": ["sequence", "waypoint_type", "address"],
+                        },
+                    },
                 },
                 "required": [
                     "cargo_name",
                     "weight",
-                    "from_address",
-                    "to_address",
                     "price",
                     "required_truck_type_id",
+                    "waypoints",
                 ],
             },
         ),
@@ -568,27 +603,50 @@ class LogistikaToolkit:
     async def create_order(
         self,
         cargo_name: str,
-        weight: float,
-        from_address: str,
-        to_address: str,
-        price: float,
+        weight: Any,
+        price: Any,
         required_truck_type_id: int,
+        waypoints: Any,
+        volume: Any = None,
+        currency: str = "UZS",
+        scheduled_start: Optional[str] = None,
+        scheduled_end: Optional[str] = None,
     ) -> str:
+        if not waypoints or not isinstance(waypoints, list):
+            return "'waypoints' bo'sh yoki ro'yxat emas — marshrut nuqtalarini yuboring."
+
+        wp_models: List[order_schemas.OrderWaypointCreate] = []
+        for wp in waypoints:
+            wd: Dict[str, Any]
+            if isinstance(wp, dict):
+                wd = wp
+            else:
+                try:
+                    wd = dict(wp)
+                except Exception:
+                    return f"Noto'g'ri waypoint: {wp!r}"
+
+            wp_models.append(order_schemas.OrderWaypointCreate(**wd))
+
+        wp_models.sort(key=lambda w: w.sequence)
+
+        oc_fields: Dict[str, Any] = {
+            "cargo_name": cargo_name,
+            "weight": weight,
+            "price": price,
+            "required_truck_type_id": required_truck_type_id,
+            "currency": currency or "UZS",
+            "waypoints": wp_models,
+        }
+        if volume is not None:
+            oc_fields["volume"] = volume
+        if scheduled_start:
+            oc_fields["scheduled_start"] = scheduled_start
+        if scheduled_end:
+            oc_fields["scheduled_end"] = scheduled_end
+
         try:
-            order_data = order_schemas.OrderCreate(
-                cargo_name=cargo_name,
-                weight=weight,
-                price=price,
-                required_truck_type_id=required_truck_type_id,
-                waypoints=[
-                    order_schemas.OrderWaypointCreate(
-                        sequence=1, waypoint_type="pickup", address=from_address
-                    ),
-                    order_schemas.OrderWaypointCreate(
-                        sequence=2, waypoint_type="delivery", address=to_address
-                    ),
-                ],
-            )
+            order_data = order_schemas.OrderCreate(**oc_fields)
             order = await order_crud.create_order(
                 self.db, order_data, customer_id=self.user_id
             )
