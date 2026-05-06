@@ -66,6 +66,20 @@ services:
       migrations:
         condition: service_completed_successfully
 
+  frontend-bot:
+    build:
+      context: ./Frontend_bot
+      dockerfile: Dockerfile
+    container_name: logistika_frontend
+    ports:
+      - "8088:80"
+    depends_on:
+      backend-api:
+        condition: service_started
+    restart: always
+    networks:
+      - logistika_network
+
   logistika-redis:
     image: redis:7-alpine
     container_name: logistika_redis

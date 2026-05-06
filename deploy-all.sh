@@ -20,16 +20,7 @@ SSH_BASE=(
     -o ControlPath="/tmp/logistika_full_%r@%h:%p"
 )
 
-echo "🚀 Deploying backend and building frontend..."
-
-# 1. Build frontend locally first to save server resources
-echo "🏗️  Admin SPA build..."
-cd Frontend_bot/admin
-if [ ! -d "node_modules" ]; then
-    npm ci --prefer-offline --no-audit --no-fund
-fi
-npm run build
-cd ../..
+echo "🚀 Deploying backend + frontend (Docker)..."
 
 echo "📤 Syncing project to ${LOGISTIKA_SSH_HOST}:${REMOTE_PROJECT_DIR}..."
 # Create directory on server
@@ -61,7 +52,7 @@ systemctl reload nginx
 
 # Rebuild and restart docker compose services
 cd "$REMOTE_PROJECT_DIR"
-docker compose up -d --build backend-api backend-bot migrations
+docker compose up -d --build backend-api backend-bot frontend-bot migrations
 
 REMOTE
 
