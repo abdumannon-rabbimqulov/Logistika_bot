@@ -11,6 +11,10 @@ ENV/
 .git/
 .gitignore
 *.log
+.DS_Store
+._*
+**/.DS_Store
+**/._*
 data/
 postgres_data/
 node_modules/

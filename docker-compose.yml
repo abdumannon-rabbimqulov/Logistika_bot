@@ -9,9 +9,13 @@ x-backend-base: &backend-base
   volumes:
     - .:/app
     - uploads_data:/app/uploads
+  networks:
+    - logistika_network
   depends_on:
     db:
       condition: service_healthy
+    logistika-redis:
+      condition: service_started
 
 services:
   db:
@@ -31,6 +35,8 @@ services:
       timeout: 5s
       retries: 5
     restart: always
+    networks:
+      - logistika_network
 
   migrations:
     <<: *backend-base
@@ -43,7 +49,7 @@ services:
     container_name: logistika_api
     command: uvicorn config.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
-      - "8000:8000"
+      - "8003:8000"
     depends_on:
       db:
         condition: service_healthy

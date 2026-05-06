@@ -104,7 +104,7 @@ async def update_driver_location(
         pipe.sadd(ONLINE_SET, driver_id)
         pipe.publish(CHANNEL, raw)
         await pipe.execute()
-    except RedisError as exc:
+    except (RedisError, OSError) as exc:
         logger.warning("Redis live location write failed, DB fallback used: %s", exc)
         await _persist_to_db(driver_id, lat, lon, expires_at)
         return payload
@@ -121,7 +121,7 @@ async def stop_driver_location(driver_id: int) -> None:
         pipe.delete(_loc_key(driver_id))
         pipe.srem(ONLINE_SET, driver_id)
         await pipe.execute()
-    except RedisError as exc:
+    except (RedisError, OSError) as exc:
         logger.warning("Redis live location stop failed, DB fallback used: %s", exc)
     try:
         async with async_session() as db:
@@ -145,7 +145,7 @@ async def _maybe_persist_to_db(
         set_ok = await r.set(flag, "1", ex=LIVE_LOC_DB_THROTTLE_SEC, nx=True)
         if not set_ok:
             return
-    except RedisError as exc:
+    except (RedisError, OSError) as exc:
         logger.warning("Redis DB throttle failed, persisting directly: %s", exc)
     await _persist_to_db(driver_id, lat, lon, expires_at)
 
@@ -179,7 +179,7 @@ async def get_driver_location(driver_id: int) -> Optional[Dict]:
                 return json.loads(raw)
             except json.JSONDecodeError:
                 return None
-    except RedisError as exc:
+    except (RedisError, OSError) as exc:
         logger.warning("Redis get driver location failed, DB fallback used: %s", exc)
 
     rows = await _locations_from_db(driver_id=driver_id)
@@ -201,7 +201,7 @@ async def get_all_online_drivers() -> List[Dict]:
             except json.JSONDecodeError:
                 continue
         return items
-    except RedisError as exc:
+    except (RedisError, OSError) as exc:
         logger.warning("Redis online drivers scan failed, DB fallback used: %s", exc)
         return await _locations_from_db()
 
@@ -259,12 +259,16 @@ async def subscribe_location_updates() -> AsyncIterator[Dict]:
         r = get_redis()
         pubsub = r.pubsub()
         await pubsub.subscribe(CHANNEL)
-    except RedisError as exc:
+    except (RedisError, OSError) as exc:
         logger.warning("Redis pub/sub unavailable: %s", exc)
         return
     try:
         while True:
-            msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=30)
+            try:
+                msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=30)
+            except (RedisError, OSError) as exc:
+                logger.warning("Redis pub/sub read failed: %s", exc)
+                break
             if msg is None:
                 await asyncio.sleep(0)
                 continue

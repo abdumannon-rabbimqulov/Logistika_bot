@@ -267,7 +267,8 @@ async def delete_my_account(
 
 
 @router.post("/logout")
-async def logout(refresh_token: str, current_user: User = Depends(get_current_user)):
+async def logout(data: RefreshTokenRequest, current_user: User = Depends(get_current_user)):
+    refresh_token = data.refresh_token
     payload = verify_token(refresh_token)
     if payload is None or payload.get("type") != "refresh":
         raise HTTPException(
@@ -277,5 +278,8 @@ async def logout(refresh_token: str, current_user: User = Depends(get_current_us
     user_id = payload.get("sub")
     if not user_id or str(user_id) != str(current_user.id):
         raise HTTPException(status_code=401, detail="Refresh token xato")
-    redis_client.set(f"blacklist_refresh_{refresh_token}", "true", ex=timedelta(days=1))
+    try:
+        redis_client.set(f"blacklist_refresh_{refresh_token}", "true", ex=timedelta(days=1))
+    except (redis.exceptions.RedisError, OSError) as exc:
+        logger.warning("Redis logout blacklist unavailable, local logout only: %s", exc)
     return {"detail": "Muvaffaqiyatli logout qilindi."}
