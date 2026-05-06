@@ -1,11 +1,19 @@
 from __future__ import annotations
 import enum
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 
 from sqlalchemy import (
-    BigInteger, String, Numeric, DateTime, Enum
+    BigInteger,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
 )
+from sqlalchemy.schema import Index
 from config.config import Base
 
 from sqlalchemy import func
@@ -64,4 +72,48 @@ class User(Base):
         foreign_keys="[Rating.target_user]",
         back_populates="target_user_obj")
     ai_commands: Mapped[list["AICommand"]] = relationship(back_populates="user")
+    tariff_payments: Mapped[list["UserTariffPayment"]] = relationship(
+        back_populates="user",
+        foreign_keys="UserTariffPayment.user_id",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class UserTariffPayment(Base):
+    """Foydalanuvchini oylik tarif / obuna to‘lovi yozuvlari (faqat admin kiritadi/o‘zgartiradi)."""
+
+    __tablename__ = "user_tariff_payments"
+
+    __table_args__ = (Index("ix_user_tariff_payments_user_billing_month", "user_id", "billing_month"),)
+
+    id: Mapped[int] = mapped_column(autoincrement=True, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    billing_month: Mapped[date] = mapped_column(Date, nullable=False)
+
+    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(10), nullable=False, default="UZS")
+    tariff_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    recorded_by_admin_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    user: Mapped["User"] = relationship(
+        foreign_keys=[user_id],
+        back_populates="tariff_payments",
+    )
 

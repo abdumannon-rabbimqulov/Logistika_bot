@@ -1,8 +1,8 @@
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -84,3 +84,56 @@ class RefreshTokenRequest(BaseModel):
 
 class TelegramWebAppLoginRequest(BaseModel):
     init_data: str = Field(..., min_length=1)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ADMIN — Foydalanuvchi tarif / oylik to‘lov yozuvlari (user_tariff_payments)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class UserTariffPaymentCreate(BaseModel):
+    """Oylik uchun to‘lov yozuvi: qaysi oy (yil + oy) va miqdor."""
+
+    user_id: int = Field(...)
+    billing_year: int = Field(..., ge=2000, le=2100)
+    billing_month: int = Field(..., ge=1, le=12)
+    amount: Decimal = Field(..., ge=0, description="To‘langan summa")
+    currency: str = Field(default="UZS", max_length=10)
+    tariff_code: Optional[str] = Field(None, max_length=64, description="Masalan: basic, pro")
+    paid_at: Optional[datetime] = None
+    note: Optional[str] = None
+
+
+class UserTariffPaymentUpdate(BaseModel):
+    billing_year: Optional[int] = Field(None, ge=2000, le=2100)
+    billing_month: Optional[int] = Field(None, ge=1, le=12)
+    amount: Optional[Decimal] = Field(None, ge=0)
+    currency: Optional[str] = Field(None, max_length=10)
+    tariff_code: Optional[str] = Field(None, max_length=64)
+    paid_at: Optional[datetime] = None
+    note: Optional[str] = None
+
+
+class UserTariffPaymentRead(BaseModel):
+    id: int
+    user_id: int
+    billing_month: date
+    amount: Decimal
+    currency: str
+    tariff_code: Optional[str]
+    paid_at: Optional[datetime]
+    note: Optional[str]
+    recorded_by_admin_id: Optional[int]
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserMonthlyTariffSummary(BaseModel):
+    """Bitta foydalanuvchi uchun kalendaryil bo‘yicha oyliklar yig‘indisi."""
+
+    billing_month: date
+    total_amount: Decimal
+    payment_count: int
+    currency: str

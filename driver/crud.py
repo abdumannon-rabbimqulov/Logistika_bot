@@ -66,11 +66,6 @@ async def update_driver(db: AsyncSession, pk: int, data: DriverUpdate) -> Option
     await db.commit()
     return await get_driver(db, pk)
 
-# --- DriverDocument CRUD ---
-
-
-
-
 
 
 

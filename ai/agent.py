@@ -346,21 +346,60 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
         "roles": ["driver", "admin"],
         "declaration": _decl(
             "create_announcement",
-            "Yangi safar e'loni yaratish (origin->destination, narx, sana).",
+            "Yangi safar e'loni yaratish — marshrut ixtiyoriy uzunlikda (origin, transit*, destination). Backend driver/crud.create_announcement bilan bir xil tuzilish.",
             {
                 "type": "object",
                 "properties": {
-                    "from_city": {"type": "string"},
-                    "to_city": {"type": "string"},
                     "price": {"type": "number"},
                     "departure_date_iso": {
                         "type": "string",
                         "description": "ISO-8601 format (2025-05-10T08:00:00Z)",
                     },
-                    "available_weight": {"type": "number"},
+                    "currency": {"type": "string", "description": "standart: UZS"},
+                    "available_weight": {
+                        "type": "number",
+                        "description": "tonna (ixtiyoriy)",
+                    },
+                    "available_volume": {
+                        "type": "number",
+                        "description": "m3 (ixtiyoriy)",
+                    },
+                    "arrival_date_iso": {
+                        "type": "string",
+                        "description": "ISO-8601, ixtiyoriy",
+                    },
+                    "expires_at_iso": {
+                        "type": "string",
+                        "description": "ISO-8601, ixtiyoriy",
+                    },
                     "description": {"type": "string"},
+                    "waypoints": {
+                        "type": "array",
+                        "description": "Marshrut nuqtalari tartib bilan (sequence=1,2,3,...). Boshida origin, oxirida destination; orasiga transit mumkin.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "sequence": {"type": "integer"},
+                                "waypoint_type": {
+                                    "type": "string",
+                                    "enum": ["origin", "destination", "transit"],
+                                },
+                                "city": {"type": "string"},
+                                "region": {"type": "string"},
+                                "address": {"type": "string"},
+                                "latitude": {"type": "number"},
+                                "longitude": {"type": "number"},
+                                "scheduled_at": {
+                                    "type": "string",
+                                    "description": "ISO-8601, ixtiyoriy",
+                                },
+                                "note": {"type": "string"},
+                            },
+                            "required": ["sequence", "waypoint_type", "city"],
+                        },
+                    },
                 },
-                "required": ["from_city", "to_city", "price", "departure_date_iso"],
+                "required": ["price", "departure_date_iso", "waypoints"],
             },
         ),
     },
@@ -858,37 +897,94 @@ class LogistikaToolkit:
 
     async def create_announcement(
         self,
-        from_city: str,
-        to_city: str,
-        price: float,
+        price: Any,
         departure_date_iso: str,
-        available_weight: Optional[float] = None,
+        waypoints: Any,
+        currency: str = "UZS",
+        available_weight: Any = None,
+        available_volume: Any = None,
+        arrival_date_iso: Optional[str] = None,
+        expires_at_iso: Optional[str] = None,
         description: Optional[str] = None,
     ) -> str:
         driver = await self._require_driver()
         if not driver:
             return "Avval haydovchi profili to'ldirilishi kerak."
+
+        def _parse_iso(value: str, field_name: str) -> Tuple[Optional[datetime], Optional[str]]:
+            try:
+                return datetime.fromisoformat(value.replace("Z", "+00:00")), None
+            except (ValueError, AttributeError):
+                return None, f"{field_name} noto'g'ri format. Misol: 2025-05-10T08:00:00Z"
+
+        departure, err = _parse_iso(departure_date_iso, "departure_date_iso")
+        if err:
+            return err
+
+        arrival: Optional[datetime] = None
+        if arrival_date_iso:
+            arrival, err = _parse_iso(arrival_date_iso, "arrival_date_iso")
+            if err:
+                return err
+
+        expires: Optional[datetime] = None
+        if expires_at_iso:
+            expires, err = _parse_iso(expires_at_iso, "expires_at_iso")
+            if err:
+                return err
+
+        if not waypoints or not isinstance(waypoints, list):
+            return "'waypoints' bo'sh yoki ro'yxat emas — marshrut nuqtalarini yuboring."
+
+        wp_models: List[driver_schemas.AnnouncementWaypointCreate] = []
+        for wp in waypoints:
+            if isinstance(wp, dict):
+                wd: Dict[str, Any] = wp
+            else:
+                try:
+                    wd = dict(wp)
+                except Exception:
+                    return f"Noto'g'ri waypoint: {wp!r}"
+            if "scheduled_at" in wd and isinstance(wd["scheduled_at"], str):
+                parsed, err = _parse_iso(wd["scheduled_at"], "waypoint.scheduled_at")
+                if err:
+                    return err
+                wd["scheduled_at"] = parsed
+            wp_models.append(driver_schemas.AnnouncementWaypointCreate(**wd))
+
+        wp_models.sort(key=lambda w: w.sequence)
+
+        ann_fields: Dict[str, Any] = {
+            "driver_id": driver.id,
+            "price": price,
+            "currency": currency or "UZS",
+            "departure_date": departure,
+            "waypoints": wp_models,
+        }
+        if available_weight is not None:
+            ann_fields["available_weight"] = available_weight
+        if available_volume is not None:
+            ann_fields["available_volume"] = available_volume
+        if arrival is not None:
+            ann_fields["arrival_date"] = arrival
+        if expires is not None:
+            ann_fields["expires_at"] = expires
+        if description:
+            ann_fields["description"] = description
+
         try:
-            departure = datetime.fromisoformat(departure_date_iso.replace("Z", "+00:00"))
-        except ValueError:
-            return "departure_date_iso noto'g'ri format. Misol: 2025-05-10T08:00:00Z"
-        ann_data = driver_schemas.DriverAnnouncementCreate(
-            driver_id=driver.id,
-            price=price,
-            available_weight=available_weight,
-            departure_date=departure,
-            description=description,
-            waypoints=[
-                driver_schemas.AnnouncementWaypointCreate(
-                    sequence=1, waypoint_type="origin", city=from_city
-                ),
-                driver_schemas.AnnouncementWaypointCreate(
-                    sequence=2, waypoint_type="destination", city=to_city
-                ),
-            ],
+            ann_data = driver_schemas.DriverAnnouncementCreate(**ann_fields)
+            ann = await driver_crud.create_announcement(self.db, ann_data)
+        except Exception as exc:
+            logger.error("AI create_announcement error: %s", exc)
+            return f"E'lon yaratishda xato: {exc}"
+
+        from_city = wp_models[0].city
+        to_city = wp_models[-1].city
+        return (
+            f"E'lon #{ann.id} yaratildi: {from_city} -> {to_city}, "
+            f"{price} {ann.currency} ({len(wp_models)} nuqta)."
         )
-        ann = await driver_crud.create_announcement(self.db, ann_data)
-        return f"E'lon #{ann.id} yaratildi: {from_city} -> {to_city}, {price} so'm."
 
     async def list_my_announcements(self) -> str:
         driver = await self._require_driver()

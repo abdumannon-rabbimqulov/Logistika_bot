@@ -13,7 +13,7 @@ from config.config import (
     REFRESH_TOKEN_EXPIRE_DAYS,
 )
 from users.crud import get_user_by_id
-from users.models import User
+from users.models import User, UserRole
 
 import bcrypt
 
@@ -97,6 +97,17 @@ async def get_current_active_user(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Akkaunt faol emas.",
+        )
+    return current_user
+
+
+async def get_current_admin(
+    current_user: User = Depends(get_current_active_user),
+) -> User:
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bu resurs faqat administratorlar uchun.",
         )
     return current_user
 

@@ -18,6 +18,7 @@ from driver.router import router as driver_router
 from order.router import router as order_router
 from ai.router import router as ai_router
 from users.router import router as auth_router
+from users.tariff_router import router as tariff_admin_router
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -55,6 +56,7 @@ app.include_router(order_router)
 app.include_router(ai_router)
 
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
+app.include_router(tariff_admin_router)
 
 
 
@@ -104,6 +106,7 @@ async def api_docs():
             "drivers": "/api/driver",
             "orders": "/api/order",
             "ai": "/api/ai",
+            "admin_tariffs": "/admin/tariffs",
         },
         "health": {
             "status": "/health",
