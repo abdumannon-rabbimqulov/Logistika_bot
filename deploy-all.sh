@@ -4,32 +4,28 @@ cd "$(dirname "$0")"
 
 LOGISTIKA_SSH_HOST="${LOGISTIKA_SSH_HOST:-root@158.220.100.58}"
 SSH_KEY="${LOGISTIKA_SSH_KEY:-$HOME/.ssh/deploy_key}"
-REMOTE_PROJECT_DIR="/root/Logistika_bot"
+REMOTE_PROJECT_DIR="${LOGISTIKA_REMOTE_PROJECT_DIR:-/root/logistika_bot}"
 
 if [ ! -f "$SSH_KEY" ]; then
     echo "SSH kalit yo‘q: $SSH_KEY" >&2
     exit 1
 fi
 
+# Clean any stale ControlMaster sockets from previous runs
+rm -f /tmp/logistika_full_* 2>/dev/null || true
+
 SSH_BASE=(
     ssh
     -i "$SSH_KEY"
     -o StrictHostKeyChecking=no
-    -o ControlMaster=auto
-    -o ControlPersist=60s
-    -o ControlPath="/tmp/logistika_full_%r@%h:%p"
+    -o BatchMode=yes
+    -o ConnectTimeout=45
+    -o ServerAliveInterval=15
+    -o ServerAliveCountMax=4
+    -o ControlMaster=no
 )
 
-echo "🚀 Deploying backend + frontend (Docker) + Driver SPA..."
-
-# Build driver SPA locally
-echo "🏗️  Driver SPA build..."
-cd Frontend_bot/driver
-if [ ! -d "node_modules" ]; then
-    npm ci --prefer-offline --no-audit --no-fund
-fi
-npm run build
-cd ../..
+echo "🚀 Deploying backend services..."
 
 echo "📤 Syncing project to ${LOGISTIKA_SSH_HOST}:${REMOTE_PROJECT_DIR}..."
 # Create directory on server
@@ -50,13 +46,6 @@ rsync -az --delete \
     ./ \
     "$LOGISTIKA_SSH_HOST:$REMOTE_PROJECT_DIR/"
 
-# Rsync built driver dist for static serving under /driver/
-"${SSH_BASE[@]}" "$LOGISTIKA_SSH_HOST" "mkdir -p '$REMOTE_PROJECT_DIR/Frontend_bot/driver/dist'"
-rsync -az --delete \
-    -e "ssh -i '$SSH_KEY' -o StrictHostKeyChecking=no -o ControlMaster=auto -o ControlPersist=60s -o ControlPath=/tmp/logistika_full_%r@%h:%p" \
-    Frontend_bot/driver/dist/ \
-    "$LOGISTIKA_SSH_HOST:$REMOTE_PROJECT_DIR/Frontend_bot/driver/dist/"
-
 echo "⚙️  Restarting Docker containers and Nginx on server..."
 "${SSH_BASE[@]}" "$LOGISTIKA_SSH_HOST" bash << REMOTE
 set -euo pipefail
@@ -68,8 +57,9 @@ systemctl reload nginx
 
 # Rebuild and restart docker compose services
 cd "$REMOTE_PROJECT_DIR"
-docker compose up -d --build backend-api backend-bot frontend-bot migrations
+docker compose up -d --build backend-api backend-bot migrations
 
 REMOTE
 
-echo "✅ Full Deploy successfully completed!"
+echo "✅ Backend deploy successfully completed!"
+echo "➡️  Frontend uchun alohida ishga tushiring: ./deploy-frontend.sh"
