@@ -19,6 +19,7 @@ from order.router import router as order_router
 from ai.router import router as ai_router
 from users.router import router as auth_router
 from users.tariff_router import router as tariff_admin_router
+from Admin_panel.router import router as admin_router
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -57,6 +58,7 @@ app.include_router(ai_router)
 
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(tariff_admin_router)
+app.include_router(admin_router)
 
 
 

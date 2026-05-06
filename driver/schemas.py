@@ -4,7 +4,6 @@ from decimal import Decimal
 from typing import Optional, List
 from enum import Enum
 
-# --- ENUM Schemas ---
 
 class AnnouncementOfferStatus(str, Enum):
     PENDING   = "pending"

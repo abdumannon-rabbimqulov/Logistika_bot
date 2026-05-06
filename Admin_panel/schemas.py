@@ -1,0 +1,129 @@
+"""Admin paneli uchun pydantic schemalar."""
+
+from __future__ import annotations
+
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from users.models import UserRole
+
+
+# ════════════════════════════════════════════════════════════
+# USERS
+# ════════════════════════════════════════════════════════════
+
+
+class AdminUserListItem(BaseModel):
+    id: int
+    username: Optional[str] = None
+    full_name: str
+    email: Optional[str] = None
+    phone_number: Optional[str] = None
+    role: Optional[str] = None
+    language: str
+    is_active: bool
+    is_banned: bool
+    balance: Decimal
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminUserList(BaseModel):
+    total: int
+    items: List[AdminUserListItem]
+
+
+class AdminUserUpdate(BaseModel):
+    role: Optional[UserRole] = None
+    is_banned: Optional[bool] = None
+    is_active: Optional[bool] = None
+    language: Optional[str] = Field(None, min_length=2, max_length=10)
+    full_name: Optional[str] = Field(None, max_length=128)
+
+
+# ════════════════════════════════════════════════════════════
+# ORDERS
+# ════════════════════════════════════════════════════════════
+
+
+class AdminOrderUpdate(BaseModel):
+    status: Optional[str] = None
+    cargo_name: Optional[str] = None
+    weight: Optional[Decimal] = None
+    price: Optional[Decimal] = None
+    currency: Optional[str] = None
+    description: Optional[str] = None
+
+
+# ════════════════════════════════════════════════════════════
+# DASHBOARD STATS
+# ════════════════════════════════════════════════════════════
+
+
+class OrdersByDay(BaseModel):
+    date: date
+    count: int
+
+
+class AdminDashboardStats(BaseModel):
+    users_total: int
+    users_today: int
+    drivers_total: int
+    drivers_online: int
+    drivers_live_gps: int
+    orders_total: int
+    orders_today: int
+    orders_by_status: Dict[str, int]
+    offers_today: int
+    ai_requests_today: int
+    ai_input_tokens_today: int
+    ai_output_tokens_today: int
+    orders_last_7_days: List[OrdersByDay]
+
+
+# ════════════════════════════════════════════════════════════
+# AI COMMANDS
+# ════════════════════════════════════════════════════════════
+
+
+class AICommandRead(BaseModel):
+    id: int
+    user_id: Optional[int]
+    message_id: Optional[int]
+    command_type: str
+    raw_input: Optional[str]
+    parameters: Optional[Dict[str, Any]] = None
+    status: str
+    result: Optional[Dict[str, Any]] = None
+    error_msg: Optional[str] = None
+    created_at: datetime
+    executed_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AICommandList(BaseModel):
+    total: int
+    items: List[AICommandRead]
+
+
+# ════════════════════════════════════════════════════════════
+# DRIVER LIVE LOCATION
+# ════════════════════════════════════════════════════════════
+
+
+class DriverLocationItem(BaseModel):
+    driver_id: int
+    user_id: Optional[int] = None
+    full_name: Optional[str] = None
+    truck_number: Optional[str] = None
+    truck_type_id: Optional[int] = None
+    lat: float
+    lon: float
+    ts: datetime
+    expires_at: Optional[datetime] = None

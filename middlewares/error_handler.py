@@ -11,6 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from jose import JWTError
 import json
+from utils.admin_alerts import send_error_to_admins, format_details_for_alert
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,15 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
                 "client": client,
             },
             exc_info=exc
+        )
+        await send_error_to_admins(
+            title="Database Error",
+            request_id=request_id,
+            method=method,
+            path=path,
+            client=client,
+            exc_type=type(exc).__name__,
+            details=format_details_for_alert(exc),
         )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -161,6 +171,15 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
                 "exc_type": type(exc).__name__,
             },
             exc_info=exc
+        )
+        await send_error_to_admins(
+            title="Unhandled Exception",
+            request_id=request_id,
+            method=method,
+            path=path,
+            client=client,
+            exc_type=type(exc).__name__,
+            details=format_details_for_alert(exc),
         )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

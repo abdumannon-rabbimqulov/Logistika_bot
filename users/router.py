@@ -10,7 +10,6 @@ from users.crud import (
     get_user_by_phone,
     update_password,
     update_user,
-    update_user_role,
 )
 from users.auth import (
     create_access_token,
@@ -25,7 +24,6 @@ from users.telegram_auth import validate_telegram_init_data
 from users.schemas import (
     ChangePasswordRequest,
     RefreshTokenRequest,
-    SelectRoleRequest,
     TelegramWebAppLoginRequest,
     Token,
     TokenWithStep,

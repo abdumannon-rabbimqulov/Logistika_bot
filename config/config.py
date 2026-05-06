@@ -66,6 +66,13 @@ REDIS_PORT = int(get_optional_env('REDIS_PORT', '6379'))
 REDIS_DB = int(get_optional_env('REDIS_DB', '1'))
 
 # ─────────────────────────────────────────────────────────────
+# DRIVER LIVE LOCATION
+# ─────────────────────────────────────────────────────────────
+LIVE_LOC_TTL_SEC = int(get_optional_env("LIVE_LOC_TTL_SEC", "120"))
+LIVE_LOC_DB_THROTTLE_SEC = int(get_optional_env("LIVE_LOC_DB_THROTTLE_SEC", "60"))
+LIVE_LOC_DEFAULT_PERIOD_SEC = int(get_optional_env("LIVE_LOC_DEFAULT_PERIOD_SEC", "1800"))
+
+# ─────────────────────────────────────────────────────────────
 # LOGGING & ENVIRONMENT
 # ─────────────────────────────────────────────────────────────
 ENVIRONMENT = get_optional_env('ENVIRONMENT', 'development')
