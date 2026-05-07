@@ -3,6 +3,7 @@
 """
 
 import logging
+import time
 import uuid
 from datetime import datetime, timezone
 from fastapi import FastAPI, Request, status
@@ -61,11 +62,20 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
                 "error": str(exc.orig),
             }
         )
+        await send_error_to_admins(
+            title="Database Integrity Error",
+            request_id=request_id,
+            method=method,
+            path=path,
+            client=client,
+            exc_type=type(exc).__name__,
+            details=format_details_for_alert(exc),
+        )
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content=ErrorResponse.build(
                 status_code=409,
-                message="❌ Database conflict - duplicate entry or invalid reference",
+                message="Database conflict - duplicate entry or invalid reference",
                 error_code="CONFLICT",
                 request_id=request_id
             )
@@ -96,7 +106,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=ErrorResponse.build(
                 status_code=500,
-                message="❌ Database operation failed",
+                message="Database operation failed",
                 error_code="DATABASE_ERROR",
                 request_id=request_id
             )
@@ -127,7 +137,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content=ErrorResponse.build(
                 status_code=422,
-                message="❌ Invalid request data",
+                message="Invalid request data",
                 error_code="VALIDATION_ERROR",
                 details={"errors": errors},
                 request_id=request_id
@@ -151,7 +161,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
             status_code=status.HTTP_401_UNAUTHORIZED,
             content=ErrorResponse.build(
                 status_code=401,
-                message="❌ Invalid or expired authentication token",
+                message="Invalid or expired authentication token",
                 error_code="AUTHENTICATION_ERROR",
                 request_id=request_id
             )
@@ -185,7 +195,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=ErrorResponse.build(
                 status_code=500,
-                message="❌ Internal server error",
+                message="Internal server error",
                 error_code="INTERNAL_ERROR",
                 request_id=request_id
             )
@@ -203,16 +213,15 @@ class RequestLoggingMiddleware:
     
     async def __call__(self, request: Request, call_next):
         request_id = str(uuid.uuid4())
+        started = time.perf_counter()
         
         # Request ma'lumotlarini loglash
         logger.info(
-            f"📥 {request.method} {request.url.path}",
+            "request_started",
             extra={
                 "request_id": request_id,
                 "method": request.method,
                 "path": request.url.path,
-                "client": request.client.host if request.client else "unknown",
-                "query_params": dict(request.query_params),
             }
         )
         
@@ -222,12 +231,13 @@ class RequestLoggingMiddleware:
             
             # Response ma'lumotlarini loglash
             logger.info(
-                f"📤 {request.method} {request.url.path} - {response.status_code}",
+                "request_finished",
                 extra={
                     "request_id": request_id,
                     "method": request.method,
                     "path": request.url.path,
                     "status_code": response.status_code,
+                    "duration_ms": round((time.perf_counter() - started) * 1000, 2),
                 }
             )
             
@@ -237,12 +247,13 @@ class RequestLoggingMiddleware:
         
         except Exception as exc:
             logger.error(
-                f"❌ {request.method} {request.url.path}",
+                "request_failed",
                 extra={
                     "request_id": request_id,
                     "method": request.method,
                     "path": request.url.path,
                     "exc_type": type(exc).__name__,
+                    "duration_ms": round((time.perf_counter() - started) * 1000, 2),
                 },
                 exc_info=exc
             )
@@ -256,9 +267,10 @@ def setup_error_handlers(app: FastAPI):
     class RequestLoggingHTTPMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request: Request, call_next):
             request_id = str(uuid.uuid4())
+            started = time.perf_counter()
             
             logger.info(
-                f"📥 {request.method} {request.url.path}",
+                "request_started",
                 extra={
                     "request_id": request_id,
                     "method": request.method,
@@ -269,22 +281,37 @@ def setup_error_handlers(app: FastAPI):
             try:
                 response = await call_next(request)
                 logger.info(
-                    f"📤 {request.method} {request.url.path} - {response.status_code}",
+                    "request_finished",
                     extra={
                         "request_id": request_id,
+                        "method": request.method,
+                        "path": request.url.path,
                         "status_code": response.status_code,
+                        "duration_ms": round((time.perf_counter() - started) * 1000, 2),
                     }
                 )
                 response.headers["X-Request-ID"] = request_id
                 return response
             except Exception as exc:
                 logger.error(
-                    f"❌ {request.method} {request.url.path}",
+                    "request_failed",
                     extra={
                         "request_id": request_id,
+                        "method": request.method,
+                        "path": request.url.path,
                         "exc_type": type(exc).__name__,
+                        "duration_ms": round((time.perf_counter() - started) * 1000, 2),
                     },
                     exc_info=exc
+                )
+                await send_error_to_admins(
+                    title="Unhandled Exception (middleware)",
+                    request_id=request_id,
+                    method=request.method,
+                    path=request.url.path,
+                    client=request.client.host if request.client else "unknown",
+                    exc_type=type(exc).__name__,
+                    details=format_details_for_alert(exc),
                 )
                 raise
     
@@ -299,13 +326,9 @@ class StructuredFormatter(logging.Formatter):
     
     def format(self, record: logging.LogRecord) -> str:
         log_data = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
-            "level": record.levelname,
-            "logger": record.name,
-            "message": record.getMessage(),
-            "module": record.module,
-            "function": record.funcName,
-            "line": record.lineno,
+            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "lvl": record.levelname,
+            "msg": record.getMessage(),
         }
         
         # Extra fields qo'shish (request_id, user_id, etc.)
@@ -319,6 +342,8 @@ class StructuredFormatter(logging.Formatter):
             log_data["path"] = record.path
         if hasattr(record, "status_code") and record.status_code:
             log_data["status_code"] = record.status_code
+        if hasattr(record, "duration_ms") and record.duration_ms is not None:
+            log_data["duration_ms"] = record.duration_ms
         
         # Exception info
         if record.exc_info:
@@ -331,6 +356,7 @@ def setup_logging(environment: str = "development"):
     """
     Logging'ni sozlash (ENV'ga qarab JSON yoki text format).
     """
+    import os
     import sys
     
     # Root logger
@@ -344,11 +370,17 @@ def setup_logging(environment: str = "development"):
     if environment == "production":
         # Production: JSON format to file
         formatter = StructuredFormatter()
-        
-        # File handler
-        file_handler = logging.FileHandler("logs/app.log")
-        file_handler.setFormatter(formatter)
-        root_logger.addHandler(file_handler)
+
+        # File handler (fallback to console if volume/file permissions are restricted)
+        try:
+            os.makedirs("logs", exist_ok=True)
+            file_handler = logging.FileHandler("logs/app.log")
+            file_handler.setFormatter(formatter)
+            root_logger.addHandler(file_handler)
+        except (OSError, PermissionError):
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setFormatter(formatter)
+            root_logger.addHandler(console_handler)
     else:
         # Development: Text format to console with colors
         formatter = logging.Formatter(
@@ -364,7 +396,7 @@ def setup_logging(environment: str = "development"):
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     
-    logger.info(f"✅ Logging configured for {environment} environment")
+    logger.info("logging_configured", extra={"environment": environment})
 
 
 

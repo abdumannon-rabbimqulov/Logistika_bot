@@ -1,52 +1,100 @@
-# Logistika Bot
+# Logistika Bot (Backend)
 
-Ushbu loyiha logistika sohasi uchun mo'ljallangan Telegram bot hisoblanadi. Bot orqali yuk beruvchilar va haydovchilar bir-birini topishi, e'lonlar qoldirishi va yuklarni yetkazib berish bo'yicha kelishuvlar amalga oshirishi ko'zda tutilgan.
+Bu repository backend uchun: FastAPI API + Telegram bot + Postgres/Redis.
 
-## Loyiha Haqida
+`Frontend_bot` alohida repository sifatida deploy qilinadi va bu repoga aralashmaydi.
 
-Botda 2 xil foydalanuvchi roli mavjud:
-1. **Mijoz (Yuk beruvchi)** - Yuk jo'natish uchun buyurtmalar (Order) yaratadi, haydovchilardan keladigan takliflarni ko'rib chiqib qabul qiladi.
-2. **Haydovchi** - Botdan ro'yxatdan o'tadi (mashinasi, raqami va ruxsatnomalari tasdiqlanadi). Mijozlar yaratgan buyurtmalarga taklif (Offer) qoldirishi yoki o'zlari ham yo'nalish bo'yicha e'lonlar (DriverAnnouncement) qoldirib mijozlardan takliflar olishi mumkin.
+## Arxitektura (qisqa)
 
-**Loyiha tuzilmasi:**
-- `config/` - Loyihaning asosiy sozlamalari va ma'lumotlar bazasi bilan ishlash (`database.py`, `models.py`). Asosiy modellar (User, TruckType, Driver, Order, OrderOffer, DriverAnnouncement).
-- `handlers/` - Foydalanuvchilar bilan bo'ladigan barcha o'zaro aloqani boshqaradigan qism (`start.py`, `order.py`, `driver_reg.py`, `menu.py`, `location.py`, `ai.py` va hokazo).
-- `keyboards/` - Tugmalar (menyular, tasdiqlash va inkor etish tugmalari uchun).
-- `middlewares/` - Botga kelayotgan xabarlarga ishlov berish uchun qo'shimcha mexanizmlar (masalan `i18n.py` til uchun, `logging.py` xabarlarni loglash uchun).
-- `main.py` - Loyihaning kirish nuqtasi, botni va dispetcherni asinxron tarzda ishga tushiruvchi modul.
+- Backend API: `backend-api` (`:8003`)
+- Telegram bot: `backend-bot`
+- Migrations: `migrations`
+- DB: `db` (Postgres)
+- Cache: `logistika-redis` (Redis)
 
-## Asosiy Texnologiyalar va Kutubxonalar
+## Muhim qoida
 
-Loyihani yaratishda quyidagi asosiy kutubxonalar va freymvorklardan foydalanilgan:
+- Backend deploy: shu repository (`./deploy-all.sh`)
+- Frontend deploy: `Frontend_bot` repository (`./deploy.sh`)
+- Public Nginx asosiy configini frontend repo boshqaradi.
 
-* **aiogram (3.26.0)** - Asinxron Telegram bot yaratish uchun eng kuchli zamonaviy freymvork.
-* **SQLAlchemy (2.0.49)** - Ma'lumotlar bazasi ustida ORM sifatida ishlash.
-* **asyncpg (0.31.0)** - PostgreSQL bazasiga asinxron ulanish drayveri.
-* **psycopg2-binary** - PostgreSQL uchun qo'shimcha ulanish sinxron va umumiy amallar uchun vosita.
-* **google-generativeai / google-genai** - AI (Gemini va boshqalar) bilan ishlash, ehtimol xabarlarga intellektual tarzda ishlov berish (masofaviy dispatcher vazifasida).
-* **pydantic** - Ma'lumotlarni validatsiya qilish.
-* **python-dotenv** - Maxfiy ma'lumotlar (\`.env\`) faylidan xavfsiz foydalanish.
+## .env tayyorlash
 
-To'liq ro'yxati `requirements.txt` faylida keltirilgan (quyida eng asosiylari):
-- aiohttp, aiofiles
-- cryptography
-- certifi
-- grpcio
-- tenacity
+1. `.env` fayl yarating:
+```bash
+cp .env.example .env
+```
+2. Kamida quyilarni to'ldiring:
+- `BOT_TOKEN`
+- `SECRET_KEY`
+- `API_KEY` (ixtiyoriy, AI ishlatilsa)
+- `DB_USER`, `DB_PASSWORD`, `DB_NAME`
+- `ADMIN`
+- `WEBAPP_URL=https://logistic.org.uz/drivers/`
 
-## Qanday Ishga Tushiriladi?
+## Deploy (serverga kirmasdan)
 
-1. Loyiha papkasida `.env` faylini yarating va quyidagi turdagi o'zgaruvchilarni kiriting (masalan, `BOT_TOKEN`, `API_KEY` yoki DB uchun `DB_URL`).
-2. Virtual muhitga kutubxonalarni o'rnating: `pip install -r requirements.txt`
-3. Botni ishga tushiring: `python main.py`
+Lokal kompyuterdan:
+```bash
+cd /Users/user/Logistika_bot
+./deploy-all.sh
+```
 
-# Sqlalchemyda migrations
+Skript avtomatik:
+- kodni serverga yuboradi;
+- serverda backend docker servislarni rebuild/restart qiladi.
 
-````
-alembic revision --autogenerate -m "initial"
-````
+### Qo'shimcha flaglar
 
-# Sqlalchemy migrate
-````
+- Nginx configini backend tomondan majburan qo'yish:
+```bash
+LOGISTIKA_APPLY_NGINX=1 ./deploy-all.sh
+```
+
+- SSH kalit yo'li boshqacha bo'lsa:
+```bash
+LOGISTIKA_SSH_KEY=/path/to/key ./deploy-all.sh
+```
+
+- Server host o'zgarsa:
+```bash
+LOGISTIKA_SSH_HOST=root@SERVER_IP ./deploy-all.sh
+```
+
+## Deploy (server ichidan)
+
+```bash
+cd /root/Logistika_bot
+git pull
+LOGISTIKA_DEPLOY_LOCAL=1 ./deploy-all.sh
+```
+
+## Faqat backend containerlar
+
+```bash
+docker compose up -d --build db logistika-redis migrations backend-api backend-bot
+```
+
+## Tez tekshiruv
+
+```bash
+docker ps
+curl http://127.0.0.1:8003/health
+```
+
+## Ko'p uchraydigan xatolar
+
+- `PermissionError: /app/logs/app.log`
+  - Logging fallback qo'shilgan: file yozolmasa console ga tushadi.
+  - Backendni qayta build qiling: `docker compose up -d --build backend-api backend-bot`
+
+- `502 Bad Gateway` (`/auth/login`)
+  - Odatda backend container yiqilgan bo'ladi yoki `:8003` ishlamaydi.
+  - `docker ps` va backend loglarni tekshiring.
+
+## Migrations
+
+```bash
+alembic revision --autogenerate -m "message"
 alembic upgrade head
-````
+```

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import (
     BigInteger, Integer, String, Boolean,
     Numeric, Float, DateTime, ForeignKey,
-    Enum as SQLEnum, Text, SmallInteger, func
+    Enum as SQLEnum, Text, SmallInteger, func, text
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -110,6 +110,12 @@ class Driver(Base):
     on_time_percent : Mapped[float] = mapped_column(Numeric(5, 2), default=100.0)
 
     is_available  : Mapped[bool] = mapped_column(Boolean, default=True)
+    docs_verified : Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=text("false"),
+        nullable=False,
+    )
     is_blocked    : Mapped[bool] = mapped_column(Boolean, default=False)
     block_reason  : Mapped[str|None] = mapped_column(String(300), nullable=True)
 
