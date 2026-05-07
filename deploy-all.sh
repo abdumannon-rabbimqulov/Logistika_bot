@@ -4,7 +4,7 @@ cd "$(dirname "$0")"
 
 LOGISTIKA_SSH_HOST="${LOGISTIKA_SSH_HOST:-root@158.220.100.58}"
 SSH_KEY="${LOGISTIKA_SSH_KEY:-$HOME/.ssh/deploy_key}"
-REMOTE_PROJECT_DIR="${LOGISTIKA_REMOTE_PROJECT_DIR:-/root/logistika_bot}"
+REMOTE_PROJECT_DIR="${LOGISTIKA_REMOTE_PROJECT_DIR:-/root/Logistika_bot}"
 
 if [ ! -f "$SSH_KEY" ]; then
     echo "SSH kalit yo‘q: $SSH_KEY" >&2
