@@ -106,7 +106,7 @@ class Chat(Base):
 
     id        : Mapped[str]            = mapped_column(Integer, primary_key=True, autoincrement=True)
 
-    user_id   : Mapped[Optional[str]]  = mapped_column(Integer, ForeignKey("users.id"),   nullable=True)
+    user_id   : Mapped[Optional[str]]  = mapped_column(BigInteger, ForeignKey("users.id"),   nullable=True)
     driver_id : Mapped[Optional[str]]  = mapped_column(Integer, ForeignKey("drivers.id"), nullable=True)
     order_id  : Mapped[Optional[str]]  = mapped_column(Integer, ForeignKey("orders.id"),  nullable=True, unique=True)
 
@@ -146,7 +146,7 @@ class Message(Base):
     id           : Mapped[str]           = mapped_column(Integer, primary_key=True, )
     chat_id      : Mapped[str]           = mapped_column(Integer, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False)
 
-    sender_id    : Mapped[Optional[str]] = mapped_column(Integer, nullable=True)
+    sender_id    : Mapped[Optional[str]] = mapped_column(BigInteger, nullable=True)
     sender_type  : Mapped[SenderType]    = mapped_column(SAEnum(SenderType),  nullable=False)
     message_type : Mapped[MessageType]   = mapped_column(SAEnum(MessageType), default=MessageType.TEXT, nullable=False)
 
@@ -215,12 +215,12 @@ class Rating(Base):
     order_id        : Mapped[str]            = mapped_column(Integer, ForeignKey("orders.id"), nullable=False)
 
     # Kim baho berdi
-    rated_by_user   : Mapped[Optional[str]]  = mapped_column(Integer, ForeignKey("users.id"),   nullable=True)
+    rated_by_user   : Mapped[Optional[str]]  = mapped_column(BigInteger, ForeignKey("users.id"),   nullable=True)
     rated_by_driver : Mapped[Optional[str]]  = mapped_column(Integer, ForeignKey("drivers.id"), nullable=True)
 
     # Kim baholandi
     target_type     : Mapped[RatingTarget]   = mapped_column(SAEnum(RatingTarget), nullable=False)
-    target_user     : Mapped[Optional[str]]  = mapped_column(Integer, ForeignKey("users.id"),   nullable=True)
+    target_user     : Mapped[Optional[str]]  = mapped_column(BigInteger, ForeignKey("users.id"),   nullable=True)
     target_driver   : Mapped[Optional[str]]  = mapped_column(Integer, ForeignKey("drivers.id"), nullable=True)
 
     # Baho
@@ -298,7 +298,7 @@ class AICommand(Base):
 
     id           : Mapped[str]              = mapped_column(Integer, primary_key=True)
     message_id   : Mapped[Optional[str]]    = mapped_column(Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True, unique=True)
-    user_id      : Mapped[str]              = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id      : Mapped[str]              = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
 
     command_type : Mapped[AICommandType]    = mapped_column(SAEnum(AICommandType),    nullable=False)
     raw_input    : Mapped[Optional[str]]    = mapped_column(Text, nullable=True)

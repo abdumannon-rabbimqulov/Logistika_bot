@@ -6,9 +6,6 @@ from config.config import SECRET_KEY, ALGORITHM
 
 logger = logging.getLogger(__name__)
 
-# ════════════════════════════════════════════════
-# CONNECTION MANAGER - Real-vaqtda aloqa boshqaruvchisi
-# ════════════════════════════════════════════════
 
 class ConnectionManager:
     """

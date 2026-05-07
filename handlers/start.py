@@ -3,7 +3,12 @@ from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from keyboards.reply import get_language_keyboard, get_phone_keyboard, get_role_keyboard
+from keyboards.reply import (
+    get_language_keyboard,
+    get_phone_keyboard,
+    get_role_keyboard,
+    get_driver_live_location_keyboard,
+)
 from users.models import UserRole
 import database as db
 
@@ -47,10 +52,15 @@ async def cmd_start(message: types.Message, state: FSMContext):
         else:
             greet = "Assalomu alaykum"
             help_text = "Sizga qanday yordam bera olaman?"
+        reply_markup = (
+            get_driver_live_location_keyboard(user.language)
+            if user.role == UserRole.DRIVER
+            else types.ReplyKeyboardRemove()
+        )
         await message.answer(
             f"{greet}, {message.from_user.full_name}! 👋\n"
             f"{help_text}",
-            reply_markup=types.ReplyKeyboardRemove()
+            reply_markup=reply_markup
         )
     else:
         await message.answer(
@@ -137,7 +147,12 @@ async def select_role(message: types.Message, state: FSMContext):
             f"✅ Ro'yxatdan o'tdingiz, {tg_user.full_name}!\n"
             "Endi bot xizmatlaridan foydalanishingiz mumkin."
         )
-    await message.answer(text, reply_markup=types.ReplyKeyboardRemove())
+    reply_markup = (
+        get_driver_live_location_keyboard(lang)
+        if role == UserRole.DRIVER
+        else types.ReplyKeyboardRemove()
+    )
+    await message.answer(text, reply_markup=reply_markup)
     await state.clear()
 
 

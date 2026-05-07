@@ -18,17 +18,14 @@ from driver import crud as driver_crud
 from services import live_location
 from users.models import UserRole
 import database as db
+from keyboards.reply import get_driver_live_location_keyboard, LIVE_LOCATION_REQUEST_TEXTS
 
 logger = logging.getLogger(__name__)
 router = Router()
 
 
 # ── Reply tugmalar matni (3 til) ─────────────────────────────
-LIVE_BTN_TEXTS = {
-    "uz":      "📍 Jonli lokatsiya yuborish (yo'riqnoma)",
-    "uz_cyrl": "📍 Жонли локацияни юбориш (йўриқнома)",
-    "ru":      "📍 Отправить live-локацию (инструкция)",
-}
+LIVE_BTN_TEXTS = LIVE_LOCATION_REQUEST_TEXTS
 
 LIVE_HOWTO_TEXT = {
     "uz": (
@@ -59,11 +56,7 @@ LIVE_HOWTO_TEXT = {
 
 
 def driver_keyboard(lang: str) -> types.ReplyKeyboardMarkup:
-    text = LIVE_BTN_TEXTS.get(lang, LIVE_BTN_TEXTS["uz"])
-    return types.ReplyKeyboardMarkup(
-        keyboard=[[types.KeyboardButton(text=text)]],
-        resize_keyboard=True,
-    )
+    return get_driver_live_location_keyboard(lang)
 
 
 # ── Yo'riqnoma matni ────────────────────────────────────────
@@ -92,7 +85,7 @@ async def cmd_live(message: types.Message) -> None:
 
 
 # ── Lokatsiya event'lari ────────────────────────────────────
-async def _handle_location_event(message: types.Message) -> None:
+async def _handle_location_event(message: types.Message, *, is_edited: bool) -> None:
     if message.location is None:
         return
 
@@ -118,8 +111,8 @@ async def _handle_location_event(message: types.Message) -> None:
     loc = message.location
     live_period = int(loc.live_period or 0)
 
-    if live_period == 0:
-        # Telegram "stop sharing" yuborganda live_period=0; bu vaqtinchalik to'xtatish demak
+    if is_edited and live_period == 0:
+        # Telegram stop-sharing event odatda edited location bilan keladi.
         await live_location.stop_driver_location(driver.id)
         if message.from_user.id == message.chat.id:
             await message.answer("📍 Live lokatsiya to'xtatildi.")
@@ -141,9 +134,9 @@ async def _handle_location_event(message: types.Message) -> None:
 
 @router.message(F.location)
 async def on_location_message(message: types.Message) -> None:
-    await _handle_location_event(message)
+    await _handle_location_event(message, is_edited=False)
 
 
 @router.edited_message(F.location)
 async def on_location_edited(message: types.Message) -> None:
-    await _handle_location_event(message)
+    await _handle_location_event(message, is_edited=True)

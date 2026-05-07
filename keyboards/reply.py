@@ -52,3 +52,22 @@ def get_role_keyboard(lang: str = "uz"):
     )
     return keyboard
 
+
+LIVE_LOCATION_REQUEST_TEXTS = {
+    "uz": "📍 Jonli lokatsiyani yoqish",
+    "uz_cyrl": "📍 Жонли локацияни ёқиш",
+    "ru": "📍 Включить live-локацию",
+}
+
+
+def get_driver_live_location_keyboard(lang: str = "uz"):
+    """Keyboard for driver live location sharing."""
+    text = LIVE_LOCATION_REQUEST_TEXTS.get(lang, LIVE_LOCATION_REQUEST_TEXTS["uz"])
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=text, request_location=True)],
+        ],
+        resize_keyboard=True,
+    )
+    return keyboard
+
