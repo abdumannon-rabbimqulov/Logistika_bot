@@ -28,14 +28,10 @@ from users.schemas import (
     RefreshTokenRequest,
     TelegramWebAppLoginRequest,
     Token,
-    TokenWithStep,
     UserRead,
     UserUpdate,
 )
 from driver.crud import  get_driver_by_user_id
-from sqlalchemy import select as sa_select
-from driver.models import Driver as DriverModel
-from driver.schemas import DriverCreate
 
 import redis
 from datetime import timedelta
@@ -46,67 +42,6 @@ redis_client = redis.Redis(
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-
-@router.post(
-    "/driver-profile",
-    response_model=TokenWithStep,
-    summary="Driver profili to'ldirish (faqat haydovchilar uchun",
-)
-async def fill_driver_profile(
-    data: DriverCreate,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    if current_user.role != UserRole.DRIVER:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Bu endpoint faqat haydovchilar uchun. Avval /select-role orqali 'driver' tanlang.",
-        )
-
-    existing_driver = await get_driver_by_user_id(db, current_user.id)
-    if existing_driver:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Haydovchi profili allaqachon to'ldirilgan.",
-        )
-
-
-
-    truck_check = await db.execute(
-        sa_select(DriverModel).where(DriverModel.truck_number == data.truck_number)
-    )
-    if truck_check.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"'{data.truck_number}' davlat raqami allaqachon ro'yxatdan o'tgan.",
-        )
-
-    new_driver = DriverModel(
-        user_id=current_user.id,
-        truck_type_id=data.truck_type_id,
-        truck_number=data.truck_number,
-        truck_year=data.truck_year,
-        current_city=data.current_city,
-        current_region=data.current_region,
-    )
-    db.add(new_driver)
-
-    if data.phone_number:
-        current_user.phone_number = data.phone_number
-
-    await db.commit()
-
-    logger.info("Driver profili yaratildi: user_id=%s truck=%s", current_user.id, data.truck_number)
-
-    payload = {"sub": str(current_user.id)}
-    return TokenWithStep(
-        access_token=create_access_token(payload),
-        refresh_token=create_refresh_token(payload),
-        next_step="done",
-        message="Profil muvaffaqiyatli to'ldirildi! Xush kelibsiz, haydovchi.",
-    )
 
 
 
@@ -193,12 +128,14 @@ async def telegram_webapp_login(
             }
 
     token_payload = {"sub": str(user.id)}
-    return {
+    response={
         "access_token": create_access_token(token_payload),
         "refresh_token": create_refresh_token(token_payload),
         "role": user.role,
         "user_id": user.id,
     }
+    print('Login muvaffaqiyatli-------------------------:', response)
+    return response
 
 
 @router.get(
