@@ -169,9 +169,15 @@ async def login(
 )
 async def reset_password(
     phone_number: str = Body(..., embed=True),
-    new_password: str = Body(..., embed=True),
+    new_password: str = Body(..., embed=True,min_length=8,max_length=20),
+    confirm_password: str = Body(..., embed=True,min_length=8,max_length=20),
     db: AsyncSession = Depends(get_db),
 ):
+    if new_password != confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Yangi parol va tasdiqlash paroli mos kelmadi.",
+        )
     user = await get_user_by_phone(db, phone_number)
     if not user:
         raise HTTPException(
