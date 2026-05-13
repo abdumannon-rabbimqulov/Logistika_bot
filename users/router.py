@@ -2,9 +2,11 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.config import BOT_TOKEN, get_db, REDIS_HOST, REDIS_PORT, REDIS_DB
+from handlers.verification_code import send_verification_code
 from users.crud import (
 
     deactivate_user,
@@ -21,7 +23,7 @@ from users.auth import (
     verify_password,
     verify_token,
 )
-from users.models import User, UserRole
+from users.models import User, UserRole, VerificationCode
 from users.telegram_auth import validate_telegram_init_data
 from users.schemas import (
     ChangePasswordRequest,
@@ -34,7 +36,9 @@ from users.schemas import (
 from driver.crud import  get_driver_by_user_id
 
 import redis
-from datetime import timedelta
+from datetime import timedelta, datetime, timezone
+
+from handlers.bot import bot
 
 redis_client = redis.Redis(
     host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
@@ -163,26 +167,90 @@ async def login(
 
     return response
 
+
 @router.post(
-    "/reset-password",
-    summary="Parolni tiklash (telefon raqam orqali)",
-)
-async def reset_password(
+    "/reset-phone",
+    summary="Telefon raqam bor bolsa code yuboriladi",)
+async def reset_phone(
     phone_number: str = Body(..., embed=True),
-    new_password: str = Body(..., embed=True,min_length=8,max_length=20),
-    confirm_password: str = Body(..., embed=True,min_length=8,max_length=20),
     db: AsyncSession = Depends(get_db),
 ):
-    if new_password != confirm_password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Yangi parol va tasdiqlash paroli mos kelmadi.",
-        )
     user = await get_user_by_phone(db, phone_number)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Bunday telefon raqam bilan foydalanuvchi topilmadi.",
+        )
+    if not user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Foydalanuvchining Telegram akkaunti ulanmagan.",
+        )
+    code = await send_verification_code(
+        bot=bot,
+        telegram_id=user.id,
+    )
+    verification_code = VerificationCode(
+        user_id=user.id,
+        code=code,
+    )
+    db.add(verification_code)
+    await db.commit()
+
+    token_payload = {"sub": str(user.id)}
+    return {"detail": "Tasdiqlash kodi Telegram akkauntingizga yuborildi.",
+            "access_token": create_access_token(token_payload),
+            }
+
+@router.post(
+    "/verify-reset-code",
+    summary="Tasdiqlash kodini tekshirish va parolni tiklash",
+)
+async def verify_reset_code(
+    current_user: User = Depends(get_current_user),
+    code: str = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db),
+):
+    user=current_user
+    if not user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Foydalanuvchining Telegram akkaunti ulanmagan.",
+        )
+    verification_code = await db.execute(
+        select(VerificationCode).where(
+            VerificationCode.user_id == user.id,
+            VerificationCode.code == code,
+            VerificationCode.expires_at > datetime.now(timezone.utc),
+        )
+    )
+    verification_code = verification_code.scalars().first()
+    if not verification_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tasdiqlash kodi noto'g'ri yoki muddati tugagan.",
+        )
+    await db.delete(verification_code)
+    await db.commit()
+    return {"detail": "Kod tasdiqlandi. Endi yangi parolni tiklash uchun /reset-password endpoint'iga murojaat qilishingiz mumkin."}
+
+
+
+@router.post(
+    "/reset-password",
+    summary="Parolni tiklash (telefon raqam orqali)",
+)
+async def reset_password(
+    current_user: User = Depends(get_current_user),
+    new_password: str = Body(..., embed=True,min_length=8,max_length=20),
+    confirm_password: str = Body(..., embed=True,min_length=8,max_length=20),
+    db: AsyncSession = Depends(get_db),
+):
+    user=current_user
+    if new_password != confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Yangi parol va tasdiqlash paroli mos kelmadi.",
         )
 
     new_hashed_password = hash_password(new_password)
