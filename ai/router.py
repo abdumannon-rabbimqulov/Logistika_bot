@@ -58,7 +58,7 @@ router = APIRouter(prefix="/ai", tags=["Logistika AI & Chat"])
 async def websocket_info():
     """AI Agent va Chat uchun WebSocket qo'llanmasi."""
     return {
-        "url": "ws://domain/api/ai/ws/{chat_id}?token=YOUR_ACCESS_TOKEN",
+        "url": "ws://domain/ai/ws/{chat_id}?token=YOUR_ACCESS_TOKEN",
         "authentication": "JWT access tokenni query parameter sifatida yuboring",
         "events_sent_by_user": [
             {"type": "new_message", "content": "matn", "sender_id": 123},

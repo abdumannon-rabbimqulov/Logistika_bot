@@ -13,7 +13,7 @@ from users import schemas as user_schemas
 from users import tariff_crud
 
 
-router = APIRouter(prefix="/admin/tariffs", tags=["Admin — tarif/to‘lov"])
+router = APIRouter(prefix="/system/tariffs", tags=["Admin — tarif/to‘lov"])
 
 
 @router.post(

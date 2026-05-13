@@ -1,9 +1,9 @@
 """Admin paneli REST + WebSocket endpointlari.
 
-Hammasi `/admin` prefiksi ostida; foydalanish uchun foydalanuvchi
+Hammasi `/system` prefiksi ostida (SPA `/admin/*` bilan aralashmasin); foydalanuvchi
 `role == ADMIN` yoki `id in ADMIN_IDS` bo'lishi kerak (Admin_panel.validation.is_admin).
 
-WebSocket (`/admin/drivers/locations/stream`) Bearer JWT'ni query string
+WebSocket (`/system/drivers/locations/stream`) Bearer JWT'ni query string
 `?token=...` orqali qabul qiladi.
 """
 
@@ -39,7 +39,7 @@ from users.auth import verify_token
 from users.models import User, UserRole
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/admin", tags=["Admin paneli"])
+router = APIRouter(prefix="/system", tags=["Admin paneli"])
 
 
 # ════════════════════════════════════════════════════════════

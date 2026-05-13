@@ -104,11 +104,12 @@ async def api_docs():
         "docs_url": "/docs",
         "redoc_url": "/redoc",
         "endpoints": {
-            "auth": "/api/auth",
-            "drivers": "/api/driver",
-            "orders": "/api/order",
-            "ai": "/api/ai",
-            "admin_tariffs": "/admin/tariffs",
+            "auth": "/auth",
+            "drivers": "/drivers",
+            "orders": "/orders",
+            "ai": "/ai",
+            "admin_api": "/system",
+            "admin_tariffs": "/system/tariffs",
         },
         "health": {
             "status": "/health",

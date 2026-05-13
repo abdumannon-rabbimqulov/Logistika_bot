@@ -49,7 +49,6 @@ router = APIRouter()
 
 
 
-
 @router.post(
     "/refresh",
     response_model=Token,
@@ -86,7 +85,7 @@ async def refresh_tokens(data: RefreshTokenRequest):
 
 @router.post(
     "/telegram-webapp-login",
-    summary="Telegram WebApp initData orqali login",
+    summary="Telegram WebApp initData orqali login (legacy; /login bilan bir xil)",
 )
 async def telegram_webapp_login(
     data: TelegramWebAppLoginRequest,
@@ -118,10 +117,11 @@ async def telegram_webapp_login(
         await db.commit()
         await db.refresh(user)
 
-    if user.role==UserRole.DRIVER:
+    if user.role == UserRole.DRIVER:
         existing_driver = await get_driver_by_user_id(db, user.id)
         if not existing_driver:
-            logger.info("Telegram foydalanuvchisi haydovchi rolini tanlagan, lekin profil to'ldirilmagan: user_id=%s", user.id)
+            logger.info("Telegram foydalanuvchisi haydovchi rolini tanlagan, lekin profil to'ldirilmagan: user_id=%s",
+                        user.id)
             return {
                 "access_token": create_access_token({"sub": str(user.id)}),
                 "refresh_token": create_refresh_token({"sub": str(user.id)}),
@@ -132,7 +132,7 @@ async def telegram_webapp_login(
             }
 
     token_payload = {"sub": str(user.id)}
-    response={
+    response = {
         "access_token": create_access_token(token_payload),
         "refresh_token": create_refresh_token(token_payload),
         "role": user.role,
@@ -140,6 +140,7 @@ async def telegram_webapp_login(
     }
     print('Login muvaffaqiyatli-------------------------:', response)
     return response
+
 
 @router.post(
     "/login",

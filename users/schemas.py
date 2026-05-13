@@ -2,7 +2,7 @@ from datetime import datetime, date
 from decimal import Decimal
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -86,8 +86,6 @@ class TelegramWebAppLoginRequest(BaseModel):
     init_data: str = Field(..., min_length=1)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# ADMIN — Foydalanuvchi tarif / oylik to‘lov yozuvlari (user_tariff_payments)
 # ═══════════════════════════════════════════════════════════════════════════
 
 
