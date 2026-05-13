@@ -81,7 +81,7 @@ async def refresh_tokens(data: RefreshTokenRequest):
 
 
 @router.post(
-    "/login",
+    "/telegram-webapp-login",
     summary="Telegram WebApp initData orqali login",
 )
 async def telegram_webapp_login(
@@ -137,6 +137,52 @@ async def telegram_webapp_login(
     print('Login muvaffaqiyatli-------------------------:', response)
     return response
 
+@router.post(
+    "/login",
+    summary="Telefon raqam va parol orqali login",
+)
+async def login(
+    phone_number: str = Body(..., embed=True),
+    password: str = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_user_by_phone(db, phone_number)
+    if not user or not user.password or not verify_password(password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Telefon raqam yoki parol noto'g'ri.",
+        )
+
+    token_payload = {"sub": str(user.id)}
+    response={
+        "access_token": create_access_token(token_payload),
+        "refresh_token": create_refresh_token(token_payload),
+        "role": user.role,
+        "user_id": user.id,
+    }
+
+    return response
+
+@router.post(
+    "/reset-password",
+    summary="Parolni tiklash (telefon raqam orqali)",
+)
+async def reset_password(
+    phone_number: str = Body(..., embed=True),
+    new_password: str = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_user_by_phone(db, phone_number)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Bunday telefon raqam bilan foydalanuvchi topilmadi.",
+        )
+
+    new_hashed_password = hash_password(new_password)
+    await update_password(db, user, new_hashed_password)
+    return {"detail": "Parol muvaffaqiyatli tiklandi."}
+
 
 @router.get(
     "/me",
@@ -181,11 +227,6 @@ async def change_password(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Eski parol noto'g'ri.",
-        )
-    if data.old_password == data.new_password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Yangi parol eski paroldan farq qilishi kerak.",
         )
     new_hash = hash_password(data.new_password)
     await update_password(db, current_user, new_hash)
