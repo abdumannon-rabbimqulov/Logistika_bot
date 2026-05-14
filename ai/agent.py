@@ -44,9 +44,7 @@ from ai.models import AIUsage
 logger = logging.getLogger(__name__)
 
 
-# ════════════════════════════════════════════════════════════
-# SYSTEM INSTRUCTION BUILDER
-# ════════════════════════════════════════════════════════════
+
 
 
 def build_system_instruction(role: str, language: str) -> str:
@@ -56,9 +54,7 @@ def build_system_instruction(role: str, language: str) -> str:
     return f"{SYSTEM_INSTRUCTION_BASE.strip()}\n\n{role_part}\n\n{lang_part}"
 
 
-# ════════════════════════════════════════════════════════════
-# TOOL DECLARATIONS (Gemini function-calling schema)
-# ════════════════════════════════════════════════════════════
+
 
 
 def _decl(
