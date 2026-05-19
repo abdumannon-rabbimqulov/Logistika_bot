@@ -1,5 +1,14 @@
 from fastapi import FastAPI
-from config.config import engine, Base, UPLOAD_DIR, STATIC_PATH, LOG_LEVEL, ENVIRONMENT
+from config.config import (
+    engine,
+    Base,
+    UPLOAD_DIR,
+    STATIC_PATH,
+    LOG_LEVEL,
+    ENVIRONMENT,
+    API_PUBLIC_PREFIX,
+    WEBAPP_URL,
+)
 from middlewares.error_handler import setup_error_handlers, setup_logging
 import driver.models
 import order.models
@@ -28,7 +37,11 @@ import os
 app = FastAPI(
     title="Logistika AI API",
     version="1.0.0",
-    description="🚀 Logistics platform with AI-powered order management"
+    description="🚀 Logistics platform with AI-powered order management",
+    servers=[
+        {"url": API_PUBLIC_PREFIX, "description": "Production (logistic.org.uz)"},
+        {"url": "", "description": "To'g'ridan-to'g'ri (localhost:8003)"},
+    ],
 )
 
 # ─────────────────────────────────────────────────────────────
@@ -52,13 +65,48 @@ async def startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-app.include_router(driver_router)
-app.include_router(order_router)
-app.include_router(ai_router)
+def _register_api_routers(
+    target: FastAPI,
+    *,
+    prefix: str = "",
+    include_in_schema: bool = True,
+) -> None:
+    kwargs = {"prefix": prefix, "include_in_schema": include_in_schema}
+    target.include_router(driver_router, **kwargs)
+    target.include_router(order_router, **kwargs)
+    target.include_router(ai_router, **kwargs)
+    auth_prefix = f"{prefix}/auth".replace("//", "/")
+    target.include_router(
+        auth_router,
+        prefix=auth_prefix,
+        tags=["Auth"],
+        include_in_schema=include_in_schema,
+    )
+    target.include_router(tariff_admin_router, **kwargs)
+    target.include_router(admin_router, **kwargs)
 
-app.include_router(auth_router, prefix="/auth", tags=["Auth"])
-app.include_router(tariff_admin_router)
-app.include_router(admin_router)
+
+_register_api_routers(app)
+# Nginx /api/ → backend (prefix olib tashlanadi) va to'g'ridan-to'g'ri :8003/api/... uchun
+_register_api_routers(app, prefix=API_PUBLIC_PREFIX, include_in_schema=False)
+
+
+@app.get("/", tags=["System"], summary="API kirish nuqtasi")
+@app.get(API_PUBLIC_PREFIX, tags=["System"], include_in_schema=False)
+@app.get(f"{API_PUBLIC_PREFIX}/", tags=["System"], include_in_schema=False)
+async def api_root():
+    """Postman uchun: barcha endpointlar {API_PUBLIC_PREFIX} ostida chaqiriladi."""
+    return {
+        "service": "Logistika AI API",
+        "api_base": API_PUBLIC_PREFIX,
+        "docs": f"{API_PUBLIC_PREFIX}/docs",
+        "health": f"{API_PUBLIC_PREFIX}/health",
+        "examples": {
+            "truck_types": f"{API_PUBLIC_PREFIX}/drivers/truck-types",
+            "login": f"{API_PUBLIC_PREFIX}/auth/login",
+        },
+        "webapp_url": WEBAPP_URL,
+    }
 
 
 
@@ -69,6 +117,7 @@ app.include_router(admin_router)
 # ─────────────────────────────────────────────────────────────
 
 @app.get("/health", tags=["System"], summary="Service health status")
+@app.get(f"{API_PUBLIC_PREFIX}/health", tags=["System"], include_in_schema=False)
 async def health_check():
     """Service ishlayaptimi tekshirish."""
     from datetime import datetime, timezone
@@ -81,6 +130,7 @@ async def health_check():
 
 
 @app.get("/health/db", tags=["System"], summary="Database connection status")
+@app.get(f"{API_PUBLIC_PREFIX}/health/db", tags=["System"], include_in_schema=False)
 async def db_health():
     """Database ulanishini tekshirish."""
     try:

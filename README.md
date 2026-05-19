@@ -82,6 +82,17 @@ docker ps
 curl http://127.0.0.1:8003/health
 ```
 
+## Postman
+
+Productionda API **`/api`** prefiksi bilan chaqiriladi:
+
+- `GET https://logistic.org.uz/api/drivers/truck-types`
+- `POST https://logistic.org.uz/api/auth/login`
+
+`GET https://logistic.org.uz/drivers/truck-types` — bu frontend yo'li, API emas.
+
+Tayyor environment: `postman/Logistika_API.postman_environment.json` (`baseUrl` = `https://logistic.org.uz/api`).
+
 ## Ko'p uchraydigan xatolar
 
 - `PermissionError: /app/logs/app.log`

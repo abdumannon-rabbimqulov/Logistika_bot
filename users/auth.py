@@ -11,13 +11,14 @@ from config.config import (
     ALGORITHM,
     ACCESS_TOKEN_EXPIRE_MINUTES,
     REFRESH_TOKEN_EXPIRE_DAYS,
+    API_PUBLIC_PREFIX,
 )
 from users.crud import get_user_by_id
 from users.models import User, UserRole
 
 import bcrypt
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{API_PUBLIC_PREFIX}/auth/login")
 
 def hash_password(password: str) -> str:
     salt = bcrypt.gensalt()

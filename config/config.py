@@ -38,6 +38,8 @@ def get_optional_env(key: str, default: str | None = None) -> str | None:
 # ─────────────────────────────────────────────────────────────
 BOT_TOKEN = get_required_env('BOT_TOKEN')
 WEBAPP_URL = get_optional_env('WEBAPP_URL', 'http://localhost:8000')
+# Tashqi domen orqali API (Postman, Swagger): https://logistic.org.uz/api/...
+API_PUBLIC_PREFIX = (get_optional_env("API_PUBLIC_PREFIX", "/api") or "/api").rstrip("/") or "/api"
 ADMIN_IDS: set[int] = {int(i.strip()) for i in get_optional_env("ADMIN", "").split(",") if i.strip()}
 
 # ─────────────────────────────────────────────────────────────
