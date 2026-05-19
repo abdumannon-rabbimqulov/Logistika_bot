@@ -95,27 +95,5 @@ async def db_health():
         }
 
 
-@app.get("/api", tags=["Documentation"], summary="API documentation")
-async def api_docs():
-    """API dokumentatsiyasi va mavjud endpoints."""
-    return {
-        "title": "Logistika AI API",
-        "version": "1.0.0",
-        "docs_url": "/docs",
-        "redoc_url": "/redoc",
-        "endpoints": {
-            "auth": "/auth",
-            "drivers": "/drivers",
-            "orders": "/orders",
-            "ai": "/ai",
-            "admin_api": "/system",
-            "admin_tariffs": "/system/tariffs",
-        },
-        "health": {
-            "status": "/health",
-            "database": "/health/db"
-        }
-    }
-
 
 
