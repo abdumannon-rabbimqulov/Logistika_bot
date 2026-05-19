@@ -82,19 +82,14 @@ async def refresh_tokens(data: RefreshTokenRequest):
 
 
 
-@router.post(
-    "/login",
-    summary="",
-)
+@router.post("/login", summary="")
 async def login(
-    phone_number: str = Body(..., embed=True),
-    password: str = Body(..., embed=True),
+    phone_number: Optional[str] = Body(None, embed=True),
+    password: Optional[str] = Body(None, embed=True),
     init_data: Optional[str] = Body(None, embed=True),
     db: AsyncSession = Depends(get_db),
 ):
-
-    user=None
-
+    user = None
 
     if init_data:
         if not BOT_TOKEN:
@@ -110,6 +105,7 @@ async def login(
             raise HTTPException(status_code=400, detail="Telegram user id topilmadi")
 
         user = await get_user_by_id(db, int(tg_user_id))
+
         if user is None:
             user = User(
                 id=int(tg_user_id),
@@ -130,36 +126,34 @@ async def login(
                 detail="init_data yoki phone_number va password yuborilishi kerak.",
             )
 
-
         user = await get_user_by_phone(db, phone_number)
+
         if not user or not user.password or not verify_password(password, user.password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Telefon raqam yoki parol noto'g'ri.",
             )
+
     if user.role == UserRole.DRIVER:
         existing_driver = await get_driver_by_user_id(db, user.id)
         if not existing_driver:
-            logger.info("Telegram foydalanuvchisi haydovchi rolini tanlagan, lekin profil to'ldirilmagan: user_id=%s",
-                        user.id)
             return {
                 "access_token": create_access_token({"sub": str(user.id)}),
                 "refresh_token": create_refresh_token({"sub": str(user.id)}),
                 "role": user.role,
                 "user_id": user.id,
                 "status": "need_driver_profile",
-                "message": "Haydovchi rolini tanlagansiz, lekin profil ma'lumotlaringiz to'liq emas. Iltimos, /driver-profile endpoint orqali profil ma'lumotlaringizni to'ldiring.",
+                "message": "Haydovchi rolini tanlagansiz, lekin profil ma'lumotlaringiz to'liq emas.",
             }
 
     token_payload = {"sub": str(user.id)}
-    response = {
+
+    return {
         "access_token": create_access_token(token_payload),
         "refresh_token": create_refresh_token(token_payload),
         "role": user.role,
         "user_id": user.id,
     }
-    print('Login muvaffaqiyatli-------------------------:', response)
-    return response
 
 
 @router.post(
