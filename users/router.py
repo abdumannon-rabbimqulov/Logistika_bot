@@ -28,7 +28,6 @@ from users.telegram_auth import validate_telegram_init_data
 from users.schemas import (
     ChangePasswordRequest,
     RefreshTokenRequest,
-    TelegramWebAppLoginRequest,
     Token,
     UserRead,
     UserUpdate,
@@ -84,39 +83,60 @@ async def refresh_tokens(data: RefreshTokenRequest):
 
 
 @router.post(
-    "/telegram-webapp-login",
-    summary="Telegram WebApp initData orqali login (legacy; /login bilan bir xil)",
+    "/login",
+    summary="",
 )
-async def telegram_webapp_login(
-    data: TelegramWebAppLoginRequest,
+async def login(
+    phone_number: str = Body(..., embed=True),
+    password: str = Body(..., embed=True),
+    init_data: Optional[str] = Body(None, embed=True),
     db: AsyncSession = Depends(get_db),
 ):
-    if not BOT_TOKEN:
-        raise HTTPException(status_code=500, detail="BOT_TOKEN sozlanmagan")
 
-    try:
-        tg_user = validate_telegram_init_data(data.init_data, BOT_TOKEN)
-    except ValueError as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    user=None
 
-    tg_user_id = tg_user.get("id")
-    if not tg_user_id:
-        raise HTTPException(status_code=400, detail="Telegram user id topilmadi")
 
-    user = await get_user_by_id(db, int(tg_user_id))
-    if user is None:
-        user = User(
-            id=int(tg_user_id),
-            username=tg_user.get("username"),
-            full_name=" ".join(
-                p for p in [tg_user.get("first_name"), tg_user.get("last_name")] if p
-            ) or "Telegram User",
-            language="uz",
-        )
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
+    if init_data:
+        if not BOT_TOKEN:
+            raise HTTPException(status_code=500, detail="BOT_TOKEN sozlanmagan")
 
+        try:
+            tg_user = validate_telegram_init_data(init_data, BOT_TOKEN)
+        except ValueError as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+        tg_user_id = tg_user.get("id")
+        if not tg_user_id:
+            raise HTTPException(status_code=400, detail="Telegram user id topilmadi")
+
+        user = await get_user_by_id(db, int(tg_user_id))
+        if user is None:
+            user = User(
+                id=int(tg_user_id),
+                username=tg_user.get("username"),
+                full_name=" ".join(
+                    p for p in [tg_user.get("first_name"), tg_user.get("last_name")] if p
+                ) or "Telegram User",
+                language="uz",
+            )
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
+
+    else:
+        if not phone_number or not password:
+            raise HTTPException(
+                status_code=400,
+                detail="init_data yoki phone_number va password yuborilishi kerak.",
+            )
+
+
+        user = await get_user_by_phone(db, phone_number)
+        if not user or not user.password or not verify_password(password, user.password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Telefon raqam yoki parol noto'g'ri.",
+            )
     if user.role == UserRole.DRIVER:
         existing_driver = await get_driver_by_user_id(db, user.id)
         if not existing_driver:
@@ -139,33 +159,6 @@ async def telegram_webapp_login(
         "user_id": user.id,
     }
     print('Login muvaffaqiyatli-------------------------:', response)
-    return response
-
-
-@router.post(
-    "/login",
-    summary="Telefon raqam va parol orqali login",
-)
-async def login(
-    phone_number: str = Body(..., embed=True),
-    password: str = Body(..., embed=True),
-    db: AsyncSession = Depends(get_db),
-):
-    user = await get_user_by_phone(db, phone_number)
-    if not user or not user.password or not verify_password(password, user.password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Telefon raqam yoki parol noto'g'ri.",
-        )
-
-    token_payload = {"sub": str(user.id)}
-    response={
-        "access_token": create_access_token(token_payload),
-        "refresh_token": create_refresh_token(token_payload),
-        "role": user.role,
-        "user_id": user.id,
-    }
-
     return response
 
 
