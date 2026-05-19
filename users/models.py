@@ -83,7 +83,6 @@ class User(Base):
 
 
 class UserTariffPayment(Base):
-    """Foydalanuvchini oylik tarif / obuna to‘lovi yozuvlari (faqat admin kiritadi/o‘zgartiradi)."""
 
     __tablename__ = "user_tariff_payments"
 

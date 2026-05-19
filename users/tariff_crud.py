@@ -103,7 +103,6 @@ async def monthly_totals_for_user(
     *,
     year: int,
 ) -> List[tuple]:
-    """(billing_month, total_amount Decimal, payment_count int, currency) ro'yxati."""
     start = date(year, 1, 1)
     end = date(year + 1, 1, 1)
 

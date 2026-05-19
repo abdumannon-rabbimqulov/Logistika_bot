@@ -5,9 +5,6 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# TOKEN
-# ═══════════════════════════════════════════════════════════════════════════
 
 class Token(BaseModel):
     access_token:  str
@@ -15,35 +12,11 @@ class Token(BaseModel):
     token_type:    str = "bearer"
 
 
-class TokenWithStep(Token):
-    """
-    Token + keyingi qadam yo'riqnomasi.
-    next_step qiymatlari:
-      "select_role"        → foydalanuvchi rolini tanlashi kerak
-      "fill_driver_profile" → driver profili to'ldirilishi kerak
-      "done"               → barcha bosqichlar tugadi
-    """
-    next_step: Literal["select_role", "fill_driver_profile", "done"]
-    message:   Optional[str] = None
 
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# ROL TANLASH — 3-qadam
-# ═══════════════════════════════════════════════════════════════════════════
-
-class SelectRoleRequest(BaseModel):
-    """
-    Foydalanuvchi kim ekanini bildiradi.
-    role: "driver" yoki "sender"
-    """
-    role: Literal["driver", "sender"] = Field(..., description="'driver' yoki 'sender'")
 
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# USER READ / UPDATE
-# ═══════════════════════════════════════════════════════════════════════════
 
 class UserRead(BaseModel):
     id:           int
@@ -69,9 +42,7 @@ class UserUpdate(BaseModel):
     bio:          Optional[str] = Field(None, max_length=500)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# BOSHQA
-# ═══════════════════════════════════════════════════════════════════════════
+
 
 class ChangePasswordRequest(BaseModel):
     old_password: str
@@ -86,11 +57,9 @@ class TelegramWebAppLoginRequest(BaseModel):
     init_data: str = Field(..., min_length=1)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
 
 
 class UserTariffPaymentCreate(BaseModel):
-    """Oylik uchun to‘lov yozuvi: qaysi oy (yil + oy) va miqdor."""
 
     user_id: int = Field(...)
     billing_year: int = Field(..., ge=2000, le=2100)
@@ -129,7 +98,6 @@ class UserTariffPaymentRead(BaseModel):
 
 
 class UserMonthlyTariffSummary(BaseModel):
-    """Bitta foydalanuvchi uchun kalendaryil bo‘yicha oyliklar yig‘indisi."""
 
     billing_month: date
     total_amount: Decimal

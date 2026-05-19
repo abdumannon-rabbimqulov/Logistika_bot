@@ -29,7 +29,6 @@ async def get_user_by_username(db: AsyncSession, username: str) -> Optional[User
 
 
 async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
-    """Email manzili bo'yicha foydalanuvchini qidiradi."""
     result = await db.execute(
         select(User).where(User.email == email)
     )
@@ -38,7 +37,6 @@ async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
 
 
 async def update_user_role(db: AsyncSession, user: User, role: UserRole) -> User:
-    """Foydalanuvchi rolini yangilaydi."""
     user.role = role
     await db.commit()
     await db.refresh(user)

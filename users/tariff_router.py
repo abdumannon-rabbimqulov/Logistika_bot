@@ -1,4 +1,3 @@
-"""Foydalanuvchi tarif / oylik to‘lov CRUD — faqat ADMIN."""
 
 from typing import List, Optional
 
