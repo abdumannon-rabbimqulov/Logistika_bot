@@ -3,7 +3,6 @@
 """
 
 import logging
-import time
 import uuid
 from datetime import datetime, timezone
 from fastapi import FastAPI, Request, status
@@ -11,7 +10,6 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from jose import JWTError
-import json
 from utils.admin_alerts import send_error_to_admins, format_details_for_alert
 
 logger = logging.getLogger(__name__)
@@ -202,108 +200,20 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         )
 
 
-class RequestLoggingMiddleware:
-    """
-    Har bitta request/response'ni log qiladi.
-    Performance va debugging uchun foydalaniladi.
-    """
-    
-    def __init__(self, app):
-        self.app = app
-    
-    async def __call__(self, request: Request, call_next):
-        request_id = str(uuid.uuid4())
-        started = time.perf_counter()
-        
-        # Request ma'lumotlarini loglash
-        logger.info(
-            "request_started",
-            extra={
-                "request_id": request_id,
-                "method": request.method,
-                "path": request.url.path,
-            }
-        )
-        
-        try:
-            # Request ni process qilish
-            response = await call_next(request)
-            
-            # Response ma'lumotlarini loglash
-            logger.info(
-                "request_finished",
-                extra={
-                    "request_id": request_id,
-                    "method": request.method,
-                    "path": request.url.path,
-                    "status_code": response.status_code,
-                    "duration_ms": round((time.perf_counter() - started) * 1000, 2),
-                }
-            )
-            
-            # Request ID ni response header'iga qo'shish
-            response.headers["X-Request-ID"] = request_id
-            return response
-        
-        except Exception as exc:
-            logger.error(
-                "request_failed",
-                extra={
-                    "request_id": request_id,
-                    "method": request.method,
-                    "path": request.url.path,
-                    "exc_type": type(exc).__name__,
-                    "duration_ms": round((time.perf_counter() - started) * 1000, 2),
-                },
-                exc_info=exc
-            )
-            raise
-
-
 def setup_error_handlers(app: FastAPI):
     """FastAPI'ga error handlers'ni qo'shish."""
     from starlette.middleware.base import BaseHTTPMiddleware
     
-    class RequestLoggingHTTPMiddleware(BaseHTTPMiddleware):
+    class RequestIdMiddleware(BaseHTTPMiddleware):
+        """Har javobga X-Request-ID qo'shadi; access log uvicorn'da chiqadi."""
+
         async def dispatch(self, request: Request, call_next):
             request_id = str(uuid.uuid4())
-            started = time.perf_counter()
-            
-            logger.info(
-                "request_started",
-                extra={
-                    "request_id": request_id,
-                    "method": request.method,
-                    "path": request.url.path,
-                }
-            )
-            
             try:
                 response = await call_next(request)
-                logger.info(
-                    "request_finished",
-                    extra={
-                        "request_id": request_id,
-                        "method": request.method,
-                        "path": request.url.path,
-                        "status_code": response.status_code,
-                        "duration_ms": round((time.perf_counter() - started) * 1000, 2),
-                    }
-                )
                 response.headers["X-Request-ID"] = request_id
                 return response
             except Exception as exc:
-                logger.error(
-                    "request_failed",
-                    extra={
-                        "request_id": request_id,
-                        "method": request.method,
-                        "path": request.url.path,
-                        "exc_type": type(exc).__name__,
-                        "duration_ms": round((time.perf_counter() - started) * 1000, 2),
-                    },
-                    exc_info=exc
-                )
                 await send_error_to_admins(
                     title="Unhandled Exception (middleware)",
                     request_id=request_id,
@@ -316,87 +226,45 @@ def setup_error_handlers(app: FastAPI):
                 raise
     
     app.add_exception_handler(Exception, global_exception_handler)
-    app.add_middleware(RequestLoggingHTTPMiddleware)
+    app.add_middleware(RequestIdMiddleware)
 
 
-class StructuredFormatter(logging.Formatter):
-    """
-    JSON format'da logging uchun custom formatter.
-    """
-    
-    def format(self, record: logging.LogRecord) -> str:
-        log_data = {
-            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
-            "lvl": record.levelname,
-            "msg": record.getMessage(),
-        }
-        
-        # Extra fields qo'shish (request_id, user_id, etc.)
-        if hasattr(record, "request_id") and record.request_id:
-            log_data["request_id"] = record.request_id
-        if hasattr(record, "user_id") and record.user_id:
-            log_data["user_id"] = record.user_id
-        if hasattr(record, "method") and record.method:
-            log_data["method"] = record.method
-        if hasattr(record, "path") and record.path:
-            log_data["path"] = record.path
-        if hasattr(record, "status_code") and record.status_code:
-            log_data["status_code"] = record.status_code
-        if hasattr(record, "duration_ms") and record.duration_ms is not None:
-            log_data["duration_ms"] = record.duration_ms
-        
-        # Exception info
-        if record.exc_info:
-            log_data["exception"] = self.formatException(record.exc_info)
-        
-        return json.dumps(log_data, ensure_ascii=False)
+_CONSOLE_LOG_FORMAT = "%(levelname)s:     %(message)s"
 
 
 def setup_logging(environment: str = "development"):
-    """
-    Logging'ni sozlash (ENV'ga qarab JSON yoki text format).
-    """
+    """Oddiy matn loglar (uvicorn access log bilan bir xil uslub)."""
     import os
     import sys
-    
-    # Root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
-    
-    # Remove default handlers
-    root_logger.handlers.clear()
-    
-    # Create formatters
-    if environment == "production":
-        # Production: JSON format to file
-        formatter = StructuredFormatter()
 
-        # File handler (fallback to console if volume/file permissions are restricted)
+    from config.config import LOG_LEVEL
+
+    level = getattr(logging, (LOG_LEVEL or "INFO").upper(), logging.INFO)
+    formatter = logging.Formatter(_CONSOLE_LOG_FORMAT)
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level)
+    root_logger.handlers.clear()
+
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+
+    if environment == "production":
         try:
             os.makedirs("logs", exist_ok=True)
             file_handler = logging.FileHandler("logs/app.log")
             file_handler.setFormatter(formatter)
             root_logger.addHandler(file_handler)
         except (OSError, PermissionError):
-            console_handler = logging.StreamHandler(sys.stdout)
-            console_handler.setFormatter(formatter)
-            root_logger.addHandler(console_handler)
-    else:
-        # Development: Text format to console with colors
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-        
-        # Console handler
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(formatter)
-        root_logger.addHandler(console_handler)
-    
-    # Set specific loggers
+            pass
+
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
-    
-    logger.info("logging_configured", extra={"environment": environment})
+    # Uvicorn access: INFO: 127.0.0.1:1234 - "GET /path HTTP/1.1" 200 OK
+    logging.getLogger("uvicorn.access").setLevel(logging.INFO)
+
+    logger.info("Logging configured (%s)", environment)
 
 
 

@@ -3,13 +3,27 @@ from sqlalchemy import select, update, delete
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from ai.models import (
-    Chat, Message, Attachment, Rating, AIAnalysis, AICommand
+    Chat,
+    ChatCategory,
+    ChatStatus,
+    Message,
+    Attachment,
+    Rating,
+    AIAnalysis,
+    AICommand,
+    SenderType,
 )
+from ai import schemas
 from ai.schemas import (
-    ChatCreate, ChatUpdate,
-    MessageCreate, MessageUpdate,
-    RatingCreate, RatingUpdate,
-    AIAnalysisCreate, AICommandCreate, AICommandUpdate
+    ChatCreate,
+    ChatUpdate,
+    MessageCreate,
+    MessageUpdate,
+    RatingCreate,
+    RatingUpdate,
+    AIAnalysisCreate,
+    AICommandCreate,
+    AICommandUpdate,
 )
 from datetime import datetime, timezone
 
@@ -41,8 +55,79 @@ async def get_chat(db: AsyncSession, pk: int) -> Optional[Chat]:
 
 async def list_user_chats(db: AsyncSession, user_id: int) -> List[Chat]:
     """Foydalanuvchining barcha chat sessiyalarini qaytaradi."""
-    result = await db.execute(select(Chat).where(Chat.user_id == user_id))
-    return result.scalars().all()
+    result = await db.execute(
+        select(Chat).where(Chat.user_id == user_id).order_by(Chat.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_or_create_ai_chat(db: AsyncSession, user_id: int) -> Chat:
+    """Foydalanuvchi uchun AI yordamchi chatini topadi yoki yaratadi."""
+    result = await db.execute(
+        select(Chat)
+        .where(
+            Chat.user_id == user_id,
+            Chat.category == ChatCategory.AI_COMMAND,
+            Chat.status == ChatStatus.OPEN,
+        )
+        .order_by(Chat.created_at.desc())
+        .limit(1)
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        return existing
+    return await create_chat(
+        db,
+        ChatCreate(
+            user_id=user_id,
+            category=schemas.ChatCategory.AI_COMMAND,
+            title="Logistika AI",
+        ),
+    )
+
+
+async def list_chat_messages(
+    db: AsyncSession,
+    chat_id: int,
+    *,
+    limit: int = 50,
+    before_id: Optional[int] = None,
+) -> List[Message]:
+    """Chat xabarlarini vaqt bo'yicha (eskidan yangiga) qaytaradi."""
+    stmt = (
+        select(Message)
+        .options(selectinload(Message.attachments))
+        .where(Message.chat_id == chat_id)
+        .order_by(Message.created_at.desc())
+        .limit(min(limit, 100))
+    )
+    if before_id is not None:
+        stmt = stmt.where(Message.id < before_id)
+    result = await db.execute(stmt)
+    return list(reversed(result.scalars().all()))
+
+
+async def build_agent_history(
+    db: AsyncSession,
+    chat_id: int,
+    *,
+    limit: int = 24,
+    exclude_message_id: Optional[int] = None,
+) -> List[dict]:
+    """Gemini uchun suhbat konteksti."""
+    messages = await list_chat_messages(db, chat_id, limit=limit + 1)
+    history: List[dict] = []
+    for msg in messages:
+        if exclude_message_id and msg.id == exclude_message_id:
+            continue
+        text = (msg.content or "").strip()
+        if not text:
+            continue
+        if msg.sender_type == SenderType.AI:
+            history.append({"role": "model", "text": text})
+        elif msg.sender_type in (SenderType.USER, SenderType.DRIVER):
+            history.append({"role": "user", "text": text})
+    return history[-limit:]
 
 async def update_chat(db: AsyncSession, pk: int, data: ChatUpdate) -> Optional[Chat]:
     """Chat holati (status) yoki kategoriyasini o'zgartiradi."""

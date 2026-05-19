@@ -93,6 +93,13 @@ Productionda API **`/api`** prefiksi bilan chaqiriladi:
 
 Tayyor environment: `postman/Logistika_API.postman_environment.json` (`baseUrl` = `https://logistic.org.uz/api`).
 
+### AI WebSocket
+
+1. `POST /api/ai/chats/assistant` — `chat_id` oling
+2. `wss://logistic.org.uz/api/ai/ws/{chat_id}?token=ACCESS_TOKEN`
+3. Yuboring: `{"type":"new_message","content":"Salom"}`
+4. Qabul qiling: `connected`, `ai_typing`, `new_message` (AI javobi)
+
 ## Ko'p uchraydigan xatolar
 
 - `PermissionError: /app/logs/app.log`

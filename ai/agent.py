@@ -1187,17 +1187,73 @@ class LogistikaAgent:
 
     # ── Asosiy oqim ────────────────────────────────────
 
+    @staticmethod
+    def _build_contents(
+        message_text: str,
+        history: Optional[List[Dict[str, str]]] = None,
+    ) -> List[Any]:
+        contents: List[Any] = []
+        for item in (history or [])[-24:]:
+            text = (item.get("text") or "").strip()
+            if not text:
+                continue
+            role = "model" if item.get("role") == "model" else "user"
+            contents.append({"role": role, "parts": [{"text": text}]})
+        contents.append(message_text)
+        return contents
+
+    @staticmethod
+    def _extract_function_call(response: Any):
+        parts = response.candidates[0].content.parts if response.candidates else None
+        if not parts:
+            return None
+        for part in parts:
+            if getattr(part, "function_call", None):
+                return part.function_call
+        return None
+
+    async def _execute_tool(
+        self,
+        func_name: str,
+        args: Dict[str, Any],
+        on_action_callback: ActionCallback,
+    ) -> str:
+        if not _is_tool_allowed(func_name, self.role):
+            return f"Sizning roleingiz ({self.role}) bu amalni bajarishga ruxsat bermaydi."
+
+        if on_action_callback:
+            await on_action_callback(f"Bajarilmoqda: {func_name}...")
+
+        tool_def = _TOOL_BY_NAME.get(func_name)
+        if not tool_def:
+            return "Tool topilmadi."
+
+        method_name = tool_def["method"]
+        async with async_session() as db:
+            result_user = await user_crud.get_user_by_id(db, self.user_id)
+            if not result_user:
+                return "Foydalanuvchi topilmadi."
+            toolkit = LogistikaToolkit(db, result_user)
+            tool_func = getattr(toolkit, method_name, None)
+            if not tool_func:
+                return "Tool implementatsiyasi topilmadi."
+            try:
+                return await tool_func(**args)
+            except TypeError as exc:
+                return f"Tool argumentlari xato: {exc}"
+            except Exception as exc:
+                logger.error("Tool %s xatosi: %s", method_name, exc)
+                return f"Tool xatosi: {exc}"
+
     async def process_message(
         self,
         message_text: str,
         chat_id: int,
+        *,
+        history: Optional[List[Dict[str, str]]] = None,
         on_action_callback: ActionCallback = None,
     ) -> Tuple[str, Dict[str, int]]:
-        """Foydalanuvchi xabarini qayta ishlaydi.
-
-        Qaytaradi (response_text, usage_metadata).
-        usage_metadata: {"input": int, "output": int, "total": int}.
-        """
+        """Foydalanuvchi xabarini qayta ishlaydi (kontekst + tool loop)."""
         empty_usage = {"input": 0, "output": 0, "total": 0}
         if not client:
             return ("AI Agent hozircha o'chiq (API_KEY sozlanmagan).", empty_usage)
@@ -1207,91 +1263,48 @@ class LogistikaAgent:
         if self.tools_decl:
             config_obj["tools"] = [{"function_declarations": self.tools_decl}]
 
-        try:
-            response = await asyncio.to_thread(
-                lambda: client.models.generate_content(
-                    model=model, contents=message_text, config=config_obj
-                )
-            )
-        except Exception as exc:
-            logger.error("AI Agent generate_content error: %s", exc)
-            return (f"Kechirasiz, muammo yuz berdi: {exc}", empty_usage)
+        contents: List[Any] = self._build_contents(message_text, history)
+        total_usage = dict(empty_usage)
 
-        usage = self._extract_usage(response)
-
-        parts = (
-            response.candidates[0].content.parts if response.candidates else None
-        )
-        function_call = None
-        if parts:
-            for p in parts:
-                if getattr(p, "function_call", None):
-                    function_call = p.function_call
-                    break
-
-        if function_call:
-            func_name = function_call.name
-            args = dict(function_call.args or {})
-
-            if not _is_tool_allowed(func_name, self.role):
-                return (
-                    f"Sizning roleingiz ({self.role}) bu amalni bajarishga ruxsat bermaydi.",
-                    usage,
-                )
-
-            if on_action_callback:
-                await on_action_callback(f"Bajarilmoqda: {func_name}...")
-
-            tool_def = _TOOL_BY_NAME[func_name]
-            method_name = tool_def["method"]
-
-            async with async_session() as db:
-                result_user = await user_crud.get_user_by_id(db, self.user_id)
-                if not result_user:
-                    return ("Foydalanuvchi topilmadi.", usage)
-                toolkit = LogistikaToolkit(db, result_user)
-                tool_func = getattr(toolkit, method_name, None)
-                if not tool_func:
-                    return ("Tool implementatsiyasi topilmadi.", usage)
-                try:
-                    tool_result = await tool_func(**args)
-                except TypeError as exc:
-                    tool_result = f"Tool argumentlari xato: {exc}"
-                except Exception as exc:
-                    logger.error("Tool %s xatosi: %s", method_name, exc)
-                    tool_result = f"Tool xatosi: {exc}"
-
+        for _ in range(6):
             try:
-                final_response = await asyncio.to_thread(
-                    lambda: client.models.generate_content(
-                        model=model,
-                        contents=[
-                            message_text,
-                            response.candidates[0].content,
-                            {
-                                "parts": [
-                                    {
-                                        "function_response": {
-                                            "name": func_name,
-                                            "response": {"content": tool_result},
-                                        }
-                                    }
-                                ]
-                            },
-                        ],
-                        config=config_obj,
+                response = await asyncio.to_thread(
+                    lambda c=contents: client.models.generate_content(
+                        model=model, contents=c, config=config_obj
                     )
                 )
             except Exception as exc:
-                logger.error("AI final_response error: %s", exc)
-                return (str(tool_result), usage)
+                logger.error("AI generate_content error: %s", exc)
+                return (f"Kechirasiz, muammo yuz berdi: {exc}", total_usage)
 
-            final_usage = self._extract_usage(final_response)
-            for k in usage:
-                usage[k] += final_usage.get(k, 0)
-            return (final_response.text or str(tool_result), usage)
+            step_usage = self._extract_usage(response)
+            for key in total_usage:
+                total_usage[key] += step_usage.get(key, 0)
 
-        return (response.text or "", usage)
+            function_call = self._extract_function_call(response)
+            if not function_call:
+                return (response.text or "", total_usage)
+
+            func_name = function_call.name
+            args = dict(function_call.args or {})
+            tool_result = await self._execute_tool(func_name, args, on_action_callback)
+
+            contents = [
+                *contents,
+                response.candidates[0].content,
+                {
+                    "parts": [
+                        {
+                            "function_response": {
+                                "name": func_name,
+                                "response": {"content": tool_result},
+                            }
+                        }
+                    ]
+                },
+            ]
+
+        return ("Juda ko'p ketma-ket amal bajarildi. Qisqaroq so'rang.", total_usage)
 
     @staticmethod
     def _extract_usage(response: Any) -> Dict[str, int]:

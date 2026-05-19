@@ -4,7 +4,7 @@ import logging
 import os
 import shutil
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date
 from typing import List, Optional
 
 from fastapi import (
@@ -18,7 +18,6 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from Admin_panel.validation import is_admin
@@ -57,28 +56,29 @@ router = APIRouter(prefix="/ai", tags=["Logistika AI & Chat"])
 @router.get("/ws-info", tags=["Documentation"])
 async def websocket_info():
     """AI Agent va Chat uchun WebSocket qo'llanmasi."""
+    from config.config import API_PUBLIC_PREFIX
+
+    base = API_PUBLIC_PREFIX or ""
     return {
-        "url": "ws://domain/ai/ws/{chat_id}?token=YOUR_ACCESS_TOKEN",
+        "url": f"wss://logistic.org.uz{base}/ai/ws/{{chat_id}}?token=YOUR_ACCESS_TOKEN",
         "authentication": "JWT access tokenni query parameter sifatida yuboring",
+        "ai_chat": f"POST {base}/ai/chats/assistant — AI chat yaratish/olish",
         "events_sent_by_user": [
-            {"type": "new_message", "content": "matn", "sender_id": 123},
+            {"type": "ping"},
+            {"type": "new_message", "content": "matn", "invoke_ai": True},
             {
                 "type": "voice_message",
                 "audio_b64": "<base64>",
-                "mime_type": "audio/webm | audio/ogg | audio/mpeg",
-                "sender_id": 123,
+                "mime_type": "audio/webm",
             },
         ],
         "events_received": [
-            {"event": "new_message", "data": {"...": "Message obyekti"}},
-            {"event": "voice_transcribed", "data": {"transcript": "...", "message_id": 1}},
+            {"event": "connected", "data": {"chat_id": 1, "messages": []}},
+            {"event": "pong"},
+            {"event": "new_message", "data": {"...": "Message"}},
+            {"event": "ai_typing", "active": True},
             {"event": "ai_action", "action": "Bajarilmoqda: ..."},
-            {
-                "event": "ai_limit_exceeded",
-                "message": "Kunlik limit tugagan",
-                "used": 50,
-                "limit": 50,
-            },
+            {"event": "ai_limit_exceeded", "used": 50, "limit": 50},
             {"event": "error", "message": "..."},
         ],
         "error_codes": {"1008": "Invalid token / no access"},
@@ -92,6 +92,27 @@ async def _send(websocket: WebSocket, payload: dict) -> None:
         logger.warning("WS send failed: %s", exc)
 
 
+def _message_payload(msg) -> dict:
+    return schemas.MessageResponse.model_validate(msg).model_dump(mode="json")
+
+
+async def _user_can_access_chat(db: AsyncSession, chat, user_id: int) -> bool:
+    if chat.user_id == user_id:
+        return True
+    if chat.driver_id:
+        driver = await driver_crud.get_driver(db, chat.driver_id)
+        return bool(driver and driver.user_id == user_id)
+    return False
+
+
+def _should_invoke_ai(*, is_ai_chat: bool, payload: dict) -> bool:
+    if payload.get("invoke_ai") is False:
+        return False
+    if is_ai_chat:
+        return True
+    return bool(payload.get("invoke_ai"))
+
+
 async def _run_ai_flow(
     db: AsyncSession,
     websocket: WebSocket,
@@ -99,11 +120,14 @@ async def _run_ai_flow(
     user: User,
     log_agent: agent.LogistikaAgent,
     transcript: str,
+    *,
     is_ai_chat: bool,
+    invoke_ai: bool,
+    exclude_message_id: Optional[int],
     on_action_callback,
 ) -> None:
-    """Quota check + AI process + Message yaratish + broadcast."""
-    if not (is_ai_chat or transcript.lower().startswith("ai")):
+    """Quota + kontekst + AI javob + DB + broadcast."""
+    if not _should_invoke_ai(is_ai_chat=is_ai_chat, payload={"invoke_ai": invoke_ai}):
         return
 
     allowed, used, limit = await check_request_quota(db, user)
@@ -119,16 +143,30 @@ async def _run_ai_flow(
         )
         return
 
+    history = await crud.build_agent_history(
+        db, chat_id, exclude_message_id=exclude_message_id
+    )
+
+    await manager.broadcast({"event": "ai_typing", "active": True}, chat_id)
     try:
         ai_text, usage = await asyncio.wait_for(
             log_agent.process_message(
-                transcript, chat_id=chat_id, on_action_callback=on_action_callback
+                transcript,
+                chat_id=chat_id,
+                history=history,
+                on_action_callback=on_action_callback,
             ),
-            timeout=60,
+            timeout=90,
         )
     except asyncio.TimeoutError:
         await _send(websocket, {"event": "error", "message": "AI javob bermadi (timeout)"})
         return
+    except Exception as exc:
+        logger.error("AI flow error chat=%s: %s", chat_id, exc, exc_info=True)
+        await _send(websocket, {"event": "error", "message": f"AI xatosi: {exc}"})
+        return
+    finally:
+        await manager.broadcast({"event": "ai_typing", "active": False}, chat_id)
 
     await increment_usage(
         db,
@@ -143,18 +181,15 @@ async def _run_ai_flow(
             db2,
             schemas.MessageCreate(
                 chat_id=chat_id,
-                sender_id=0,
+                sender_id=None,
                 sender_type=schemas.SenderType.AI,
+                message_type=schemas.MessageType.AI_REPLY,
                 content=ai_text,
+                is_ai_response=True,
             ),
         )
-        await manager.broadcast(
-            {
-                "event": "new_message",
-                "data": schemas.MessageResponse.model_validate(ai_msg).model_dump(mode="json"),
-            },
-            chat_id,
-        )
+        payload = {"event": "new_message", "data": _message_payload(ai_msg)}
+        await manager.broadcast(payload, chat_id)
 
 
 @router.websocket("/ws/{chat_id}")
@@ -183,11 +218,7 @@ async def websocket_endpoint(websocket: WebSocket, chat_id: int):
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Chat not found")
             return
 
-        allowed = chat_obj.user_id == user_id
-        if not allowed and chat_obj.driver_id:
-            driver = await driver_crud.get_driver(db, chat_obj.driver_id)
-            allowed = bool(driver and driver.user_id == user_id)
-        if not allowed:
+        if not await _user_can_access_chat(db, chat_obj, user_id):
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Access denied")
             return
 
@@ -206,10 +237,30 @@ async def websocket_endpoint(websocket: WebSocket, chat_id: int):
     async def ai_action_callback(action_text: str):
         await manager.broadcast({"event": "ai_action", "action": action_text}, chat_id)
 
+    async with async_session() as db:
+        recent = await crud.list_chat_messages(db, chat_id, limit=40)
+    await _send(
+        websocket,
+        {
+            "event": "connected",
+            "data": {
+                "chat_id": chat_id,
+                "is_ai_chat": is_ai_chat,
+                "user_id": user_id,
+                "role": user_role,
+                "messages": [_message_payload(m) for m in recent],
+            },
+        },
+    )
+
     try:
         while True:
             data = await websocket.receive_json()
             msg_type = data.get("type")
+
+            if msg_type == "ping":
+                await _send(websocket, {"event": "pong"})
+                continue
 
             # ── Matnli xabar ──────────────────────────────
             if msg_type == "new_message":
@@ -229,12 +280,7 @@ async def websocket_endpoint(websocket: WebSocket, chat_id: int):
                         ),
                     )
                     await manager.broadcast(
-                        {
-                            "event": "new_message",
-                            "data": schemas.MessageResponse.model_validate(user_msg).model_dump(
-                                mode="json"
-                            ),
-                        },
+                        {"event": "new_message", "data": _message_payload(user_msg)},
                         chat_id,
                     )
 
@@ -247,8 +293,10 @@ async def websocket_endpoint(websocket: WebSocket, chat_id: int):
                         fresh_user,
                         log_agent,
                         content,
-                        is_ai_chat,
-                        ai_action_callback,
+                        is_ai_chat=is_ai_chat,
+                        invoke_ai=data.get("invoke_ai", is_ai_chat),
+                        exclude_message_id=user_msg.id,
+                        on_action_callback=ai_action_callback,
                     )
 
             # ── Ovozli xabar ──────────────────────────────
@@ -356,6 +404,10 @@ async def websocket_endpoint(websocket: WebSocket, chat_id: int):
                     )
 
                 await manager.broadcast(
+                    {"event": "new_message", "data": _message_payload(user_msg)},
+                    chat_id,
+                )
+                await manager.broadcast(
                     {
                         "event": "voice_transcribed",
                         "data": {
@@ -368,7 +420,6 @@ async def websocket_endpoint(websocket: WebSocket, chat_id: int):
                     chat_id,
                 )
 
-                # AI oqimi (transcript matn sifatida)
                 async with async_session() as db:
                     fresh_user = await users_crud.get_user_by_id(db, user_id) or user
                     await _run_ai_flow(
@@ -378,8 +429,10 @@ async def websocket_endpoint(websocket: WebSocket, chat_id: int):
                         fresh_user,
                         log_agent,
                         transcript,
-                        is_ai_chat,
-                        ai_action_callback,
+                        is_ai_chat=is_ai_chat,
+                        invoke_ai=data.get("invoke_ai", is_ai_chat),
+                        exclude_message_id=user_msg.id,
+                        on_action_callback=ai_action_callback,
                     )
 
             else:
@@ -390,6 +443,7 @@ async def websocket_endpoint(websocket: WebSocket, chat_id: int):
         logger.info("WebSocket disconnected: user=%s chat=%s", user_id, chat_id)
     except Exception as exc:
         logger.error("WebSocket error chat=%s: %s", chat_id, exc, exc_info=True)
+        await _send(websocket, {"event": "error", "message": str(exc)})
         manager.disconnect(chat_id, user_id)
 
 
@@ -408,6 +462,19 @@ async def create_new_chat(
     return await crud.create_chat(db, chat_data)
 
 
+@router.post(
+    "/chats/assistant",
+    response_model=schemas.ChatResponse,
+    summary="AI yordamchi chatini olish yoki yaratish",
+)
+async def get_or_create_assistant_chat(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Postman/Mini App: avval shu endpoint, keyin WebSocket `chat_id` bilan."""
+    return await crud.get_or_create_ai_chat(db, current_user.id)
+
+
 @router.get("/chats", response_model=List[schemas.ChatResponse], summary="Mening chatlarim")
 async def list_my_chats(
     db: AsyncSession = Depends(get_db),
@@ -423,9 +490,27 @@ async def get_chat_details(
     current_user: User = Depends(get_current_user),
 ):
     chat = await crud.get_chat(db, chat_id)
-    if not chat or chat.user_id != current_user.id:
+    if not chat or not await _user_can_access_chat(db, chat, current_user.id):
         raise HTTPException(status_code=404, detail="Chat topilmadi yoki sizga tegishli emas")
     return chat
+
+
+@router.get(
+    "/chats/{chat_id}/messages",
+    response_model=List[schemas.MessageResponse],
+    summary="Chat xabarlari",
+)
+async def list_chat_messages(
+    chat_id: int,
+    limit: int = Query(50, ge=1, le=100),
+    before_id: Optional[int] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    chat = await crud.get_chat(db, chat_id)
+    if not chat or not await _user_can_access_chat(db, chat, current_user.id):
+        raise HTTPException(status_code=404, detail="Chat topilmadi yoki sizga tegishli emas")
+    return await crud.list_chat_messages(db, chat_id, limit=limit, before_id=before_id)
 
 
 @router.patch(
