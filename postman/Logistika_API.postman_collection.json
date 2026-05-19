@@ -1,0 +1,1742 @@
+{
+	"info": {
+		"_postman_id": "logistika-api-collection",
+		"name": "Logistika AI API",
+		"description": "Logistika platformasi uchun to'liq API kolleksiyasi.\n\nBase URL: `{{baseUrl}}`\n\n## Autentifikatsiya\n- `POST /auth/login` orqali token oling\n- `Authorization: Bearer {{accessToken}}` header bilan so'rov yuboring\n- Token muddati tugasa `POST /auth/refresh` orqali yangilang\n\n## Rollar\n- **guest** — ro'yxatdan o'tmagan\n- **sender** — yuk jo'natuvchi (mijoz)\n- **driver** — haydovchi\n- **admin** — administrator",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{accessToken}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [],
+	"item": [
+		{
+			"name": "System",
+			"description": "Tizim holati va sog'lik tekshiruvi endpointlari",
+			"item": [
+				{
+					"name": "API Root",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/",
+							"host": ["{{baseUrl}}"],
+							"path": [""]
+						},
+						"description": "API kirish nuqtasi — barcha endpointlar haqida qisqa ma'lumot"
+					},
+					"response": []
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/health",
+							"host": ["{{baseUrl}}"],
+							"path": ["health"]
+						},
+						"description": "Servis ishlayaptimi tekshirish"
+					},
+					"response": []
+				},
+				{
+					"name": "Database Health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/health/db",
+							"host": ["{{baseUrl}}"],
+							"path": ["health", "db"]
+						},
+						"description": "Database ulanishi tekshiruvi"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Auth",
+			"description": "Autentifikatsiya: login, token yangilash, parol tiklash, profil boshqaruvi",
+			"item": [
+				{
+					"name": "Login (telefon + parol)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var json = pm.response.json();",
+									"    pm.collectionVariables.set('accessToken', json.access_token);",
+									"    pm.collectionVariables.set('refreshToken', json.refresh_token);",
+									"    pm.collectionVariables.set('userId', json.user_id);",
+									"    pm.collectionVariables.set('userRole', json.role);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone_number\": \"+998901234567\",\n    \"password\": \"parol12345\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "login"]
+						},
+						"description": "Telefon raqam va parol orqali tizimga kirish.\n\nMuvaffaqiyatli bo'lsa `access_token` va `refresh_token` qaytadi.\n\nAlternativ: `init_data` (Telegram Web App) orqali ham kirish mumkin."
+					},
+					"response": []
+				},
+				{
+					"name": "Login (Telegram init_data)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var json = pm.response.json();",
+									"    pm.collectionVariables.set('accessToken', json.access_token);",
+									"    pm.collectionVariables.set('refreshToken', json.refresh_token);",
+									"    pm.collectionVariables.set('userId', json.user_id);",
+									"    pm.collectionVariables.set('userRole', json.role);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"init_data\": \"query_id=AAHdF6IQ...&hash=abc123...\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "login"]
+						},
+						"description": "Telegram Web App `init_data` orqali kirish.\n\nFoydalanuvchi mavjud bo'lmasa avtomatik ro'yxatdan o'tkaziladi."
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var json = pm.response.json();",
+									"    pm.collectionVariables.set('accessToken', json.access_token);",
+									"    pm.collectionVariables.set('refreshToken', json.refresh_token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"refresh_token\": \"{{refreshToken}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/refresh",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "refresh"]
+						},
+						"description": "Refresh token orqali yangi access va refresh tokenlar olish.\n\nEski refresh token ishlatilgandan so'ng yaroqsiz bo'ladi."
+					},
+					"response": []
+				},
+				{
+					"name": "Reset Phone (kod yuborish)",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"phone_number\": \"+998901234567\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/reset-phone",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "reset-phone"]
+						},
+						"description": "Telefon raqam bor bo'lsa, foydalanuvchining Telegram akkauntiga 6 xonali tasdiqlash kodi yuboriladi.\n\nJavobda `access_token` qaytadi — keyingi qadamlarda ishlatiladi."
+					},
+					"response": []
+				},
+				{
+					"name": "Verify Reset Code",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"code\": \"123456\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/verify-reset-code",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "verify-reset-code"]
+						},
+						"description": "Telegramga yuborilgan tasdiqlash kodini tekshirish.\n\n`Authorization: Bearer` header talab qilinadi (reset-phone dan olingan token)."
+					},
+					"response": []
+				},
+				{
+					"name": "Reset Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"new_password\": \"yangiparol123\",\n    \"confirm_password\": \"yangiparol123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/reset-password",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "reset-password"]
+						},
+						"description": "Kod tasdiqlangandan so'ng yangi parol o'rnatish.\n\nParol 8-20 belgi oralig'ida bo'lishi kerak."
+					},
+					"response": []
+				},
+				{
+					"name": "Get My Profile",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/auth/me",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "me"]
+						},
+						"description": "Joriy foydalanuvchi profilini ko'rish.\n\nJavob: id, username, full_name, email, phone_number, role, language, is_active, is_banned, balance, created_at, updated_at"
+					},
+					"response": []
+				},
+				{
+					"name": "Update My Profile",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"full_name\": \"Yangi Ism\",\n    \"phone_number\": \"+998991234567\",\n    \"language\": \"uz\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/me",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "me"]
+						},
+						"description": "Profil ma'lumotlarini yangilash.\n\nFaqat berilgan maydonlar yangilanadi (partial update)."
+					},
+					"response": []
+				},
+				{
+					"name": "Change Password",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"old_password\": \"eskiparol123\",\n    \"new_password\": \"yangiparol123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/me/password",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "me", "password"]
+						},
+						"description": "Parolni o'zgartirish. Eski parolni to'g'ri kiritish kerak."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete My Account",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/auth/me",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "me"]
+						},
+						"description": "Akkauntni deaktivatsiya qilish (o'chirish emas, `is_active = false`)."
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"refresh_token\": \"{{refreshToken}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/logout",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "logout"]
+						},
+						"description": "Tizimdan chiqish. Refresh token Redis orqali qora ro'yxatga tushadi.\n\nRefresh token body yoki `?refresh_token=` query orqali yuborilishi mumkin."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Drivers",
+			"description": "Haydovchi profili, mashina turlari, safar e'lonlari va takliflar",
+			"item": [
+				{
+					"name": "Truck Types",
+					"description": "Mashina turlari boshqaruvi",
+					"item": [
+						{
+							"name": "List Truck Types",
+							"request": {
+								"auth": {
+									"type": "noauth"
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/drivers/truck-types",
+									"host": ["{{baseUrl}}"],
+									"path": ["drivers", "truck-types"]
+								},
+								"description": "Barcha mashina turlarini olish. Autentifikatsiya talab qilinmaydi."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Truck Type",
+							"request": {
+								"auth": {
+									"type": "noauth"
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/drivers/truck-types/{{truckTypeId}}",
+									"host": ["{{baseUrl}}"],
+									"path": ["drivers", "truck-types", "{{truckTypeId}}"]
+								},
+								"description": "Bitta mashina turi tafsilotlari"
+							},
+							"response": []
+						},
+						{
+							"name": "Create Truck Type (Admin)",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Tentli fura\",\n    \"max_weight\": 20000,\n    \"max_volume\": 86,\n    \"length\": 13.6,\n    \"width\": 2.45,\n    \"height\": 2.7,\n    \"pallet_capacity\": 33,\n    \"description\": \"Standart tentli yuk mashinasi\",\n    \"is_active\": true\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/drivers/truck-types",
+									"host": ["{{baseUrl}}"],
+									"path": ["drivers", "truck-types"]
+								},
+								"description": "Yangi mashina turi qo'shish. Faqat admin uchun."
+							},
+							"response": []
+						},
+						{
+							"name": "Update Truck Type (Admin)",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Katta tentli fura\",\n    \"max_weight\": 25000\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/drivers/truck-types/{{truckTypeId}}",
+									"host": ["{{baseUrl}}"],
+									"path": ["drivers", "truck-types", "{{truckTypeId}}"]
+								},
+								"description": "Mashina turini tahrirlash. Faqat admin uchun."
+							},
+							"response": []
+						},
+						{
+							"name": "Delete Truck Type (Admin)",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/drivers/truck-types/{{truckTypeId}}",
+									"host": ["{{baseUrl}}"],
+									"path": ["drivers", "truck-types", "{{truckTypeId}}"]
+								},
+								"description": "Mashina turini o'chirish. Faqat admin uchun."
+							},
+							"response": []
+						},
+						{
+							"name": "Upload Truck Type Image (Admin)",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "file",
+											"type": "file",
+											"description": "Rasm fayl (jpg, jpeg, png, webp, gif)"
+										}
+									]
+								},
+								"url": {
+									"raw": "{{baseUrl}}/drivers/truck-types/image",
+									"host": ["{{baseUrl}}"],
+									"path": ["drivers", "truck-types", "image"]
+								},
+								"description": "Mashina turi uchun rasm yuklash. Javobda `url` va `filename` qaytadi."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Driver Profile",
+					"description": "Haydovchi profili boshqaruvi",
+					"item": [
+						{
+							"name": "Create Driver Profile",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"truck_type_id\": 2,\n    \"truck_number\": \"10Z123ZZ\",\n    \"truck_year\": 2021,\n    \"current_city\": \"Namangan\",\n    \"current_region\": \"Namangan viloyati\",\n    \"phone_number\": \"+998901112233\"\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/drivers/profile",
+									"host": ["{{baseUrl}}"],
+									"path": ["drivers", "profile"]
+								},
+								"description": "Haydovchi profilini yaratish. Har bir foydalanuvchi faqat bitta profil yaratishi mumkin."
+							},
+							"response": []
+						},
+						{
+							"name": "Get My Driver Profile",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/drivers/me",
+									"host": ["{{baseUrl}}"],
+									"path": ["drivers", "me"]
+								},
+								"description": "Mening haydovchi profilim"
+							},
+							"response": []
+						},
+						{
+							"name": "Update My Driver Profile",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"truck_number\": \"01A777BB\",\n    \"current_city\": \"Toshkent\",\n    \"is_available\": true\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/drivers/me",
+									"host": ["{{baseUrl}}"],
+									"path": ["drivers", "me"]
+								},
+								"description": "Haydovchi profilini yangilash"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Announcements",
+					"description": "Haydovchi safar e'lonlari",
+					"item": [
+						{
+							"name": "Create Announcement",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"price\": 3000000,\n    \"currency\": \"UZS\",\n    \"available_weight\": 20.0,\n    \"available_volume\": 80.0,\n    \"departure_date\": \"2026-06-01T08:00:00Z\",\n    \"description\": \"Katta fura, bo'sh joy bor\",\n    \"driver_id\": {{driverId}},\n    \"waypoints\": [\n        {\n            \"sequence\": 1,\n            \"waypoint_type\": \"origin\",\n            \"city\": \"Xiva\"\n        },\n        {\n            \"sequence\": 2,\n            \"waypoint_type\": \"destination\",\n            \"city\": \"Toshkent\"\n        }\n    ]\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/drivers/announcements",
+									"host": ["{{baseUrl}}"],
+									"path": ["drivers", "announcements"]
+								},
+								"description": "Safar e'loni berish. Waypoints (boshlang'ich, oraliq, oxirgi nuqtalar) bilan birga yuboriladi.\n\nStatus: active, filled, expired, cancelled"
+							},
+							"response": []
+						},
+						{
+							"name": "List Announcements",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/drivers/announcements",
+									"host": ["{{baseUrl}}"],
+									"path": ["drivers", "announcements"],
+									"query": [
+										{
+											"key": "driver_id",
+											"value": "",
+											"disabled": true,
+											"description": "Muayyan haydovchi e'lonlari (ixtiyoriy)"
+										}
+									]
+								},
+								"description": "Barcha safar e'lonlari ro'yxati. `driver_id` bilan filtr qilish mumkin."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Announcement",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/drivers/announcements/{{announcementId}}",
+									"host": ["{{baseUrl}}"],
+									"path": ["drivers", "announcements", "{{announcementId}}"]
+								},
+								"description": "Bitta e'lon tafsilotlari (waypoints bilan)"
+							},
+							"response": []
+						},
+						{
+							"name": "Make Offer on Announcement",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"cargo_name\": \"Mebel\",\n    \"cargo_description\": \"Uy mebellar to'plami\",\n    \"cargo_weight\": 5.0,\n    \"cargo_volume\": 20.0,\n    \"pickup_city\": \"Xiva\",\n    \"delivery_city\": \"Toshkent\",\n    \"offered_price\": 2500000,\n    \"currency\": \"UZS\",\n    \"comment\": \"Ehtiyotkorlik bilan tashish kerak\"\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/drivers/announcements/{{announcementId}}/offers",
+									"host": ["{{baseUrl}}"],
+									"path": ["drivers", "announcements", "{{announcementId}}", "offers"]
+								},
+								"description": "Haydovchi e'loniga mijoz tomonidan taklif berish."
+							},
+							"response": []
+						},
+						{
+							"name": "List Offers on Announcement",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/drivers/announcements/{{announcementId}}/offers",
+									"host": ["{{baseUrl}}"],
+									"path": ["drivers", "announcements", "{{announcementId}}", "offers"]
+								},
+								"description": "E'longa kelgan barcha takliflar. Faqat e'lon egasi (haydovchi) ko'rishi mumkin."
+							},
+							"response": []
+						},
+						{
+							"name": "Update Announcement Offer",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"counter_price\": 2700000,\n    \"counter_comment\": \"2.7 mln ga rozi bo'laman\",\n    \"status\": \"accepted\"\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/drivers/offers/{{offerId}}",
+									"host": ["{{baseUrl}}"],
+									"path": ["drivers", "offers", "{{offerId}}"]
+								},
+								"description": "Taklifni yangilash (qabul qilish, rad etish, qarshi narx berish).\n\nStatus qiymatlari: pending, seen, accepted, rejected, cancelled, expired, outbid"
+							},
+							"response": []
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Orders",
+			"description": "Yuk buyurtmalari: yaratish, ko'rish, tahrirlash, o'chirish va takliflar",
+			"item": [
+				{
+					"name": "Create Order",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"cargo_name\": \"Qurilish mollari (sement)\",\n    \"weight\": 20.0,\n    \"volume\": 30.0,\n    \"required_truck_type_id\": 2,\n    \"price\": 4500000,\n    \"currency\": \"UZS\",\n    \"waypoints\": [\n        {\n            \"sequence\": 1,\n            \"waypoint_type\": \"pickup\",\n            \"address\": \"Toshkent, Sergeli sanoat zonasi\",\n            \"contact_name\": \"Aziz\",\n            \"contact_phone\": \"+998901112233\"\n        },\n        {\n            \"sequence\": 2,\n            \"waypoint_type\": \"delivery\",\n            \"address\": \"Samarqand, Shahar markazi\",\n            \"contact_name\": \"Jasur\",\n            \"contact_phone\": \"+998934445566\"\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/orders/",
+							"host": ["{{baseUrl}}"],
+							"path": ["orders", ""]
+						},
+						"description": "Yangi yuk tashish buyurtmasini shakllantirish.\n\n`customer_id` JWT tokendan avtomatik olinadi.\n\nWaypoint turlari: pickup, delivery, transit"
+					},
+					"response": []
+				},
+				{
+					"name": "List Orders",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/orders/",
+							"host": ["{{baseUrl}}"],
+							"path": ["orders", ""],
+							"query": [
+								{
+									"key": "customer_id",
+									"value": "",
+									"disabled": true,
+									"description": "Mijoz ID bo'yicha filtr"
+								},
+								{
+									"key": "driver_id",
+									"value": "",
+									"disabled": true,
+									"description": "Haydovchi ID bo'yicha filtr"
+								},
+								{
+									"key": "status",
+									"value": "",
+									"disabled": true,
+									"description": "Status: pending, accepted, in_progress, completed, cancelled"
+								}
+							]
+						},
+						"description": "Barcha buyurtmalar ro'yxati. Filtrlar: customer_id, driver_id, status"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Order",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/orders/{{orderId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["orders", "{{orderId}}"]
+						},
+						"description": "Bitta buyurtma tafsilotlari (waypoints bilan)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Order",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"cargo_name\": \"Yangilangan yuk nomi\",\n    \"price\": 5000000,\n    \"status\": \"accepted\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/orders/{{orderId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["orders", "{{orderId}}"]
+						},
+						"description": "Buyurtma ma'lumotlarini yangilash. Faqat buyurtma egasi (customer) o'zgartira oladi."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Order",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/orders/{{orderId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["orders", "{{orderId}}"]
+						},
+						"description": "Buyurtmani o'chirish. Faqat buyurtma egasi o'chira oladi."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Order Offer",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"offered_price\": 4000000,\n    \"currency\": \"UZS\",\n    \"estimated_pickup_time\": \"2026-06-01T10:00:00Z\",\n    \"estimated_delivery_time\": \"2026-06-02T08:00:00Z\",\n    \"comment\": \"Ertaga olib ketaman\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/orders/{{orderId}}/offers",
+							"host": ["{{baseUrl}}"],
+							"path": ["orders", "{{orderId}}", "offers"]
+						},
+						"description": "Haydovchi tomonidan buyurtmaga taklif berish. Faqat haydovchi profili bor foydalanuvchilar uchun."
+					},
+					"response": []
+				},
+				{
+					"name": "List Order Offers",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/orders/{{orderId}}/offers",
+							"host": ["{{baseUrl}}"],
+							"path": ["orders", "{{orderId}}", "offers"]
+						},
+						"description": "Buyurtmaga kelgan barcha takliflar. Faqat buyurtma egasi ko'rishi mumkin."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Order Offer",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"counter_price\": 4200000,\n    \"counter_comment\": \"Narxni bir oz ko'taramiz\",\n    \"status\": \"accepted\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/orders/offers/{{orderOfferId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["orders", "offers", "{{orderOfferId}}"]
+						},
+						"description": "Taklifni yangilash: qabul qilish, rad etish, qarshi narx berish.\n\nStatus: pending, seen, accepted, rejected, cancelled, expired, outbid"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "AI & Chat",
+			"description": "AI yordamchi, peer chat, media yuklash, baho berish",
+			"item": [
+				{
+					"name": "AI Assistant",
+					"description": "AI yordamchi bilan ishlash (faqat REST, WebSocket emas)",
+					"item": [
+						{
+							"name": "Send Message to AI",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"message\": \"Mening buyurtmalarimni ko'rsat\",\n    \"chat_id\": null\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/ai/assistant/message",
+									"host": ["{{baseUrl}}"],
+									"path": ["ai", "assistant", "message"]
+								},
+								"description": "AI yordamchiga matnli savol yuborish.\n\n`chat_id` bo'sh bo'lsa yangi/mavjud AI chat ochiladi.\n\nJavob: reply, chat_id, used_today, daily_limit, allowed"
+							},
+							"response": []
+						},
+						{
+							"name": "Get AI Chat",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/ai/assistant/chat",
+									"host": ["{{baseUrl}}"],
+									"path": ["ai", "assistant", "chat"]
+								},
+								"description": "AI yordamchi chatini olish yoki yaratish"
+							},
+							"response": []
+						},
+						{
+							"name": "Get AI Chat Messages",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/ai/assistant/messages",
+									"host": ["{{baseUrl}}"],
+									"path": ["ai", "assistant", "messages"],
+									"query": [
+										{
+											"key": "chat_id",
+											"value": "",
+											"disabled": true,
+											"description": "Chat ID (ixtiyoriy)"
+										},
+										{
+											"key": "limit",
+											"value": "50",
+											"disabled": true,
+											"description": "1-100, default 50"
+										},
+										{
+											"key": "before_id",
+											"value": "",
+											"disabled": true,
+											"description": "Pagination uchun"
+										}
+									]
+								},
+								"description": "AI chat xabarlari tarixini olish"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Peer Chat",
+					"description": "Foydalanuvchilar o'rtasida matnli chat (REST + WebSocket)",
+					"item": [
+						{
+							"name": "WebSocket Info",
+							"request": {
+								"auth": {
+									"type": "noauth"
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/ai/ws-info",
+									"host": ["{{baseUrl}}"],
+									"path": ["ai", "ws-info"]
+								},
+								"description": "WebSocket qo'llanmasi va ulanish ma'lumotlari"
+							},
+							"response": []
+						},
+						{
+							"name": "Create Chat",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"category\": \"conversation\",\n    \"title\": \"Haydovchi bilan suhbat\"\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/ai/chats",
+									"host": ["{{baseUrl}}"],
+									"path": ["ai", "chats"]
+								},
+								"description": "Yangi chat yaratish.\n\nKategoriyalar: complaint, suggestion, conversation, ai_command, support"
+							},
+							"response": []
+						},
+						{
+							"name": "List My Chats",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/ai/chats",
+									"host": ["{{baseUrl}}"],
+									"path": ["ai", "chats"]
+								},
+								"description": "Mening barcha chatlarim ro'yxati"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Chat Details",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/ai/chats/{{chatId}}",
+									"host": ["{{baseUrl}}"],
+									"path": ["ai", "chats", "{{chatId}}"]
+								},
+								"description": "Chat tafsilotlari"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Chat Messages",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/ai/chats/{{chatId}}/messages",
+									"host": ["{{baseUrl}}"],
+									"path": ["ai", "chats", "{{chatId}}", "messages"],
+									"query": [
+										{
+											"key": "limit",
+											"value": "50",
+											"disabled": true
+										},
+										{
+											"key": "before_id",
+											"value": "",
+											"disabled": true
+										}
+									]
+								},
+								"description": "Chat xabarlari (pagination: limit, before_id)"
+							},
+							"response": []
+						},
+						{
+							"name": "Edit Message",
+							"request": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"content\": \"Tahrirlangan xabar matni\"\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/ai/messages/{{messageId}}",
+									"host": ["{{baseUrl}}"],
+									"path": ["ai", "messages", "{{messageId}}"]
+								},
+								"description": "Xabarni tahrirlash. Faqat o'z xabaringizni o'zgartira olasiz."
+							},
+							"response": []
+						},
+						{
+							"name": "Delete Message",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/ai/messages/{{messageId}}",
+									"host": ["{{baseUrl}}"],
+									"path": ["ai", "messages", "{{messageId}}"]
+								},
+								"description": "Xabarni o'chirish. Faqat o'z xabaringiz."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Upload Media",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"description": "Media fayl (rasm, video, audio, dokument)"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/ai/upload",
+							"host": ["{{baseUrl}}"],
+							"path": ["ai", "upload"]
+						},
+						"description": "Media fayl yuklash. Javobda `url` va `filename` qaytadi."
+					},
+					"response": []
+				},
+				{
+					"name": "Submit Rating",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"order_id\": 1,\n    \"target_type\": \"driver\",\n    \"target_driver\": 1,\n    \"score\": 5,\n    \"comment\": \"Juda yaxshi xizmat!\",\n    \"criteria_scores\": {\n        \"speed\": 5,\n        \"safety\": 5,\n        \"communication\": 4\n    }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/ai/ratings",
+							"host": ["{{baseUrl}}"],
+							"path": ["ai", "ratings"]
+						},
+						"description": "Baho berish (1-5 ball).\n\ntarget_type: user yoki driver"
+					},
+					"response": []
+				},
+				{
+					"name": "My AI Usage",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/ai/me/usage",
+							"host": ["{{baseUrl}}"],
+							"path": ["ai", "me", "usage"]
+						},
+						"description": "Bugungi AI sarflari: ishlatilgan so'rovlar, kunlik limit, ruxsat holati"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Admin — AI",
+			"description": "Admin: AI model boshqaruvi, foydalanuvchi limiti, usage statistikasi",
+			"item": [
+				{
+					"name": "AI Settings",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/ai/admin/settings",
+							"host": ["{{baseUrl}}"],
+							"path": ["ai", "admin", "settings"]
+						},
+						"description": "AI sozlamalari: joriy model, mavjud modellar, free/pro limitlar"
+					},
+					"response": []
+				},
+				{
+					"name": "List AI Models",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/ai/admin/models",
+							"host": ["{{baseUrl}}"],
+							"path": ["ai", "admin", "models"]
+						},
+						"description": "Mavjud AI modellar ro'yxati"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current AI Model",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/ai/admin/model",
+							"host": ["{{baseUrl}}"],
+							"path": ["ai", "admin", "model"]
+						},
+						"description": "Hozirda ishlayotgan AI model nomi"
+					},
+					"response": []
+				},
+				{
+					"name": "Set AI Model",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"model_name\": \"gemini-flash-latest\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/ai/admin/model",
+							"host": ["{{baseUrl}}"],
+							"path": ["ai", "admin", "model"]
+						},
+						"description": "AI modelni almashtirish"
+					},
+					"response": []
+				},
+				{
+					"name": "Set User AI Limit",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"daily_requests\": 100\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/ai/admin/users/{{targetUserId}}/limit",
+							"host": ["{{baseUrl}}"],
+							"path": ["ai", "admin", "users", "{{targetUserId}}", "limit"]
+						},
+						"description": "Foydalanuvchi kunlik AI so'rov limitini sozlash (0-10000000)"
+					},
+					"response": []
+				},
+				{
+					"name": "Set User Tariff",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tariff\": \"pro\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/ai/admin/users/{{targetUserId}}/tariff",
+							"host": ["{{baseUrl}}"],
+							"path": ["ai", "admin", "users", "{{targetUserId}}", "tariff"]
+						},
+						"description": "Foydalanuvchi tarifini sozlash: `free` yoki `pro`"
+					},
+					"response": []
+				},
+				{
+					"name": "AI Usage Stats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/ai/admin/usage",
+							"host": ["{{baseUrl}}"],
+							"path": ["ai", "admin", "usage"],
+							"query": [
+								{
+									"key": "user_id",
+									"value": "",
+									"disabled": true,
+									"description": "Muayyan user uchun filtr"
+								},
+								{
+									"key": "date_from",
+									"value": "2026-01-01",
+									"disabled": true,
+									"description": "YYYY-MM-DD"
+								},
+								{
+									"key": "date_to",
+									"value": "2026-12-31",
+									"disabled": true,
+									"description": "YYYY-MM-DD"
+								}
+							]
+						},
+						"description": "Barcha foydalanuvchilar AI sarflari statistikasi (requests, tokens)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Admin — System",
+			"description": "Admin panel: dashboard, foydalanuvchilar, buyurtmalar, AI buyruqlari, haydovchi lokatsiyalari",
+			"item": [
+				{
+					"name": "Dashboard Stats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/system/dashboard/stats",
+							"host": ["{{baseUrl}}"],
+							"path": ["system", "dashboard", "stats"]
+						},
+						"description": "Boshqaruv paneli statistikasi: foydalanuvchilar, haydovchilar, buyurtmalar, AI sarflari"
+					},
+					"response": []
+				},
+				{
+					"name": "List Users",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/system/users",
+							"host": ["{{baseUrl}}"],
+							"path": ["system", "users"],
+							"query": [
+								{
+									"key": "role",
+									"value": "",
+									"disabled": true,
+									"description": "admin, sender, driver, guest"
+								},
+								{
+									"key": "is_banned",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "is_active",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "search",
+									"value": "",
+									"disabled": true,
+									"description": "Ism/telefon bo'yicha qidiruv"
+								},
+								{
+									"key": "skip",
+									"value": "0",
+									"disabled": true
+								},
+								{
+									"key": "limit",
+									"value": "50",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Barcha foydalanuvchilar ro'yxati (filtrlar, pagination)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get User",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/system/users/{{targetUserId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["system", "users", "{{targetUserId}}"]
+						},
+						"description": "Foydalanuvchi tafsilotlari"
+					},
+					"response": []
+				},
+				{
+					"name": "Update User",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"role\": \"driver\",\n    \"is_banned\": false,\n    \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/system/users/{{targetUserId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["system", "users", "{{targetUserId}}"]
+						},
+						"description": "Foydalanuvchi ma'lumotlarini yangilash (rol, ban, active, til, ism)"
+					},
+					"response": []
+				},
+				{
+					"name": "Deactivate User",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/system/users/{{targetUserId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["system", "users", "{{targetUserId}}"]
+						},
+						"description": "Foydalanuvchini deaktivatsiya qilish"
+					},
+					"response": []
+				},
+				{
+					"name": "List Orders (Admin)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/system/orders",
+							"host": ["{{baseUrl}}"],
+							"path": ["system", "orders"],
+							"query": [
+								{
+									"key": "status",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "customer_id",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "driver_id",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "date_from",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "date_to",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "skip",
+									"value": "0",
+									"disabled": true
+								},
+								{
+									"key": "limit",
+									"value": "50",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Admin: barcha buyurtmalar (filtrlar, pagination)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Order (Admin)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/system/orders/{{orderId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["system", "orders", "{{orderId}}"]
+						},
+						"description": "Buyurtma tafsilotlari (admin)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Order (Admin)",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"cancelled\",\n    \"description\": \"Admin tomonidan bekor qilindi\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/system/orders/{{orderId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["system", "orders", "{{orderId}}"]
+						},
+						"description": "Buyurtmani admin tomonidan yangilash"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Order (Admin)",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/system/orders/{{orderId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["system", "orders", "{{orderId}}"]
+						},
+						"description": "Buyurtmani o'chirish (admin)"
+					},
+					"response": []
+				},
+				{
+					"name": "AI Commands Log",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/system/ai/commands",
+							"host": ["{{baseUrl}}"],
+							"path": ["system", "ai", "commands"],
+							"query": [
+								{
+									"key": "user_id",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "status",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "command_type",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "skip",
+									"value": "0",
+									"disabled": true
+								},
+								{
+									"key": "limit",
+									"value": "50",
+									"disabled": true
+								}
+							]
+						},
+						"description": "AI buyruqlari logi"
+					},
+					"response": []
+				},
+				{
+					"name": "Online Driver Locations",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/system/drivers/locations",
+							"host": ["{{baseUrl}}"],
+							"path": ["system", "drivers", "locations"]
+						},
+						"description": "Online haydovchilar lokatsiyalari (GPS)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Driver Location",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/system/drivers/{{driverId}}/location",
+							"host": ["{{baseUrl}}"],
+							"path": ["system", "drivers", "{{driverId}}", "location"]
+						},
+						"description": "Bitta haydovchining joriy lokatsiyasi"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Admin — Tariff Payments",
+			"description": "Admin: foydalanuvchilar tarif to'lovlarini boshqarish",
+			"item": [
+				{
+					"name": "Create Payment",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"user_id\": {{targetUserId}},\n    \"billing_year\": 2026,\n    \"billing_month\": 5,\n    \"amount\": 150000,\n    \"currency\": \"UZS\",\n    \"tariff_code\": \"pro\",\n    \"note\": \"May oyi uchun to'lov\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/system/tariffs/payments",
+							"host": ["{{baseUrl}}"],
+							"path": ["system", "tariffs", "payments"]
+						},
+						"description": "Oylik to'lov yozuvi qo'shish"
+					},
+					"response": []
+				},
+				{
+					"name": "List All Payments",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/system/tariffs/payments/all",
+							"host": ["{{baseUrl}}"],
+							"path": ["system", "tariffs", "payments", "all"],
+							"query": [
+								{
+									"key": "user_id",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "skip",
+									"value": "0",
+									"disabled": true
+								},
+								{
+									"key": "limit",
+									"value": "50",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Barcha to'lov yozuvlari"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Payment",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/system/tariffs/payments/{{paymentId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["system", "tariffs", "payments", "{{paymentId}}"]
+						},
+						"description": "Bitta to'lov yozuvi tafsilotlari"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Payment",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"amount\": 200000,\n    \"note\": \"Yangilangan to'lov\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/system/tariffs/payments/{{paymentId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["system", "tariffs", "payments", "{{paymentId}}"]
+						},
+						"description": "To'lov yozuvini yangilash"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Payment",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/system/tariffs/payments/{{paymentId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["system", "tariffs", "payments", "{{paymentId}}"]
+						},
+						"description": "To'lov yozuvini o'chirish"
+					},
+					"response": []
+				},
+				{
+					"name": "User Payments",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/system/tariffs/users/{{targetUserId}}/payments",
+							"host": ["{{baseUrl}}"],
+							"path": ["system", "tariffs", "users", "{{targetUserId}}", "payments"],
+							"query": [
+								{
+									"key": "year",
+									"value": "2026",
+									"disabled": true,
+									"description": "Filtr: faqat shu yil"
+								}
+							]
+						},
+						"description": "Bitta foydalanuvchining barcha to'lov yozuvlari"
+					},
+					"response": []
+				},
+				{
+					"name": "User Monthly Summary",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/system/tariffs/users/{{targetUserId}}/summary?year=2026",
+							"host": ["{{baseUrl}}"],
+							"path": ["system", "tariffs", "users", "{{targetUserId}}", "summary"],
+							"query": [
+								{
+									"key": "year",
+									"value": "2026",
+									"description": "Yil (majburiy)"
+								}
+							]
+						},
+						"description": "Yil bo'yicha oyma-oy to'lov yig'indisi"
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

@@ -91,7 +91,28 @@ Productionda API **`/api`** prefiksi bilan chaqiriladi:
 
 `GET https://logistic.org.uz/drivers/truck-types` — bu frontend yo'li, API emas.
 
-Tayyor environment: `postman/Logistika_API.postman_environment.json` (`baseUrl` = `https://logistic.org.uz/api`).
+### Postman fayllar
+
+| Fayl | Tavsif |
+|------|--------|
+| `postman/Logistika_API.postman_collection.json` | To'liq API kolleksiyasi (70+ endpoint) |
+| `postman/Logistika_API.postman_environment.json` | Production muhiti (`baseUrl` = `https://logistic.org.uz/api`) |
+| `postman/Logistika_API_Local.postman_environment.json` | Lokal muhit (`baseUrl` = `http://localhost:8003`) |
+
+### Postman import qilish
+
+1. Postman dasturini oching
+2. **Import** tugmasini bosing
+3. `postman/` papkasidagi uchta faylni tanlang
+4. Environment tanlang (Production yoki Local)
+5. `Auth > Login` so'rovini yuboring — tokenlar avtomatik saqlanadi
+6. Boshqa so'rovlarni yuboring
+
+### API Dokumentatsiya
+
+To'liq API dokumentatsiyasi: [`docs/API_DOCUMENTATION.md`](docs/API_DOCUMENTATION.md)
+
+Swagger UI: `/docs` | ReDoc: `/redoc`
 
 ### AI yordamchi (faqat matn, REST)
 
