@@ -8,7 +8,6 @@ from order.schemas import (
     OrderOfferCreate, OrderOfferUpdate
 )
 
-# --- Order CRUD ---
 
 async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int) -> Order:
     waypoints_data = data.waypoints
@@ -66,7 +65,6 @@ async def delete_order(db: AsyncSession, pk: int) -> bool:
     await db.commit()
     return True
 
-# --- OrderOffer CRUD ---
 
 async def create_order_offer(db: AsyncSession, data: OrderOfferCreate) -> OrderOffer:
     obj = OrderOffer(**data.model_dump())

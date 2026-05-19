@@ -13,7 +13,6 @@ from Admin_panel.validation import is_admin
 
 router = APIRouter(prefix="/drivers", tags=["Haydovchilar (Drivers)"])
 
-# --- TruckType Endpoints ---
 
 @router.post("/truck-types", response_model=schemas.TruckTypeResponse, status_code=status.HTTP_201_CREATED, summary="Yangi mashina turi qo'shish,admin uchun")
 async def create_truck_type(
@@ -25,7 +24,6 @@ async def create_truck_type(
 
 @router.get("/truck-types", response_model=List[schemas.TruckTypeResponse], summary="Barcha mashina turlarini olish,hamma uchun")
 async def list_truck_types(db: AsyncSession = Depends(get_db)):
-    """Tizimdagi barcha mavjud yuk mashinasi turlari ro'yxatini qaytaradi."""
     return await crud.get_all_truck_types(db)
 
 @router.post("/truck-types/image", response_model=dict, summary="Truck type rasmini yuklash, admin uchun")
@@ -49,7 +47,6 @@ async def upload_truck_type_image(
 
 @router.get("/truck-types/{pk}", response_model=schemas.TruckTypeResponse, summary="Mashina turi tafsilotlari,hamma uchun")
 async def get_truck_type(pk: int, db: AsyncSession = Depends(get_db)):
-    """ID bo'yicha bitta mashina turi haqida to'liq ma'lumot olish."""
     obj = await crud.get_truck_type(db, pk)
     if not obj:
         raise HTTPException(status_code=404, detail="Truck type not found")
@@ -62,7 +59,6 @@ async def update_truck_type(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(is_admin),
 ):
-    """Mavjud mashina turi ma'lumotlarini yangilash."""
     obj = await crud.update_truck_type(db, pk, data)
     if not obj:
         raise HTTPException(status_code=404, detail="Truck type not found")
@@ -74,11 +70,9 @@ async def delete_truck_type(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(is_admin),
 ):
-    """Mashina turini tizimdan o'chirish."""
     await crud.delete_truck_type(db, pk)
     return None
 
-# --- Driver Profile Endpoints ---
 
 @router.post("/profile", response_model=schemas.DriverResponse, status_code=status.HTTP_201_CREATED, summary="Haydovchi profilini yaratish")
 async def create_driver_profile(
@@ -86,7 +80,6 @@ async def create_driver_profile(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Foydalanuvchi uchun haydovchi profilini ochish."""
     existing = await crud.get_driver_by_user_id(db, current_user.id)
     if existing:
         raise HTTPException(status_code=400, detail="Driver profile already exists")
@@ -102,7 +95,6 @@ async def get_my_driver_profile(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Tizimga kirgan haydovchining shaxsiy profilini ko'rish."""
     obj = await crud.get_driver_by_user_id(db, current_user.id)
     if not obj:
         raise HTTPException(status_code=404, detail="Driver profile not found")
@@ -114,7 +106,6 @@ async def update_my_driver_profile(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Haydovchi o'z profil ma'lumotlarini yangilashi."""
     driver = await crud.get_driver_by_user_id(db, current_user.id)
     if not driver:
         raise HTTPException(status_code=404, detail="Driver profile not found")
@@ -125,7 +116,6 @@ async def update_my_driver_profile(
 
 
 
-# --- DriverAnnouncement Endpoints ---
 
 @router.post("/announcements", response_model=schemas.DriverAnnouncementResponse, status_code=status.HTTP_201_CREATED, summary="Safar e'loni berish")
 async def create_announcement(
@@ -133,7 +123,6 @@ async def create_announcement(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Haydovchi tomonidan safar rejasini e'lon qilish."""
     driver = await crud.get_driver(db, data.driver_id)
     if not driver or driver.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
@@ -146,7 +135,6 @@ async def list_announcements(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Barcha haydovchilarning safar e'lonlarini ko'rish."""
     return await crud.get_all_announcements(db, driver_id)
 
 @router.get("/announcements/{pk}", response_model=schemas.DriverAnnouncementResponse, summary="E'lon tafsilotlari")
@@ -155,13 +143,11 @@ async def get_announcement(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Bitta e'lon haqida to'liq ma'lumot."""
     obj = await crud.get_announcement(db, pk)
     if not obj:
         raise HTTPException(status_code=404, detail="Announcement not found")
     return obj
 
-# --- AnnouncementOffer Endpoints ---
 
 @router.post("/announcements/{announcement_id}/offers", response_model=schemas.AnnouncementOfferResponse, status_code=status.HTTP_201_CREATED, summary="E'longa taklif berish")
 async def make_offer_on_announcement(
@@ -170,7 +156,6 @@ async def make_offer_on_announcement(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Mijoz haydovchi e'loniga o'z yukini taklif qilishi."""
     offer_data = schemas.AnnouncementOfferCreate(
         announcement_id=announcement_id,
         customer_id=current_user.id,
@@ -184,7 +169,6 @@ async def list_offers_on_announcement(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Haydovchi o'z e'loniga kelgan barcha takliflarni ko'rishi."""
     announcement = await crud.get_announcement(db, announcement_id)
     if not announcement:
         raise HTTPException(status_code=404, detail="E'lon topilmadi")
@@ -202,7 +186,6 @@ async def update_offer(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Taklif statusini o'zgartirish (qabul qilish yoki rad etish)."""
     offer = await crud.get_announcement_offer(db, pk)
     if not offer:
         raise HTTPException(status_code=404, detail="Taklif topilmadi")

@@ -11,15 +11,12 @@ try:
 except ImportError:
     genai = None
 
-# Setup logging
 logger = logging.getLogger(__name__)
 
-# Load .env file
 load_dotenv()
 
 
 def get_required_env(key: str, default: str | None = None) -> str:
-    """Get environment variable with validation."""
     value = os.getenv(key, default)
     if not value:
         error_msg = f"❌ CRITICAL: Environment variable '{key}' is not set. Check .env file or set it manually."
@@ -29,22 +26,16 @@ def get_required_env(key: str, default: str | None = None) -> str:
 
 
 def get_optional_env(key: str, default: str | None = None) -> str | None:
-    """Get optional environment variable."""
     return os.getenv(key, default)
 
 
-# ─────────────────────────────────────────────────────────────
-# BOT & WEB CONFIGURATION
-# ─────────────────────────────────────────────────────────────
+
 BOT_TOKEN = get_required_env('BOT_TOKEN')
 WEBAPP_URL = get_optional_env('WEBAPP_URL', 'http://localhost:8000')
-# Tashqi domen orqali API (Postman, Swagger): https://logistic.org.uz/api/...
 API_PUBLIC_PREFIX = (get_optional_env("API_PUBLIC_PREFIX", "/api") or "/api").rstrip("/") or "/api"
 ADMIN_IDS: set[int] = {int(i.strip()) for i in get_optional_env("ADMIN", "").split(",") if i.strip()}
 
-# ─────────────────────────────────────────────────────────────
-# AI CONFIGURATION
-# ─────────────────────────────────────────────────────────────
+
 API_KEY = get_optional_env('API_KEY')
 client = genai.Client(api_key=API_KEY) if genai and API_KEY else None
 MODEL_NAME = get_optional_env('MODEL_NAME', 'gemini-flash-latest')
@@ -53,30 +44,22 @@ AI_DAILY_LIMIT_PRO = int(get_optional_env("AI_DAILY_LIMIT_PRO", "500"))
 
 
 
-# JWT CONFIGURATION
-# ─────────────────────────────────────────────────────────────
 SECRET_KEY = get_required_env('SECRET_KEY')
 ALGORITHM = get_optional_env('ALGORITHM', 'HS256')
 ACCESS_TOKEN_EXPIRE_MINUTES = int(get_optional_env('ACCESS_TOKEN_EXPIRE_MINUTES', '60'))
 REFRESH_TOKEN_EXPIRE_DAYS = int(get_optional_env('REFRESH_TOKEN_EXPIRE_DAYS', '1'))
 
-# ─────────────────────────────────────────────────────────────
-# REDIS CONFIGURATION
-# ─────────────────────────────────────────────────────────────
+
 REDIS_HOST = get_optional_env('REDIS_HOST', 'logistika_redis')
 REDIS_PORT = int(get_optional_env('REDIS_PORT', '6379'))
 REDIS_DB = int(get_optional_env('REDIS_DB', '2'))
 
-# ─────────────────────────────────────────────────────────────
-# DRIVER LIVE LOCATION
-# ─────────────────────────────────────────────────────────────
+
 LIVE_LOC_TTL_SEC = int(get_optional_env("LIVE_LOC_TTL_SEC", "120"))
 LIVE_LOC_DB_THROTTLE_SEC = int(get_optional_env("LIVE_LOC_DB_THROTTLE_SEC", "60"))
 LIVE_LOC_DEFAULT_PERIOD_SEC = int(get_optional_env("LIVE_LOC_DEFAULT_PERIOD_SEC", "1800"))
 
-# ─────────────────────────────────────────────────────────────
-# LOGGING & ENVIRONMENT
-# ─────────────────────────────────────────────────────────────
+
 ENVIRONMENT = get_optional_env('ENVIRONMENT', 'development')
 LOG_LEVEL = get_optional_env('LOG_LEVEL', 'INFO')
 
@@ -123,10 +106,8 @@ LANG_DIRECTIVE = {
     "ru":      "Ваши ответы должны быть всегда на русском языке.",
 }
 
-# Default model — Redis/DB'da override qilinishi mumkin
 DEFAULT_AI_DAILY_LIMIT = int(get_optional_env("AI_DAILY_LIMIT", "50"))
 
-# Admin tomonidan tanlash mumkin bo'lgan model'lar
 AVAILABLE_AI_MODELS = [
     "gemini-flash-latest",
     "gemini-2.0-flash",

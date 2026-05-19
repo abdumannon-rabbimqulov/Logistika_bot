@@ -38,7 +38,6 @@ class DocumentType(str, Enum):
     MEDICAL_CERT      = "medical_cert"
     OTHER             = "other"
 
-# --- TruckType Schemas ---
 
 class TruckTypeBase(BaseModel):
     name: str = Field()
@@ -72,7 +71,6 @@ class TruckTypeResponse(TruckTypeBase):
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
-# --- Driver Schemas ---
 
 class DriverBase(BaseModel):
     truck_type_id: int = Field(..., description="Yuk mashinasi turi ID si")
@@ -83,7 +81,6 @@ class DriverBase(BaseModel):
 
 
 class DriverCreate(DriverBase):
-    # Aloqa raqami Driver modelida emas, User.phone_number ga yoziladi.
     phone_number: Optional[str] = Field(None, max_length=20, description="Aloqa raqami (User.phone_number ga yoziladi)")
 
     model_config = ConfigDict(
@@ -131,7 +128,6 @@ class DriverResponse(BaseModel):
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
-# --- DriverDocument Schemas ---
 
 class DriverDocumentBase(BaseModel):
     doc_type: DocumentType = Field(...)
@@ -156,7 +152,6 @@ class DriverDocumentResponse(DriverDocumentBase):
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
-# --- AnnouncementWaypoint Schemas ---
 
 class AnnouncementWaypointBase(BaseModel):
     sequence: int = Field(1)
@@ -179,7 +174,6 @@ class AnnouncementWaypointResponse(AnnouncementWaypointBase):
     announcement_id: int
     model_config = ConfigDict(from_attributes=True)
 
-# --- DriverAnnouncement Schemas ---
 
 class DriverAnnouncementBase(BaseModel):
     price: Decimal = Field(...)
@@ -230,7 +224,6 @@ class DriverAnnouncementResponse(DriverAnnouncementBase):
     waypoints: List[AnnouncementWaypointResponse]
     model_config = ConfigDict(from_attributes=True)
 
-# --- AnnouncementOffer Schemas ---
 
 class AnnouncementOfferBase(BaseModel):
     cargo_name: str = Field(...)

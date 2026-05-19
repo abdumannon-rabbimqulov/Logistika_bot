@@ -12,7 +12,6 @@ from driver.schemas import (
     AnnouncementOfferCreate, AnnouncementOfferUpdate,
 )
 
-# --- TruckType CRUD ---
 
 async def create_truck_type(db: AsyncSession, data: TruckTypeCreate) -> TruckType:
     obj = TruckType(**data.model_dump())
@@ -39,7 +38,6 @@ async def delete_truck_type(db: AsyncSession, pk: int) -> bool:
     await db.commit()
     return True
 
-# --- Driver CRUD ---
 
 async def create_driver(db: AsyncSession, data: DriverCreate, *, user_id: int) -> Driver:
     payload = data.model_dump(exclude={"phone_number"})
@@ -70,7 +68,6 @@ async def update_driver(db: AsyncSession, pk: int, data: DriverUpdate) -> Option
 
 
 
-# --- DriverAnnouncement CRUD ---
 
 async def create_announcement(db: AsyncSession, data: DriverAnnouncementCreate) -> DriverAnnouncement:
     waypoints_data = data.waypoints
@@ -79,7 +76,7 @@ async def create_announcement(db: AsyncSession, data: DriverAnnouncementCreate) 
     
     obj = DriverAnnouncement(**ann_dict)
     db.add(obj)
-    await db.flush()  # To get obj.id
+    await db.flush()
     
     for wp_data in waypoints_data:
         wp = AnnouncementWaypoint(announcement_id=obj.id, **wp_data.model_dump())
@@ -90,7 +87,6 @@ async def create_announcement(db: AsyncSession, data: DriverAnnouncementCreate) 
     return obj
 
 async def get_announcement(db: AsyncSession, pk: int) -> Optional[DriverAnnouncement]:
-    # Need to load waypoints
     from sqlalchemy.orm import selectinload
     result = await db.execute(
         select(DriverAnnouncement)
@@ -112,7 +108,6 @@ async def update_announcement(db: AsyncSession, pk: int, data: DriverAnnouncemen
     await db.commit()
     return await get_announcement(db, pk)
 
-# --- AnnouncementOffer CRUD ---
 
 async def create_announcement_offer(db: AsyncSession, data: AnnouncementOfferCreate) -> AnnouncementOffer:
     obj = AnnouncementOffer(**data.model_dump())
@@ -121,9 +116,11 @@ async def create_announcement_offer(db: AsyncSession, data: AnnouncementOfferCre
     await db.refresh(obj)
     return obj
 
+
 async def get_announcement_offer(db: AsyncSession, pk: int) -> Optional[AnnouncementOffer]:
     result = await db.execute(select(AnnouncementOffer).where(AnnouncementOffer.id == pk))
     return result.scalar_one_or_none()
+
 
 async def get_announcement_offers(db: AsyncSession, announcement_id: int) -> List[AnnouncementOffer]:
     result = await db.execute(select(AnnouncementOffer).where(AnnouncementOffer.announcement_id == announcement_id))

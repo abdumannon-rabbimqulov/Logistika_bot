@@ -7,7 +7,6 @@ from keyboards.reply import (
     get_language_keyboard,
     get_phone_keyboard,
     get_role_keyboard,
-    get_driver_live_location_keyboard,
 )
 from users.models import UserRole
 import database as db
@@ -49,19 +48,6 @@ async def cmd_start(message: types.Message, state: FSMContext):
         elif user.language == "uz_cyrl":
             greet = "Ассалому алайкум"
             help_text = "Сизга қандай ёрдам бера оламан?"
-        else:
-            greet = "Assalomu alaykum"
-            help_text = "Sizga qanday yordam bera olaman?"
-        reply_markup = (
-            get_driver_live_location_keyboard(user.language)
-            if user.role == UserRole.DRIVER
-            else types.ReplyKeyboardRemove()
-        )
-        await message.answer(
-            f"{greet}, {message.from_user.full_name}! 👋\n"
-            f"{help_text}",
-            reply_markup=reply_markup
-        )
     else:
         await message.answer(
             "Assalomu alaykum! Botdan foydalanish uchun tilni tanlang:\n"
@@ -147,12 +133,6 @@ async def select_role(message: types.Message, state: FSMContext):
             f"✅ Ro'yxatdan o'tdingiz, {tg_user.full_name}!\n"
             "Endi bot xizmatlaridan foydalanishingiz mumkin."
         )
-    reply_markup = (
-        get_driver_live_location_keyboard(lang)
-        if role == UserRole.DRIVER
-        else types.ReplyKeyboardRemove()
-    )
-    await message.answer(text, reply_markup=reply_markup)
     await state.clear()
 
 

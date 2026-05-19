@@ -15,9 +15,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ai.models import Chat,Rating
     from order.models import OrderOffer
-# ═══════════════════════════════════════════════
-# ENUM lar
-# ═══════════════════════════════════════════════
 
 class AnnouncementOfferStatus(enum.Enum):
     PENDING   = "pending"
@@ -48,9 +45,7 @@ class DriverVerificationStatus(enum.Enum):
     REJECTED = "rejected"
 
 
-# ═══════════════════════════════════════════════
-# TRUCK TYPE — Yuk mashinasi turi
-# ═══════════════════════════════════════════════
+
 
 class TruckType(Base):
     __tablename__ = "truck_types"
@@ -58,7 +53,6 @@ class TruckType(Base):
     id   : Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name : Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
 
-    # O'lcham va sig'im
     max_weight      : Mapped[float]      = mapped_column(Numeric(6, 2), nullable=False)   # tonna
     max_volume      : Mapped[float]      = mapped_column(Numeric(6, 2), nullable=False)   # m³
     length          : Mapped[float|None] = mapped_column(Numeric(5, 2), nullable=True)    # m
@@ -66,22 +60,18 @@ class TruckType(Base):
     height          : Mapped[float|None] = mapped_column(Numeric(5, 2), nullable=True)    # m
     pallet_capacity : Mapped[int|None]   = mapped_column(Integer,       nullable=True)
 
-    # Meta
+
     image_url   : Mapped[str|None]  = mapped_column(String(512), nullable=True)   # ikonka / rasm
     description : Mapped[str|None]  = mapped_column(String(200), nullable=True)
     is_active   : Mapped[bool]      = mapped_column(Boolean, default=True)
     created_at  : Mapped[datetime]  = mapped_column(DateTime, default=func.now())
 
-    # Relationships
     drivers : Mapped[list["Driver"]] = relationship("Driver", back_populates="truck_type_obj")
 
     def __repr__(self) -> str:
         return f"<TruckType(id={self.id}, name='{self.name}')>"
 
 
-# ═══════════════════════════════════════════════
-# DRIVER — Haydovchi
-# ═══════════════════════════════════════════════
 
 class Driver(Base):
     __tablename__ = "drivers"
@@ -96,14 +86,12 @@ class Driver(Base):
     current_city   : Mapped[str|None]     = mapped_column(String(300))
     current_region : Mapped[str|None]= mapped_column(String(100))
 
-    # Real-time GPS
     is_live_location_active  : Mapped[bool]         = mapped_column(Boolean,  default=False)
     live_location_expires    : Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
     last_latitude            : Mapped[float|None]    = mapped_column(Float,    nullable=True)
     last_longitude           : Mapped[float|None]    = mapped_column(Float,    nullable=True)
     last_location_at         : Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
 
-    # Statistika
     rating          : Mapped[float] = mapped_column(Numeric(3, 2), default=5.0)
     total_trips     : Mapped[int]   = mapped_column(Integer, default=0)
     cancel_count    : Mapped[int]   = mapped_column(Integer, default=0)
@@ -122,7 +110,6 @@ class Driver(Base):
     created_at : Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at : Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
 
-    # ── Relationships ─────────────────────────────
     user           = relationship("User", back_populates="driver")
     truck_type_obj : Mapped["TruckType"]              = relationship("TruckType", back_populates="drivers")
     announcements  : Mapped[list["DriverAnnouncement"]] = relationship("DriverAnnouncement", back_populates="driver")
@@ -137,7 +124,6 @@ class Driver(Base):
                             foreign_keys="[Rating.target_driver]",
                             back_populates="target_driver_obj", lazy="select")
 
-    # ── Helper property lar ───────────────────────
 
     @property
     def is_gps_live(self) -> bool:
@@ -171,7 +157,6 @@ class Driver(Base):
 
 
 
-# ═══════════════════════════════════════════════
 
 class DriverAnnouncement(Base):
     __tablename__ = "driver_announcements"
@@ -179,22 +164,19 @@ class DriverAnnouncement(Base):
     id        : Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     driver_id : Mapped[int] = mapped_column(Integer, ForeignKey("drivers.id"), nullable=False, index=True)
 
-    # Umumiy masofa (waypointlar bo'yicha hisoblanadi)
     total_distance_km : Mapped[float|None] = mapped_column(Numeric(8, 2), nullable=True)
 
-    # Narx
+
     price    : Mapped[float]     = mapped_column(Numeric(12, 2), nullable=False)
     currency : Mapped[str]       = mapped_column(String(10),     default="UZS")
 
-    # Sig'im (o'sha safar uchun qolgan bo'sh joy)
     available_weight : Mapped[float|None] = mapped_column(Numeric(6, 2), nullable=True)  # tonna
     available_volume : Mapped[float|None] = mapped_column(Numeric(6, 2), nullable=True)  # m³
 
-    # Jo'nash vaqti
+
     departure_date   : Mapped[datetime]      = mapped_column(DateTime, nullable=False)
     arrival_date     : Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
 
-    # Taklif qabul qilish muddati
     expires_at       : Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
 
     description : Mapped[str|None] = mapped_column(String(500), nullable=True)
@@ -206,7 +188,6 @@ class DriverAnnouncement(Base):
     created_at : Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at : Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
 
-    # Relationships
     driver     : Mapped["Driver"]                      = relationship("Driver", back_populates="announcements")
     waypoints  : Mapped[list["AnnouncementWaypoint"]]  = relationship(
                         "AnnouncementWaypoint",
@@ -216,7 +197,6 @@ class DriverAnnouncement(Base):
                     )
     offers     : Mapped[list["AnnouncementOffer"]]     = relationship("AnnouncementOffer", back_populates="announcement")
 
-    # ── Helper property lar ───────────────────────
 
     @property
     def origin(self) -> "AnnouncementWaypoint | None":
@@ -243,9 +223,7 @@ class DriverAnnouncement(Base):
         return f"<Announcement(id={self.id}, driver={self.driver_id}, stops={stops}, status={self.status.value})>"
 
 
-# ═══════════════════════════════════════════════
-# ANNOUNCEMENT WAYPOINT — E'lon marshrutining har bir nuqtasi
-# ═══════════════════════════════════════════════
+
 
 class AnnouncementWaypoint(Base):
     __tablename__ = "announcement_waypoints"
@@ -261,7 +239,7 @@ class AnnouncementWaypoint(Base):
                         SQLEnum(AnnouncementWaypointType), nullable=False
                     )
 
-    # Manzil
+
     city      : Mapped[str]      = mapped_column(String(100), nullable=False, index=True)
     region    : Mapped[str|None] = mapped_column(String(100), nullable=True)
     address   : Mapped[str|None] = mapped_column(String(300), nullable=True)
@@ -270,21 +248,18 @@ class AnnouncementWaypoint(Base):
     latitude  : Mapped[float|None] = mapped_column(Numeric(10, 7), nullable=True)
     longitude : Mapped[float|None] = mapped_column(Numeric(10, 7), nullable=True)
 
-    # Oldingi nuqtadan masofа
     distance_from_prev_km : Mapped[float|None] = mapped_column(Numeric(8, 2), nullable=True)
 
-    # Bu nuqtada qancha vaqt to'xtaydi (daqiqalarda)
     stop_duration_min : Mapped[int|None] = mapped_column(SmallInteger, nullable=True)
 
-    # Rejalashtirilgan vaqt
     scheduled_at : Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
 
-    # Izoh
+
     note : Mapped[str|None] = mapped_column(Text, nullable=True)
 
     created_at : Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
-    # Relationships
+
     announcement : Mapped["DriverAnnouncement"] = relationship("DriverAnnouncement", back_populates="waypoints")
 
     def __repr__(self) -> str:
@@ -294,9 +269,6 @@ class AnnouncementWaypoint(Base):
         )
 
 
-# ═══════════════════════════════════════════════
-# ANNOUNCEMENT OFFER — Mijozning e'longa taklifi
-# ═══════════════════════════════════════════════
 
 class AnnouncementOffer(Base):
     __tablename__ = "announcement_offers"
@@ -305,17 +277,14 @@ class AnnouncementOffer(Base):
     announcement_id : Mapped[int] = mapped_column(Integer, ForeignKey("driver_announcements.id"), nullable=False, index=True)
     customer_id     : Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
 
-    # Yuk ma'lumotlari
     cargo_name        : Mapped[str]        = mapped_column(String(200),   nullable=False)
     cargo_description : Mapped[str|None]   = mapped_column(String(500),   nullable=True)
     cargo_weight      : Mapped[float|None] = mapped_column(Numeric(6, 2), nullable=True)   # tonna
     cargo_volume      : Mapped[float|None] = mapped_column(Numeric(6, 2), nullable=True)   # m³
 
-    # Qaysi nuqtadan qaysi nuqtaga (e'lon marshruti ichidan)
     pickup_city   : Mapped[str|None] = mapped_column(String(100), nullable=True)
     delivery_city : Mapped[str|None] = mapped_column(String(100), nullable=True)
 
-    # Narx muzakarasi
     offered_price   : Mapped[float]       = mapped_column(Numeric(12, 2), nullable=False)
     currency        : Mapped[str]         = mapped_column(String(10),     default="UZS")
     counter_price   : Mapped[float|None]  = mapped_column(Numeric(12, 2), nullable=True)
@@ -324,11 +293,9 @@ class AnnouncementOffer(Base):
 
     comment : Mapped[str|None] = mapped_column(String(500), nullable=True)
 
-    # Ko'rindi / ko'rilmadi
     is_seen : Mapped[bool]          = mapped_column(Boolean,  default=False)
     seen_at : Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
 
-    # Taklif muddati
     expires_at : Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
 
     status : Mapped[AnnouncementOfferStatus] = mapped_column(
@@ -339,17 +306,14 @@ class AnnouncementOffer(Base):
     )
     status_reason : Mapped[str|None] = mapped_column(String(300), nullable=True)
 
-    # Timestamps
     created_at   : Mapped[datetime]        = mapped_column(DateTime, default=func.now())
     updated_at   : Mapped[datetime]        = mapped_column(DateTime, default=func.now(), onupdate=func.now())
     accepted_at  : Mapped[datetime|None]   = mapped_column(DateTime, nullable=True)
     cancelled_at : Mapped[datetime|None]   = mapped_column(DateTime, nullable=True)
 
-    # Relationships
     announcement : Mapped["DriverAnnouncement"] = relationship("DriverAnnouncement", back_populates="offers")
     customer                                    = relationship("User")
 
-    # ── Helper property lar ───────────────────────
 
     @property
     def final_price(self) -> float:
