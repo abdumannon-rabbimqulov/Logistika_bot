@@ -1,5 +1,6 @@
 .env
 .env.*
+!.env.example
 *.env
 .venv
 .idea
@@ -13,3 +14,5 @@ venv/
 .venv/
 env/
 ENV/
+deploy.sh
+Frontend_bot/

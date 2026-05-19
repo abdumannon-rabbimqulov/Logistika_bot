@@ -1,7 +1,7 @@
 from typing import Any, Awaitable, Callable, Dict
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, User
-from config.database import db
+import database as db
 from locales import locales
 
 class I18nMiddleware(BaseMiddleware):
@@ -13,15 +13,21 @@ class I18nMiddleware(BaseMiddleware):
     ) -> Any:
         user: User = data.get("event_from_user")
         
+        # Default language
+        lang_code = "uz"
+        
         if user:
             # Try to get user from DB
             db_user = await db.get_user(user.id)
             
             if db_user:
-                lang_code = db_user.get("language_code", "uz")
+                # User model has 'language' field
+                lang_code = db_user.language or "uz"
             else:
-                # Default to uz for new users
-                lang_code = "uz"
+                # Default to Telegram's language if supported
+                tg_lang = user.language_code
+                if tg_lang in ['uz', 'ru']:
+                    lang_code = tg_lang
             
             # Inject translation function and language code
             data["lang"] = lang_code

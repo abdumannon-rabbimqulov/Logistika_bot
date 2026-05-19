@@ -1,0 +1,149 @@
+from fastapi import FastAPI
+from config.config import (
+    engine,
+    Base,
+    UPLOAD_DIR,
+    STATIC_PATH,
+    LOG_LEVEL,
+    ENVIRONMENT,
+    API_PUBLIC_PREFIX,
+    WEBAPP_URL,
+)
+from middlewares.error_handler import setup_error_handlers, setup_logging
+import driver.models
+import order.models
+import ai.models
+import users.models
+
+# ─────────────────────────────────────────────────────────────
+# Setup logging va error handlers
+# ─────────────────────────────────────────────────────────────
+setup_logging(environment=ENVIRONMENT)
+
+from sqlalchemy.orm import configure_mappers
+configure_mappers()
+
+from driver.router import router as driver_router
+from order.router import router as order_router
+from ai.router import router as ai_router
+from users.router import router as auth_router
+from users.tariff_router import router as tariff_admin_router
+from Admin_panel.router import router as admin_router
+
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
+
+app = FastAPI(
+    title="Logistika AI API",
+    version="1.0.0",
+    description="🚀 Logistics platform with AI-powered order management",
+    servers=[
+        {"url": API_PUBLIC_PREFIX, "description": "Production (logistic.org.uz)"},
+        {"url": "", "description": "To'g'ridan-to'g'ri (localhost:8003)"},
+    ],
+)
+
+# ─────────────────────────────────────────────────────────────
+# Setup global error handlers
+# ─────────────────────────────────────────────────────────────
+setup_error_handlers(app)
+
+# Uploads papkasini static qilib ulash
+app.mount(STATIC_PATH, StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.on_event("startup")
+async def startup():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+def _register_api_routers(
+    target: FastAPI,
+    *,
+    prefix: str = "",
+    include_in_schema: bool = True,
+) -> None:
+    kwargs = {"prefix": prefix, "include_in_schema": include_in_schema}
+    target.include_router(driver_router, **kwargs)
+    target.include_router(order_router, **kwargs)
+    target.include_router(ai_router, **kwargs)
+    auth_prefix = f"{prefix}/auth".replace("//", "/")
+    target.include_router(
+        auth_router,
+        prefix=auth_prefix,
+        tags=["Auth"],
+        include_in_schema=include_in_schema,
+    )
+    target.include_router(tariff_admin_router, **kwargs)
+    target.include_router(admin_router, **kwargs)
+
+
+_register_api_routers(app)
+# Nginx /api/ → backend (prefix olib tashlanadi) va to'g'ridan-to'g'ri :8003/api/... uchun
+_register_api_routers(app, prefix=API_PUBLIC_PREFIX, include_in_schema=False)
+
+
+@app.get("/", tags=["System"], summary="API kirish nuqtasi")
+@app.get(API_PUBLIC_PREFIX, tags=["System"], include_in_schema=False)
+@app.get(f"{API_PUBLIC_PREFIX}/", tags=["System"], include_in_schema=False)
+async def api_root():
+    """Postman uchun: barcha endpointlar {API_PUBLIC_PREFIX} ostida chaqiriladi."""
+    return {
+        "service": "Logistika AI API",
+        "api_base": API_PUBLIC_PREFIX,
+        "docs": f"{API_PUBLIC_PREFIX}/docs",
+        "health": f"{API_PUBLIC_PREFIX}/health",
+        "examples": {
+            "truck_types": f"{API_PUBLIC_PREFIX}/drivers/truck-types",
+            "login": f"{API_PUBLIC_PREFIX}/auth/login",
+        },
+        "webapp_url": WEBAPP_URL,
+    }
+
+
+
+
+
+# ─────────────────────────────────────────────────────────────
+# HEALTH CHECK & STATUS ENDPOINTS
+# ─────────────────────────────────────────────────────────────
+
+@app.get("/health", tags=["System"], summary="Service health status")
+@app.get(f"{API_PUBLIC_PREFIX}/health", tags=["System"], include_in_schema=False)
+async def health_check():
+    """Service ishlayaptimi tekshirish."""
+    from datetime import datetime, timezone
+    return {
+        "status": "ok",
+        "service": "Logistika AI API",
+        "environment": ENVIRONMENT,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
+@app.get("/health/db", tags=["System"], summary="Database connection status")
+@app.get(f"{API_PUBLIC_PREFIX}/health/db", tags=["System"], include_in_schema=False)
+async def db_health():
+    """Database ulanishini tekshirish."""
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(__import__("sqlalchemy").text("SELECT 1"))
+        return {"status": "ok", "database": "connected"}
+    except Exception as e:
+        return {
+            "status": "error",
+            "database": "disconnected",
+            "error": str(e)
+        }
+
+
+
+

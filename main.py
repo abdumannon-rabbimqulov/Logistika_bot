@@ -1,11 +1,14 @@
 import asyncio
 import logging
-from aiogram import Bot, Dispatcher, types
-from config.config import BOT_TOKEN, API_KEY
+
+
+
+from config.config import  engine
 from handlers import main_router
-from middlewares.i18n import I18nMiddleware
-from middlewares.logging import ShadowLoggingMiddleware
-from database.db import db
+
+from aiogram import Dispatcher
+from handlers.bot import bot
+
 
 async def main():
     logging.basicConfig(
@@ -13,28 +16,22 @@ async def main():
         format="%(asctime)s - %(levelname)s - %(message)s"
     )
 
-    bot = Bot(token=BOT_TOKEN)
-    dp = Dispatcher()
+    dp = Dispatcher()            # Event dispatcher
 
-    dp.message.middleware(ShadowLoggingMiddleware())
-    dp.callback_query.middleware(ShadowLoggingMiddleware())
-    dp.message.middleware(I18nMiddleware())
-    dp.callback_query.middleware(I18nMiddleware())
-
-    dp.include_router(main_router)
-
-
-    await db.connect()
+    dp.include_router(main_router)   # Barcha handlerlarni ulash
 
     try:
         logging.info("🚀 Bot ishga tushirildi...")
-        await dp.start_polling(bot)
+        await dp.start_polling(bot)   # Bot polling rejimida ishlaydi
     finally:
-        await db.close()
-        await bot.session.close()
+        # ── Chiqishda resurslarni tozalash ───────────────────────────────────
+        await engine.dispose()        # DB ulanishlarini yopish
+        await bot.session.close()     # HTTP sessiyani yopish
+
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
         logging.info("⏹ Bot to'xtatildi")
+
