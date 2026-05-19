@@ -93,12 +93,35 @@ Productionda API **`/api`** prefiksi bilan chaqiriladi:
 
 Tayyor environment: `postman/Logistika_API.postman_environment.json` (`baseUrl` = `https://logistic.org.uz/api`).
 
-### AI WebSocket
+### AI yordamchi (faqat matn, REST)
 
-1. `POST /api/ai/chats/assistant` — `chat_id` oling
+Default **free** tarif: `AI_DAILY_LIMIT_FREE=50` so'rov/kun (`.env`). Model: `MODEL_NAME` yoki admin orqali o'zgartiriladi.
+
+```bash
+# Savol-javob
+POST /api/ai/assistant/message
+Authorization: Bearer {token}
+{"message": "Mening buyurtmalarimni ko'rsat"}
+
+# AI chat va tarix
+GET /api/ai/assistant/chat
+GET /api/ai/assistant/messages?chat_id=1
+```
+
+Admin AI model:
+
+```bash
+GET  /api/ai/admin/settings
+POST /api/ai/admin/model   {"model_name": "gemini-flash-latest"}
+PATCH /api/ai/admin/users/{id}/tariff   {"tariff": "free"}
+```
+
+### Chat WebSocket (user ↔ driver, AI emas)
+
+1. Peer chat yarating: `POST /api/ai/chats` (`category: conversation`)
 2. `wss://logistic.org.uz/api/ai/ws/{chat_id}?token=ACCESS_TOKEN`
 3. Yuboring: `{"type":"new_message","content":"Salom"}`
-4. Qabul qiling: `connected`, `ai_typing`, `new_message` (AI javobi)
+4. AI chat uchun WebSocket ishlatilmaydi — `POST /api/ai/assistant/message`
 
 ## Ko'p uchraydigan xatolar
 

@@ -264,17 +264,21 @@ class RatingResponse(RatingBase):
 
 
 # ─────────────────────────────────────────────────────────────
-# WebSocket payloads (voice + AI)
+# REST AI assistant
 # ─────────────────────────────────────────────────────────────
 
 
-class VoiceMessageEvent(BaseModel):
-    """WebSocket'ga `{type: voice_message}` bilan keladigan payload."""
+class AssistantMessageRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=8000)
+    chat_id: Optional[int] = Field(None, description="Bo'sh bo'lsa yangi/mavjud AI chat ochiladi")
 
-    type: str = Field("voice_message")
-    audio_b64: str = Field(..., description="base64-kodlangan audio bytes")
-    mime_type: str = Field("audio/webm", description="audio/webm | audio/ogg | ...")
-    sender_id: Optional[int] = None
+
+class AssistantMessageResponse(BaseModel):
+    reply: str
+    chat_id: int
+    used_today: int
+    daily_limit: int
+    allowed: bool = True
 
 
 # ─────────────────────────────────────────────────────────────
@@ -289,6 +293,14 @@ class SetModelRequest(BaseModel):
 class CurrentModelResponse(BaseModel):
     model_name: str
     available: List[str]
+
+
+class AdminAISettingsResponse(BaseModel):
+    current_model: str
+    available_models: List[str]
+    free_daily_limit: int
+    pro_daily_limit: int
+    default_model_env: str
 
 
 class SetUserLimitRequest(BaseModel):

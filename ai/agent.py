@@ -1157,34 +1157,6 @@ class LogistikaAgent:
         self.system_instruction = build_system_instruction(self.role, self.language)
         self.tools_decl = get_tools_for_role(self.role)
 
-    # ── STT ─────────────────────────────────────────────
-
-    async def transcribe_audio(self, audio_bytes: bytes, mime_type: str) -> str:
-        """Audio -> matn (Gemini multimodal)."""
-        if not client:
-            return ""
-        try:
-            from google.genai import types  # type: ignore
-        except Exception as exc:
-            logger.error("google.genai.types import error: %s", exc)
-            return ""
-
-        audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
-        prompt = (
-            "Transcribe this audio EXACTLY in the original spoken language. "
-            "Output ONLY the raw transcript text, no markdown, no commentary."
-        )
-        model = await get_current_model()
-
-        def _call() -> str:
-            resp = client.models.generate_content(
-                model=model,
-                contents=[prompt, audio_part],
-            )
-            return (resp.text or "").strip()
-
-        return await asyncio.to_thread(_call)
-
     # ── Asosiy oqim ────────────────────────────────────
 
     @staticmethod

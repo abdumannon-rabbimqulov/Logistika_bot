@@ -1,5 +1,3 @@
-import asyncio
-import base64
 import logging
 import os
 import shutil
@@ -15,31 +13,32 @@ from fastapi import (
     Query,
     UploadFile,
     WebSocket,
-    WebSocketDisconnect,
     status,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from Admin_panel.validation import is_admin
-from ai import agent, crud, schemas
+from ai import crud, schemas
+from ai.models import ChatCategory
+from ai.assistant import ask_assistant
+from ai.chat_ws import user_can_access_chat, websocket_peer_chat
 from ai.limits import (
     check_request_quota,
     get_usage_stats,
-    increment_usage,
     set_user_limit as set_user_limit_setting,
     set_user_tariff as set_user_tariff_setting,
 )
 from ai.settings import get_current_model, set_current_model
 from ai.websocket import manager
 from config.config import (
+    AI_DAILY_LIMIT_FREE,
+    AI_DAILY_LIMIT_PRO,
     AVAILABLE_AI_MODELS,
-    MAX_VOICE_MB,
+    MODEL_NAME,
     STATIC_PATH,
     UPLOAD_DIR,
-    async_session,
     get_db,
 )
-from driver import crud as driver_crud
 from users import crud as users_crud
 from users.auth import get_current_user
 from users.models import User
@@ -49,406 +48,109 @@ router = APIRouter(prefix="/ai", tags=["Logistika AI & Chat"])
 
 
 # ════════════════════════════════════════════════
-# WEBSOCKET — Real-vaqtda muloqot va AI Agent
+# WEBSOCKET — faqat user ↔ user/driver chat
 # ════════════════════════════════════════════════
 
 
 @router.get("/ws-info", tags=["Documentation"])
 async def websocket_info():
-    """AI Agent va Chat uchun WebSocket qo'llanmasi."""
+    """Peer chat WebSocket qo'llanmasi (AI bu yerda emas)."""
     from config.config import API_PUBLIC_PREFIX
 
     base = API_PUBLIC_PREFIX or ""
     return {
         "url": f"wss://logistic.org.uz{base}/ai/ws/{{chat_id}}?token=YOUR_ACCESS_TOKEN",
-        "authentication": "JWT access tokenni query parameter sifatida yuboring",
-        "ai_chat": f"POST {base}/ai/chats/assistant — AI chat yaratish/olish",
+        "note": "AI yordamchi uchun WebSocket emas — POST /ai/assistant/message",
+        "ai_assistant": f"POST {base}/ai/assistant/message",
         "events_sent_by_user": [
             {"type": "ping"},
-            {"type": "new_message", "content": "matn", "invoke_ai": True},
-            {
-                "type": "voice_message",
-                "audio_b64": "<base64>",
-                "mime_type": "audio/webm",
-            },
+            {"type": "new_message", "content": "matn"},
         ],
         "events_received": [
             {"event": "connected", "data": {"chat_id": 1, "messages": []}},
             {"event": "pong"},
             {"event": "new_message", "data": {"...": "Message"}},
-            {"event": "ai_typing", "active": True},
-            {"event": "ai_action", "action": "Bajarilmoqda: ..."},
-            {"event": "ai_limit_exceeded", "used": 50, "limit": 50},
+            {"event": "message_edited"},
+            {"event": "message_deleted"},
             {"event": "error", "message": "..."},
         ],
-        "error_codes": {"1008": "Invalid token / no access"},
+        "error_codes": {
+            "1008": "Invalid token / no access / AI chat (use REST instead)",
+        },
     }
-
-
-async def _send(websocket: WebSocket, payload: dict) -> None:
-    try:
-        await websocket.send_json(payload)
-    except Exception as exc:
-        logger.warning("WS send failed: %s", exc)
-
-
-def _message_payload(msg) -> dict:
-    return schemas.MessageResponse.model_validate(msg).model_dump(mode="json")
-
-
-async def _user_can_access_chat(db: AsyncSession, chat, user_id: int) -> bool:
-    if chat.user_id == user_id:
-        return True
-    if chat.driver_id:
-        driver = await driver_crud.get_driver(db, chat.driver_id)
-        return bool(driver and driver.user_id == user_id)
-    return False
-
-
-def _should_invoke_ai(*, is_ai_chat: bool, payload: dict) -> bool:
-    if payload.get("invoke_ai") is False:
-        return False
-    if is_ai_chat:
-        return True
-    return bool(payload.get("invoke_ai"))
-
-
-async def _run_ai_flow(
-    db: AsyncSession,
-    websocket: WebSocket,
-    chat_id: int,
-    user: User,
-    log_agent: agent.LogistikaAgent,
-    transcript: str,
-    *,
-    is_ai_chat: bool,
-    invoke_ai: bool,
-    exclude_message_id: Optional[int],
-    on_action_callback,
-) -> None:
-    """Quota + kontekst + AI javob + DB + broadcast."""
-    if not _should_invoke_ai(is_ai_chat=is_ai_chat, payload={"invoke_ai": invoke_ai}):
-        return
-
-    allowed, used, limit = await check_request_quota(db, user)
-    if not allowed:
-        await _send(
-            websocket,
-            {
-                "event": "ai_limit_exceeded",
-                "message": f"Kunlik {limit} so'rov limiti tugagan.",
-                "used": used,
-                "limit": limit,
-            },
-        )
-        return
-
-    history = await crud.build_agent_history(
-        db, chat_id, exclude_message_id=exclude_message_id
-    )
-
-    await manager.broadcast({"event": "ai_typing", "active": True}, chat_id)
-    try:
-        ai_text, usage = await asyncio.wait_for(
-            log_agent.process_message(
-                transcript,
-                chat_id=chat_id,
-                history=history,
-                on_action_callback=on_action_callback,
-            ),
-            timeout=90,
-        )
-    except asyncio.TimeoutError:
-        await _send(websocket, {"event": "error", "message": "AI javob bermadi (timeout)"})
-        return
-    except Exception as exc:
-        logger.error("AI flow error chat=%s: %s", chat_id, exc, exc_info=True)
-        await _send(websocket, {"event": "error", "message": f"AI xatosi: {exc}"})
-        return
-    finally:
-        await manager.broadcast({"event": "ai_typing", "active": False}, chat_id)
-
-    await increment_usage(
-        db,
-        user.id,
-        requests=1,
-        input_tokens=usage.get("input", 0),
-        output_tokens=usage.get("output", 0),
-    )
-
-    async with async_session() as db2:
-        ai_msg = await crud.create_message(
-            db2,
-            schemas.MessageCreate(
-                chat_id=chat_id,
-                sender_id=None,
-                sender_type=schemas.SenderType.AI,
-                message_type=schemas.MessageType.AI_REPLY,
-                content=ai_text,
-                is_ai_response=True,
-            ),
-        )
-        payload = {"event": "new_message", "data": _message_payload(ai_msg)}
-        await manager.broadcast(payload, chat_id)
 
 
 @router.websocket("/ws/{chat_id}")
 async def websocket_endpoint(websocket: WebSocket, chat_id: int):
-    """AI Agent + Chat WebSocket. Tokendan user_id, role, language olinadi."""
-    from ai.websocket import verify_websocket_token
-
-    token = websocket.query_params.get("token")
-    user_id = verify_websocket_token(token)
-    if user_id is None:
-        await websocket.close(
-            code=status.WS_1008_POLICY_VIOLATION,
-            reason="Invalid or missing authentication token",
-        )
-        return
-
-    # ── Connection-level cache (User, Chat) ─────────────────
-    async with async_session() as db:
-        user = await users_crud.get_user_by_id(db, user_id)
-        if not user:
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="User not found")
-            return
-
-        chat_obj = await crud.get_chat(db, chat_id)
-        if not chat_obj:
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Chat not found")
-            return
-
-        if not await _user_can_access_chat(db, chat_obj, user_id):
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Access denied")
-            return
-
-        user_lang = user.language or "uz"
-        user_role = user.role.value if user.role else "guest"
-        is_ai_chat = chat_obj.category == schemas.ChatCategory.AI_COMMAND
-
-    await manager.connect(websocket, chat_id, user_id)
-    logger.info(
-        "WebSocket connected: user=%s role=%s lang=%s chat=%s",
-        user_id, user_role, user_lang, chat_id,
-    )
-
-    log_agent = agent.LogistikaAgent(user_id=user_id, role=user_role, language=user_lang)
-
-    async def ai_action_callback(action_text: str):
-        await manager.broadcast({"event": "ai_action", "action": action_text}, chat_id)
-
-    async with async_session() as db:
-        recent = await crud.list_chat_messages(db, chat_id, limit=40)
-    await _send(
-        websocket,
-        {
-            "event": "connected",
-            "data": {
-                "chat_id": chat_id,
-                "is_ai_chat": is_ai_chat,
-                "user_id": user_id,
-                "role": user_role,
-                "messages": [_message_payload(m) for m in recent],
-            },
-        },
-    )
-
-    try:
-        while True:
-            data = await websocket.receive_json()
-            msg_type = data.get("type")
-
-            if msg_type == "ping":
-                await _send(websocket, {"event": "pong"})
-                continue
-
-            # ── Matnli xabar ──────────────────────────────
-            if msg_type == "new_message":
-                content = (data.get("content") or "").strip()
-                if not content:
-                    await _send(websocket, {"event": "error", "message": "Bo'sh xabar"})
-                    continue
-
-                async with async_session() as db:
-                    user_msg = await crud.create_message(
-                        db,
-                        schemas.MessageCreate(
-                            chat_id=chat_id,
-                            sender_id=data.get("sender_id", user_id),
-                            sender_type=schemas.SenderType.USER,
-                            content=content,
-                        ),
-                    )
-                    await manager.broadcast(
-                        {"event": "new_message", "data": _message_payload(user_msg)},
-                        chat_id,
-                    )
-
-                async with async_session() as db:
-                    fresh_user = await users_crud.get_user_by_id(db, user_id) or user
-                    await _run_ai_flow(
-                        db,
-                        websocket,
-                        chat_id,
-                        fresh_user,
-                        log_agent,
-                        content,
-                        is_ai_chat=is_ai_chat,
-                        invoke_ai=data.get("invoke_ai", is_ai_chat),
-                        exclude_message_id=user_msg.id,
-                        on_action_callback=ai_action_callback,
-                    )
-
-            # ── Ovozli xabar ──────────────────────────────
-            elif msg_type == "voice_message":
-                audio_b64 = data.get("audio_b64")
-                mime_type = data.get("mime_type", "audio/webm")
-                if not audio_b64:
-                    await _send(websocket, {"event": "error", "message": "audio_b64 yo'q"})
-                    continue
-                if not mime_type.startswith("audio/"):
-                    await _send(
-                        websocket,
-                        {"event": "error", "message": f"Noto'g'ri mime: {mime_type}"},
-                    )
-                    continue
-
-                try:
-                    audio_bytes = base64.b64decode(audio_b64)
-                except Exception:
-                    await _send(websocket, {"event": "error", "message": "Audio dekod xato"})
-                    continue
-
-                if len(audio_bytes) > MAX_VOICE_MB * 1024 * 1024:
-                    await _send(
-                        websocket,
-                        {
-                            "event": "error",
-                            "message": f"Audio juda katta (>{MAX_VOICE_MB}MB)",
-                        },
-                    )
-                    continue
-
-                # Quota check (voice ham 1 ta request)
-                async with async_session() as db:
-                    fresh_user = await users_crud.get_user_by_id(db, user_id) or user
-                    allowed, used, limit = await check_request_quota(db, fresh_user)
-                if not allowed:
-                    await _send(
-                        websocket,
-                        {
-                            "event": "ai_limit_exceeded",
-                            "message": f"Kunlik {limit} so'rov limiti tugagan.",
-                            "used": used,
-                            "limit": limit,
-                        },
-                    )
-                    continue
-
-                # Faylga yozamiz
-                ext = mime_type.split("/")[-1].split(";")[0] or "bin"
-                fname = f"{uuid.uuid4()}.{ext}"
-                fpath = os.path.join(UPLOAD_DIR, fname)
-                try:
-                    with open(fpath, "wb") as f:
-                        f.write(audio_bytes)
-                except Exception as exc:
-                    logger.error("Audio save failed: %s", exc)
-                    await _send(websocket, {"event": "error", "message": "Faylni saqlab bo'lmadi"})
-                    continue
-                file_url = f"{STATIC_PATH}/{fname}"
-
-                # STT
-                await ai_action_callback("Ovoz matnga aylantirilmoqda...")
-                try:
-                    transcript = await asyncio.wait_for(
-                        log_agent.transcribe_audio(audio_bytes, mime_type),
-                        timeout=30,
-                    )
-                except asyncio.TimeoutError:
-                    await _send(websocket, {"event": "error", "message": "STT timeout"})
-                    continue
-                except Exception as exc:
-                    logger.error("STT failed: %s", exc)
-                    await _send(websocket, {"event": "error", "message": f"STT xatosi: {exc}"})
-                    continue
-
-                if not transcript:
-                    await _send(
-                        websocket,
-                        {"event": "error", "message": "Ovoz matnga aylantirib bo'lmadi"},
-                    )
-                    continue
-
-                # Message + Attachment yaratish
-                async with async_session() as db:
-                    user_msg = await crud.create_message(
-                        db,
-                        schemas.MessageCreate(
-                            chat_id=chat_id,
-                            sender_id=data.get("sender_id", user_id),
-                            sender_type=schemas.SenderType.USER,
-                            message_type=schemas.MessageType.VOICE,
-                            content=transcript,
-                            attachments=[
-                                schemas.AttachmentCreate(
-                                    file_type=schemas.AttachmentType.VOICE,
-                                    file_url=file_url,
-                                    mime_type=mime_type,
-                                    file_size=len(audio_bytes),
-                                    transcript=transcript,
-                                    transcript_lang=user_lang,
-                                )
-                            ],
-                        ),
-                    )
-
-                await manager.broadcast(
-                    {"event": "new_message", "data": _message_payload(user_msg)},
-                    chat_id,
-                )
-                await manager.broadcast(
-                    {
-                        "event": "voice_transcribed",
-                        "data": {
-                            "message_id": user_msg.id,
-                            "transcript": transcript,
-                            "transcript_lang": user_lang,
-                            "file_url": file_url,
-                        },
-                    },
-                    chat_id,
-                )
-
-                async with async_session() as db:
-                    fresh_user = await users_crud.get_user_by_id(db, user_id) or user
-                    await _run_ai_flow(
-                        db,
-                        websocket,
-                        chat_id,
-                        fresh_user,
-                        log_agent,
-                        transcript,
-                        is_ai_chat=is_ai_chat,
-                        invoke_ai=data.get("invoke_ai", is_ai_chat),
-                        exclude_message_id=user_msg.id,
-                        on_action_callback=ai_action_callback,
-                    )
-
-            else:
-                await _send(websocket, {"event": "error", "message": f"Noma'lum tip: {msg_type}"})
-
-    except WebSocketDisconnect:
-        manager.disconnect(chat_id, user_id)
-        logger.info("WebSocket disconnected: user=%s chat=%s", user_id, chat_id)
-    except Exception as exc:
-        logger.error("WebSocket error chat=%s: %s", chat_id, exc, exc_info=True)
-        await _send(websocket, {"event": "error", "message": str(exc)})
-        manager.disconnect(chat_id, user_id)
+    """Foydalanuvchilar o'rtasida real-vaqt matnli chat."""
+    await websocket_peer_chat(websocket, chat_id)
 
 
 # ════════════════════════════════════════════════
-# REST endpoints — Chat
+# REST — AI yordamchi (faqat matn)
+# ════════════════════════════════════════════════
+
+
+@router.post(
+    "/assistant/message",
+    response_model=schemas.AssistantMessageResponse,
+    summary="AI yordamchiga matnli savol",
+)
+async def assistant_message(
+    body: schemas.AssistantMessageRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await ask_assistant(
+        db, current_user, body.message, chat_id=body.chat_id
+    )
+    return schemas.AssistantMessageResponse(
+        reply=result.reply,
+        chat_id=result.chat_id,
+        used_today=result.used_today,
+        daily_limit=result.daily_limit,
+        allowed=result.allowed,
+    )
+
+
+@router.get(
+    "/assistant/chat",
+    response_model=schemas.ChatResponse,
+    summary="AI yordamchi chatini olish yoki yaratish",
+)
+async def assistant_get_chat(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await crud.get_or_create_ai_chat(db, current_user.id)
+
+
+@router.get(
+    "/assistant/messages",
+    response_model=List[schemas.MessageResponse],
+    summary="AI chat xabarlari",
+)
+async def assistant_list_messages(
+    chat_id: Optional[int] = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    before_id: Optional[int] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if chat_id is None:
+        chat = await crud.get_or_create_ai_chat(db, current_user.id)
+        chat_id = chat.id
+    else:
+        chat = await crud.get_chat(db, chat_id)
+        if not chat or chat.user_id != current_user.id:
+            raise HTTPException(status_code=404, detail="Chat topilmadi")
+        if chat.category != ChatCategory.AI_COMMAND:
+            raise HTTPException(status_code=400, detail="Bu AI chat emas")
+    return await crud.list_chat_messages(db, chat_id, limit=limit, before_id=before_id)
+
+
+# ════════════════════════════════════════════════
+# REST endpoints — Chat (peer)
 # ════════════════════════════════════════════════
 
 
@@ -465,13 +167,13 @@ async def create_new_chat(
 @router.post(
     "/chats/assistant",
     response_model=schemas.ChatResponse,
-    summary="AI yordamchi chatini olish yoki yaratish",
+    summary="AI chat (alias: GET /assistant/chat)",
+    deprecated=True,
 )
-async def get_or_create_assistant_chat(
+async def get_or_create_assistant_chat_legacy(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Postman/Mini App: avval shu endpoint, keyin WebSocket `chat_id` bilan."""
     return await crud.get_or_create_ai_chat(db, current_user.id)
 
 
@@ -490,7 +192,7 @@ async def get_chat_details(
     current_user: User = Depends(get_current_user),
 ):
     chat = await crud.get_chat(db, chat_id)
-    if not chat or not await _user_can_access_chat(db, chat, current_user.id):
+    if not chat or not await user_can_access_chat(db, chat, current_user.id):
         raise HTTPException(status_code=404, detail="Chat topilmadi yoki sizga tegishli emas")
     return chat
 
@@ -508,7 +210,7 @@ async def list_chat_messages(
     current_user: User = Depends(get_current_user),
 ):
     chat = await crud.get_chat(db, chat_id)
-    if not chat or not await _user_can_access_chat(db, chat, current_user.id):
+    if not chat or not await user_can_access_chat(db, chat, current_user.id):
         raise HTTPException(status_code=404, detail="Chat topilmadi yoki sizga tegishli emas")
     return await crud.list_chat_messages(db, chat_id, limit=limit, before_id=before_id)
 
@@ -589,7 +291,7 @@ async def submit_rating(
 
 
 # ════════════════════════════════════════════════
-# REST endpoints — Limit / usage (foydalanuvchi)
+# REST — Limit / usage (foydalanuvchi)
 # ════════════════════════════════════════════════
 
 
@@ -607,8 +309,24 @@ async def my_usage(
 
 
 # ════════════════════════════════════════════════
-# ADMIN endpoints — model va statistika
+# ADMIN — model va statistika
 # ════════════════════════════════════════════════
+
+
+@router.get(
+    "/admin/settings",
+    response_model=schemas.AdminAISettingsResponse,
+    summary="AI sozlamalari (admin)",
+)
+async def admin_ai_settings(admin: User = Depends(is_admin)):
+    current = await get_current_model()
+    return schemas.AdminAISettingsResponse(
+        current_model=current,
+        available_models=AVAILABLE_AI_MODELS,
+        free_daily_limit=AI_DAILY_LIMIT_FREE,
+        pro_daily_limit=AI_DAILY_LIMIT_PRO,
+        default_model_env=MODEL_NAME or "gemini-flash-latest",
+    )
 
 
 @router.get("/admin/models", summary="Mavjud AI model'lar (admin)")

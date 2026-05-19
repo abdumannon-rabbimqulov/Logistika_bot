@@ -125,7 +125,6 @@ LANG_DIRECTIVE = {
 
 # Default model — Redis/DB'da override qilinishi mumkin
 DEFAULT_AI_DAILY_LIMIT = int(get_optional_env("AI_DAILY_LIMIT", "50"))
-MAX_VOICE_MB = int(get_optional_env("MAX_VOICE_MB", "20"))
 
 # Admin tomonidan tanlash mumkin bo'lgan model'lar
 AVAILABLE_AI_MODELS = [
