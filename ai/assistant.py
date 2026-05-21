@@ -1,4 +1,3 @@
-"""REST orqali matnli AI yordamchi."""
 
 from __future__ import annotations
 

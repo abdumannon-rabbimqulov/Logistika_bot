@@ -1,11 +1,3 @@
-"""Logistika AI Agent — Gemini-asosida role-aware toolkit.
-
-- `build_system_instruction(role, language)` — base + role + til.
-- `TOOL_DEFINITIONS` — har bir tool'ga `roles` ro'yxati.
-- `LogistikaAgent` joriy modelni `ai.settings.get_current_model()` orqali oladi
-  va sinxron Gemini chaqiruvlarini `asyncio.to_thread` ichida bajaradi.
-- `LogistikaToolkit` mavjud `crud` modullariga delegatsiya qiladi va ownership tekshiradi.
-"""
 
 from __future__ import annotations
 

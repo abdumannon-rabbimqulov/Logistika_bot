@@ -1,4 +1,3 @@
-"""WebSocket — faqat foydalanuvchilar o'rtasida matnli chat (AI emas)."""
 
 from __future__ import annotations
 

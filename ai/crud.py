@@ -140,10 +140,7 @@ async def update_chat(db: AsyncSession, pk: int, data: ChatUpdate) -> Optional[C
 # ════════════════════════════════════════════════
 
 async def create_message(db: AsyncSession, data: MessageCreate) -> Message:
-    """
-    Chatga yangi xabar qo'shadi. 
-    Agar xabar ichida rasm yoki ovoz kabi fayllar bo'lsa, ular ham birga saqlanadi.
-    """
+
     msg_data = data.model_dump()
     attachments_data = msg_data.pop('attachments', []) or []
     
