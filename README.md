@@ -75,11 +75,29 @@ LOGISTIKA_DEPLOY_LOCAL=1 ./deploy-all.sh
 docker compose up -d --build db logistika-redis migrations backend-api backend-bot
 ```
 
+## Lokal ishga tushirish
+
+```bash
+docker compose up -d db logistika-redis migrations backend-api
+# Botni faqat kerak bo'lsa (production bilan bir token bo'lsa conflict bo'ladi):
+# docker compose up -d backend-bot
+```
+
+- API: http://127.0.0.1:8003/api
+- Docs: http://127.0.0.1:8003/api/docs
+- Health: http://127.0.0.1:8003/api/health
+
+Birinchi marta bo'sh DB uchun test ma'lumotlari:
+
+```bash
+docker exec -i logistika_db psql -U postgres -d logistika_db < scripts/seed_local.sql
+```
+
 ## Tez tekshiruv
 
 ```bash
 docker ps
-curl http://127.0.0.1:8003/health
+curl http://127.0.0.1:8003/api/health
 ```
 
 ## Postman

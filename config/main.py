@@ -34,14 +34,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 
+_docs_prefix = API_PUBLIC_PREFIX or ""
 app = FastAPI(
     title="Logistika AI API",
     version="1.0.0",
     description="🚀 Logistics platform with AI-powered order management",
     servers=[
-        {"url": API_PUBLIC_PREFIX, "description": "Production (logistic.org.uz)"},
-        {"url": "", "description": "To'g'ridan-to'g'ri (localhost:8003)"},
+        {"url": API_PUBLIC_PREFIX or "http://127.0.0.1:8003", "description": "API base (/api)"},
+        {"url": "", "description": "Prefiksiz (localhost:8003)"},
     ],
+    docs_url=f"{_docs_prefix}/docs" if _docs_prefix else "/docs",
+    redoc_url=f"{_docs_prefix}/redoc" if _docs_prefix else "/redoc",
+    openapi_url=f"{_docs_prefix}/openapi.json" if _docs_prefix else "/openapi.json",
 )
 
 # ─────────────────────────────────────────────────────────────

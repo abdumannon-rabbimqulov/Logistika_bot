@@ -1,17 +1,65 @@
 import os
 import shutil
 import uuid
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
+
 from config.config import STATIC_PATH, UPLOAD_DIR, get_db
 from driver import crud, schemas
+from driver.models import Driver
+from services import live_location
 from users.auth import get_current_user
 from users.models import User
 from Admin_panel.validation import is_admin
 
 router = APIRouter(prefix="/drivers", tags=["Haydovchilar (Drivers)"])
+
+
+def _parse_iso_dt(value: object) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return None
+
+
+def _location_payload_to_response(payload: dict) -> schemas.DriverLocationResponse:
+    return schemas.DriverLocationResponse(
+        driver_id=int(payload["driver_id"]),
+        user_id=payload.get("user_id"),
+        full_name=payload.get("full_name"),
+        truck_number=payload.get("truck_number"),
+        truck_type_id=payload.get("truck_type_id"),
+        lat=float(payload["lat"]),
+        lon=float(payload["lon"]),
+        ts=_parse_iso_dt(payload["ts"]) or datetime.now(timezone.utc),
+        expires_at=_parse_iso_dt(payload.get("expires_at")),
+    )
+
+
+async def _push_driver_location(
+    driver: Driver,
+    user: User,
+    latitude: float,
+    longitude: float,
+    live_period_sec: int = 0,
+) -> schemas.DriverLocationResponse:
+    payload = await live_location.update_driver_location(
+        driver_id=driver.id,
+        lat=latitude,
+        lon=longitude,
+        user_id=user.id,
+        full_name=user.full_name,
+        truck_number=driver.truck_number,
+        truck_type_id=driver.truck_type_id,
+        live_period=live_period_sec,
+    )
+    return _location_payload_to_response(payload)
 
 
 @router.post("/truck-types", response_model=schemas.TruckTypeResponse, status_code=status.HTTP_201_CREATED, summary="Yangi mashina turi qo'shish,admin uchun")
@@ -109,7 +157,83 @@ async def update_my_driver_profile(
     driver = await crud.get_driver_by_user_id(db, current_user.id)
     if not driver:
         raise HTTPException(status_code=404, detail="Driver profile not found")
-    return await crud.update_driver(db, driver.id, data)
+
+    dump = data.model_dump(exclude_unset=True)
+    lat = dump.pop("last_latitude", None)
+    lon = dump.pop("last_longitude", None)
+    live_flag = dump.pop("is_live_location_active", None)
+
+    if lat is not None and lon is not None:
+        await _push_driver_location(driver, current_user, lat, lon)
+    elif live_flag is False:
+        await live_location.stop_driver_location(driver.id)
+
+    if dump:
+        updated = await crud.update_driver(db, driver.id, schemas.DriverUpdate(**dump))
+        return updated
+    return await crud.get_driver(db, driver.id)
+
+
+@router.post(
+    "/me/location",
+    response_model=schemas.DriverLocationResponse,
+    summary="Jonli GPS (veb-sayt / Web App)",
+)
+async def update_my_location(
+    data: schemas.DriverLocationUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Sayt `watchPosition` dan kelgan koordinatalarni Redis + admin xaritaga uzatadi."""
+    driver = await crud.get_driver_by_user_id(db, current_user.id)
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver profile not found")
+    if driver.is_blocked:
+        raise HTTPException(status_code=403, detail="Haydovchi bloklangan")
+
+    return await _push_driver_location(
+        driver,
+        current_user,
+        data.latitude,
+        data.longitude,
+        live_period_sec=data.live_period_sec or 0,
+    )
+
+
+@router.get(
+    "/me/location",
+    response_model=schemas.DriverLocationResponse,
+    summary="Joriy jonli GPS holati",
+)
+async def get_my_location(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    driver = await crud.get_driver_by_user_id(db, current_user.id)
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver profile not found")
+
+    payload = await live_location.get_driver_location(driver.id)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Jonli lokatsiya yo'q")
+    return _location_payload_to_response(payload)
+
+
+@router.delete(
+    "/me/location",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Jonli GPS ni to'xtatish (sayt yopilganda)",
+)
+async def stop_my_location(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Web App yopilganda chaqiring — Redis va DB'da live holat o'chadi."""
+    driver = await crud.get_driver_by_user_id(db, current_user.id)
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver profile not found")
+    await live_location.stop_driver_location(driver.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 

@@ -1,3 +1,16 @@
 INFO:     Logging configured (production)
 INFO:     Logging configured (production)
 INFO:     Logging configured (production)
+INFO:     Logging configured (production)
+INFO:     Logging configured (production)
+INFO:     Logging configured (production)
+INFO:     Logging configured (production)
+INFO:     Logging configured (production)
+INFO:     Logging configured (production)
+INFO:     Logging configured (production)
+INFO:     Logging configured (production)
+INFO:     Logging configured (production)
+WARNING:     DB sync for driver #2 failed: (sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg.exceptions.DataError'>: invalid input for query argument $2: datetime.datetime(2026, 6, 1, 13, 17, 0,... (can't subtract offset-naive and offset-aware datetimes)
+[SQL: UPDATE drivers SET is_live_location_active=$1::BOOLEAN, live_location_expires=$2::TIMESTAMP WITHOUT TIME ZONE, last_latitude=$3::FLOAT, last_longitude=$4::FLOAT, last_location_at=$5::TIMESTAMP WITHOUT TIME ZONE, updated_at=now() WHERE drivers.id = $6::INTEGER]
+[parameters: (True, datetime.datetime(2026, 6, 1, 13, 17, 0, 663518, tzinfo=datetime.timezone.utc), 41.3111, 69.2797, datetime.datetime(2026, 6, 1, 12, 47, 0, 665358, tzinfo=datetime.timezone.utc), 2)]
+(Background on this error at: https://sqlalche.me/e/20/dbapi)

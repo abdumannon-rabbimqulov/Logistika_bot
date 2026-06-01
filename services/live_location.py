@@ -1,14 +1,4 @@
-"""Driver live location oqimi: Redis (asyncio) + Postgres throttle.
-
-- Telegram bot driver yuborgan har bir live-location yangilanishini
-  `update_driver_location()` ga uzatadi.
-- Redis kalit konvensiyasi:
-    - `live:loc:driver:{driver_id}` -> JSON, TTL = LIVE_LOC_TTL_SEC (sliding)
-    - `live:online:drivers`         -> SET (driver_id'lar)
-    - Pub/Sub channel: `live:loc:updates`
-- DB sinxronizatsiyasi (Driver.last_*) `LIVE_LOC_DB_THROTTLE_SEC` (default 60s)
-  bo'yicha throttle qilinadi: `live:loc:driver:{id}:dbsync` flag kaliti.
-"""
+"""Haydovchi jonli GPS: veb-sayt → Redis (tez) + Postgres (throttle) + admin pub/sub."""
 
 from __future__ import annotations
 
@@ -78,7 +68,7 @@ async def update_driver_location(
 ) -> Dict:
     """Yangi koordinatani Redis'ga yozadi, broadcast qiladi va periodik DB'ga sinxronlaydi.
 
-    `live_period` Telegram tomonidan berilgan masofa (soniya); 0 bo'lsa default ishlatiladi.
+    `live_period` veb-sayt yuborgan muddat (sekund); 0 bo'lsa default ishlatiladi.
     """
     now = datetime.now(timezone.utc)
     period = live_period if live_period and live_period > 0 else LIVE_LOC_DEFAULT_PERIOD_SEC
