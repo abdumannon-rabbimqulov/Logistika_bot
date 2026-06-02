@@ -1,8 +1,3 @@
-"""AI dinamik sozlamalar (model nomi va h.k.) — DB asosiy, Redis cache.
-
-`AppSettings` jadvali persistent storage; Redis 1 soatlik cache.
-"""
-
 from __future__ import annotations
 
 import logging
