@@ -49,7 +49,6 @@ def _redis_set(key: str, value: str, ttl: int = _REDIS_TTL_SEC) -> None:
 
 
 async def get_current_model() -> str:
-    """Joriy AI model nomi. Redis -> DB -> default fallback."""
     cached = _redis_get(_REDIS_KEY_MODEL)
     if cached:
         return cached
