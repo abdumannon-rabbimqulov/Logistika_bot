@@ -22,6 +22,7 @@ async def main():
 
     try:
         logging.info("🚀 Bot ishga tushirildi...")
+        await bot.delete_webhook(drop_pending_updates=True)  # Webhookni o'chirish va kutayotgan yangilanishlarni tozalash
         await dp.start_polling(bot)   # Bot polling rejimida ishlaydi
     finally:
         # ── Chiqishda resurslarni tozalash ───────────────────────────────────

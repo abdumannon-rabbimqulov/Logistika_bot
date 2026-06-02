@@ -9,6 +9,7 @@ services:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=2103
       - POSTGRES_DB=logistic_db
+      - TZ=Asia/Toshkent
     ports:
       - "5432:5432"
     volumes:
@@ -24,7 +25,11 @@ services:
       - .:/app
     env_file:
       - .env
+    environment:
+      - TZ=Asia/Tashkent
     restart: always
+    depends_on:
+      - db
 
   bot:
     build: .
@@ -33,6 +38,8 @@ services:
       - .:/app
     env_file:
       - .env
+    environment:
+      - TZ=Asia/Tashkent
     command: python main.py
     restart: always
     depends_on:
