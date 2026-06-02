@@ -1,6 +1,20 @@
 version: '3.8'
 
 services:
+  db:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    restart: always
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=2103
+      - POSTGRES_DB=logistic_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+
   web:
     build: .
     container_name: fastapi_web_app
@@ -21,3 +35,7 @@ services:
       - .env
     command: python main.py
     restart: always
+    depends_on:
+      - db
+volumes:
+  postgres_data:
