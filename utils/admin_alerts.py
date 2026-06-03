@@ -1,7 +1,4 @@
-"""Admin Telegram alert helperlari.
 
-Backend xatolarini (ERROR daraja) admin Telegram akkauntlariga yuboradi.
-"""
 
 from __future__ import annotations
 
