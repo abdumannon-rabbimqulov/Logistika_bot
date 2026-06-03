@@ -95,6 +95,7 @@ class Driver(Base):
     rating          : Mapped[float] = mapped_column(Numeric(3, 2), default=5.0)
     total_trips     : Mapped[int]   = mapped_column(Integer, default=0)
     cancel_count    : Mapped[int]   = mapped_column(Integer, default=0)
+    total_km: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     on_time_percent : Mapped[float] = mapped_column(Numeric(5, 2), default=100.0)
 
     is_available  : Mapped[bool] = mapped_column(Boolean, default=True)
@@ -136,10 +137,7 @@ class Driver(Base):
 
     @property
     def reliability_score(self) -> float:
-        """
-        Ishonchlilik ko'rsatkichi (0–100):
-        reyting × 14 + on_time_percent × 0.4 + (trip bonusi, max 20)
-        """
+
         trip_bonus = min(self.total_trips / 5, 20)
         return round(
             float(self.rating or 0) * 14
