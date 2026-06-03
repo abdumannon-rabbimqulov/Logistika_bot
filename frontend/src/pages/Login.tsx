@@ -1,23 +1,22 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { KeyRound, Phone, ShieldCheck, Lock, ArrowRight, CornerDownLeft, Eye, EyeOff } from "lucide-react";
 import { formatPhoneForApi } from "../utils/phone";
+import { initTelegramWebApp, isTelegramWebApp } from "../auth/telegram";
 
 export const Login: React.FC = () => {
-  const { login, resetPhone, verifyResetCode, resetPassword, isAuthenticated } = useAuth();
+  const {
+    login,
+    loginWithTelegram,
+    resetPhone,
+    verifyResetCode,
+    resetPassword,
+    isTelegramApp,
+  } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
+  const telegramLoginAttempted = useRef(false);
 
-  // Redirect if already logged in
-  useEffect(() => {
-    if (isAuthenticated) {
-      const from = (location.state as any)?.from?.pathname || "/dashboard";
-      navigate(from, { replace: true });
-    }
-  }, [isAuthenticated, navigate, location]);
-
-  // Form states
   const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -25,14 +24,12 @@ export const Login: React.FC = () => {
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
-  // Forgot password flow states
   const [isForgotMode, setIsForgotMode] = useState(false);
-  const [forgotStep, setForgotStep] = useState(1); // 1: phone, 2: code, 3: new password
+  const [forgotStep, setForgotStep] = useState(1);
   const [resetCode, setResetCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // Handle standard login submit
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!phoneNumber || !password) {
@@ -44,8 +41,8 @@ export const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
-      await login(formatPhoneForApi(phoneNumber), password);
-      navigate("/dashboard");
+      const result = await login(formatPhoneForApi(phoneNumber), password);
+      navigate(result.redirectTo, { replace: true });
     } catch (err: any) {
       setError(err.message || "Tizimga kirishda xatolik yuz berdi.");
     } finally {
@@ -53,7 +50,6 @@ export const Login: React.FC = () => {
     }
   };
 
-  // Handle forgot password stages
   const handleForgotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -66,12 +62,10 @@ export const Login: React.FC = () => {
         setSuccessMsg("Tasdiqlash kodi Telegram bot orqali yuborildi!");
         setForgotStep(2);
       } else if (forgotStep === 2) {
-        // Step 2: Verify Code
         await verifyResetCode(resetCode);
         setSuccessMsg("Kod muvaffaqiyatli tasdiqlandi!");
         setForgotStep(3);
       } else if (forgotStep === 3) {
-        // Step 3: Save new password
         if (newPassword.length < 8) {
           throw new Error("Parol kamida 8 ta belgidan iborat bo'lishi kerak.");
         }
@@ -88,6 +82,23 @@ export const Login: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (!isTelegramWebApp() || telegramLoginAttempted.current) return;
+    telegramLoginAttempted.current = true;
+    initTelegramWebApp();
+
+    loginWithTelegram()
+      .then((result) => {
+        if (result) {
+          navigate(result.redirectTo, { replace: true });
+        }
+      })
+      .catch((err: Error) => {
+        setError(err.message || "Telegram orqali kirishda xatolik.");
+        telegramLoginAttempted.current = false;
+      });
+  }, [loginWithTelegram, navigate]);
+
   return (
     <div className="login-page">
       <div className="background-decor">
@@ -102,14 +113,17 @@ export const Login: React.FC = () => {
               <ShieldCheck size={32} />
             </div>
             <h2>Logistika AI</h2>
-            <p>Tizimga kirish yoki parolni tiklash</p>
+            <p>
+              {isTelegramApp
+                ? "Telegram orqali avtomatik kirish..."
+                : "Tizimga kirish yoki parolni tiklash"}
+            </p>
           </div>
 
           {error && <div className="alert-message danger-alert">{error}</div>}
           {successMsg && <div className="alert-message success-alert">{successMsg}</div>}
 
           {!isForgotMode ? (
-            /* STANDARD LOGIN FORM */
             <form onSubmit={handleLoginSubmit} className="login-form">
               <div className="input-wrapper">
                 <label>Telefon raqam</label>
@@ -167,7 +181,6 @@ export const Login: React.FC = () => {
               </button>
             </form>
           ) : (
-            /* FORGOT / RESET PASSWORD FORM */
             <form onSubmit={handleForgotSubmit} className="login-form">
               {forgotStep === 1 && (
                 <div className="input-wrapper">
@@ -183,7 +196,9 @@ export const Login: React.FC = () => {
                       disabled={isLoading}
                     />
                   </div>
-                  <span className="helper-text">Ushbu raqamga bog'langan Telegram hisobingizga tasdiqlash kodi yuboriladi.</span>
+                  <span className="helper-text">
+                    Ushbu raqamga bog'langan Telegram hisobingizga tasdiqlash kodi yuboriladi.
+                  </span>
                 </div>
               )}
 
@@ -239,7 +254,13 @@ export const Login: React.FC = () => {
               )}
 
               <button type="submit" className="btn btn-primary login-btn" disabled={isLoading}>
-                {isLoading ? "Yuklanmoqda..." : forgotStep === 1 ? "Kod yuborish" : forgotStep === 2 ? "Kodni tasdiqlash" : "Parolni yangilash"}
+                {isLoading
+                  ? "Yuklanmoqda..."
+                  : forgotStep === 1
+                    ? "Kod yuborish"
+                    : forgotStep === 2
+                      ? "Kodni tasdiqlash"
+                      : "Parolni yangilash"}
                 <ArrowRight size={18} />
               </button>
 
@@ -260,223 +281,6 @@ export const Login: React.FC = () => {
           )}
         </div>
       </div>
-
-      <style>{`
-        .login-page {
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: #06070a;
-          position: relative;
-          overflow: hidden;
-          padding: 20px;
-        }
-
-        .background-decor {
-          position: absolute;
-          width: 100%;
-          height: 100%;
-          top: 0;
-          left: 0;
-          z-index: 1;
-        }
-
-        .glow {
-          position: absolute;
-          width: 400px;
-          height: 400px;
-          border-radius: 50%;
-          filter: blur(100px);
-          opacity: 0.15;
-        }
-
-        .glow-1 {
-          background: var(--accent-primary);
-          top: -100px;
-          left: -100px;
-          animation: floatGlow 12s infinite ease-in-out alternate;
-        }
-
-        .glow-2 {
-          background: var(--accent-secondary);
-          bottom: -100px;
-          right: -100px;
-          animation: floatGlow 15s infinite ease-in-out alternate-reverse;
-        }
-
-        @keyframes floatGlow {
-          0% { transform: translate(0, 0) scale(1); }
-          100% { transform: translate(40px, 40px) scale(1.1); }
-        }
-
-        .login-container {
-          position: relative;
-          z-index: 2;
-          width: 100%;
-          max-width: 440px;
-        }
-
-        .login-card {
-          padding: 40px 32px;
-          border-radius: var(--border-radius-lg);
-          display: flex;
-          flex-direction: column;
-          gap: 24px;
-        }
-
-        .login-header {
-          text-align: center;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .logo-badge {
-          width: 60px;
-          height: 60px;
-          border-radius: 16px;
-          background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          box-shadow: 0 8px 24px rgba(88, 101, 242, 0.4);
-          margin-bottom: 12px;
-        }
-
-        .login-header h2 {
-          font-size: 24px;
-          font-weight: 800;
-          letter-spacing: -0.03em;
-        }
-
-        .login-header p {
-          font-size: 13px;
-          color: var(--text-secondary);
-        }
-
-        .alert-message {
-          padding: 12px 16px;
-          border-radius: var(--border-radius);
-          font-size: 13px;
-          font-weight: 500;
-          animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both;
-        }
-
-        @keyframes shake {
-          10%, 90% { transform: translate3d(-1px, 0, 0); }
-          20%, 80% { transform: translate3d(2px, 0, 0); }
-          30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-          40%, 60% { transform: translate3d(4px, 0, 0); }
-        }
-
-        .danger-alert {
-          background: rgba(255, 23, 68, 0.1);
-          border: 1px solid rgba(255, 23, 68, 0.25);
-          color: #ff8a80;
-        }
-
-        .success-alert {
-          background: rgba(0, 230, 118, 0.1);
-          border: 1px solid rgba(0, 230, 118, 0.25);
-          color: #b9f6ca;
-        }
-
-        .login-form {
-          display: flex;
-          flex-direction: column;
-          gap: 20px;
-        }
-
-        .input-wrapper {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-
-        .label-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-
-        .input-wrapper label {
-          font-size: 13px;
-          font-weight: 600;
-          color: var(--text-secondary);
-        }
-
-        .forgot-link {
-          background: none;
-          border: none;
-          color: var(--accent-secondary);
-          font-size: 12px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: color 0.2s;
-        }
-
-        .forgot-link:hover {
-          color: var(--accent-secondary-hover);
-        }
-
-        .input-field {
-          position: relative;
-          display: flex;
-          align-items: center;
-        }
-
-        .field-icon {
-          position: absolute;
-          left: 14px;
-          color: var(--text-muted);
-          pointer-events: none;
-        }
-
-        .input-field .glass-input {
-          padding-left: 44px;
-        }
-
-        .password-toggle {
-          position: absolute;
-          right: 14px;
-          background: none;
-          border: none;
-          color: var(--text-muted);
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          transition: color 0.2s;
-        }
-
-        .password-toggle:hover {
-          color: var(--text-primary);
-        }
-
-        .helper-text {
-          font-size: 11px;
-          color: var(--text-muted);
-          margin-top: 4px;
-        }
-
-        .login-btn {
-          width: 100%;
-          justify-content: center;
-          padding: 14px;
-          font-size: 15px;
-          margin-top: 8px;
-        }
-
-        .back-btn {
-          width: 100%;
-          justify-content: center;
-          padding: 12px;
-          font-size: 13px;
-          margin-top: 4px;
-        }
-      `}</style>
     </div>
   );
 };

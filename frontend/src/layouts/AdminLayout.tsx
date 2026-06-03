@@ -1,12 +1,13 @@
 import React, { useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { isAdminRole, getPathForSession } from "../auth/redirect";
 import { Sidebar } from "../components/Sidebar";
-import { Settings, Server, X, ShieldAlert } from "lucide-react";
+import { Settings, Server, X } from "lucide-react";
 import { API_BASE_URL, normalizeApiBaseUrl } from "../api";
 
 export const AdminLayout: React.FC = () => {
-  const { isAuthenticated, user, loading } = useAuth();
+  const { isAuthenticated, user, session, loading } = useAuth();
   const location = useLocation();
   const [showSettings, setShowSettings] = useState(false);
   const [backendUrl, setBackendUrl] = useState(API_BASE_URL);
@@ -36,41 +37,14 @@ export const AdminLayout: React.FC = () => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Double check admin role access
-  const isAdmin = user?.role === "admin" || (user && [7915740408, 114631388].includes(user.id));
+  if (session?.status === "need_driver_profile") {
+    return <Navigate to="/driver/setup-profile" replace />;
+  }
+
+  const isAdmin = isAdminRole(user?.role ?? session?.role, user?.id ?? session?.userId);
   if (!isAdmin) {
-    return (
-      <div className="access-denied">
-        <div className="glass-card error-card">
-          <ShieldAlert size={48} className="error-icon" />
-          <h1>Kirish Taqiqlandi</h1>
-          <p>Sizda ushbu sahifaga kirish huquqi yo'q. Loyiha faqat Adminlar uchun ochiq.</p>
-          <a href="/login" onClick={() => localStorage.clear()} className="btn btn-primary">Login Sahifasiga Qaytish</a>
-        </div>
-        <style>{`
-          .access-denied {
-            height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: var(--bg-primary);
-            padding: 20px;
-          }
-          .error-card {
-            max-width: 500px;
-            padding: 40px;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 20px;
-          }
-          .error-icon {
-            color: var(--danger);
-          }
-        `}</style>
-      </div>
-    );
+    const redirectTo = getPathForSession(session);
+    return <Navigate to={redirectTo} replace />;
   }
 
   const handleSaveSettings = () => {

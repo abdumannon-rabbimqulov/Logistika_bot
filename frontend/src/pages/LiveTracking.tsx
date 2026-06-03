@@ -50,9 +50,11 @@ export const LiveTracking: React.FC = () => {
   // Fetch initial drivers & Connect WebSocket
   useEffect(() => {
     let ws: WebSocket | null = null;
-    let reconnectTimeout: any = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
 
     const connectWebSocket = () => {
+      if (cancelled) return;
       setWsStatus("connecting");
       const token = localStorage.getItem("logistika_access_token") || "";
       const wsUrl = getWebSocketUrl(`/system/drivers/locations/stream?token=${token}`);
@@ -90,8 +92,9 @@ export const LiveTracking: React.FC = () => {
 
       ws.onclose = () => {
         setWsStatus("offline");
-        // Reconnect after 5 seconds
-        reconnectTimeout = setTimeout(connectWebSocket, 5000);
+        if (!cancelled) {
+          reconnectTimeout = setTimeout(connectWebSocket, 5000);
+        }
       };
 
       ws.onerror = (err) => {
@@ -103,8 +106,12 @@ export const LiveTracking: React.FC = () => {
     connectWebSocket();
 
     return () => {
-      if (ws) ws.close();
+      cancelled = true;
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
+      }
     };
   }, []);
 

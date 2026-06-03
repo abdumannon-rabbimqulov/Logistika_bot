@@ -1,10 +1,12 @@
-export const UserRole = {
+export type { UserRole, AuthStatus, LoginResponse, AuthSession } from "./auth";
+
+/** Admin panel filtrlari (backend role qiymatlari). */
+export const UserRoleFilter = {
   ADMIN: "admin",
+  SENDER: "sender",
   DRIVER: "driver",
-  CLIENT: "client",
-  DISPATCHER: "dispatcher",
+  GUEST: "guest",
 } as const;
-export type UserRole = typeof UserRole[keyof typeof UserRole];
 
 export interface User {
   id: number;
@@ -12,7 +14,7 @@ export interface User {
   full_name: string;
   email: string | null;
   phone_number: string | null;
-  role: UserRole | null;
+  role: import("./auth").UserRole | null;
   language: string;
   is_active: boolean;
   is_banned: boolean;
@@ -27,11 +29,13 @@ export interface UserListResponse {
 }
 
 export interface UserUpdateData {
-  role?: UserRole | null;
+  role?: import("./auth").UserRole | null;
   is_banned?: boolean;
   is_active?: boolean;
   language?: string;
   full_name?: string;
+  phone_number?: string;
+  bio?: string;
 }
 
 export const OrderStatus = {

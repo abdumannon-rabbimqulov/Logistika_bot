@@ -36,6 +36,16 @@ services:
       - .env
     environment:
       - TZ=Asia/Tashkent
+      - FORCE_COLOR=1
+    command:
+      - uvicorn
+      - config.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --log-config
+      - config/uvicorn_logging.json
     restart: always
     depends_on:
       - db

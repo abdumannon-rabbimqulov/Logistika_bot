@@ -1,0 +1,311 @@
+/* Login — desktop dizayn + mobilga mos (kichrayib ketmasin) */
+
+.login-page {
+  min-height: 100dvh;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #06070a;
+  position: relative;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  -webkit-overflow-scrolling: touch;
+}
+
+.login-page .background-decor {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.login-page .glow {
+  position: absolute;
+  width: min(400px, 90vw);
+  height: min(400px, 90vw);
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.15;
+}
+
+.login-page .glow-1 {
+  background: var(--accent-primary);
+  top: -80px;
+  left: -80px;
+  animation: loginFloatGlow 12s infinite ease-in-out alternate;
+}
+
+.login-page .glow-2 {
+  background: var(--accent-secondary);
+  bottom: -80px;
+  right: -80px;
+  animation: loginFloatGlow 15s infinite ease-in-out alternate-reverse;
+}
+
+@keyframes loginFloatGlow {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    transform: translate(40px, 40px) scale(1.1);
+  }
+}
+
+.login-page .login-container {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 440px;
+  margin: auto;
+  flex-shrink: 0;
+}
+
+.login-page .login-card {
+  padding: 40px 32px;
+  border-radius: var(--border-radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.login-page .login-header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.login-page .logo-badge {
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 8px 24px rgba(88, 101, 242, 0.4);
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.login-page .login-header h2 {
+  font-size: clamp(22px, 5vw, 24px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin: 0;
+}
+
+.login-page .login-header p {
+  font-size: clamp(13px, 3.5vw, 14px);
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.45;
+  max-width: 320px;
+}
+
+.login-page .alert-message {
+  padding: 12px 16px;
+  border-radius: var(--border-radius);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  animation: loginShake 0.3s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes loginShake {
+  10%,
+  90% {
+    transform: translate3d(-1px, 0, 0);
+  }
+  20%,
+  80% {
+    transform: translate3d(2px, 0, 0);
+  }
+  30%,
+  50%,
+  70% {
+    transform: translate3d(-4px, 0, 0);
+  }
+  40%,
+  60% {
+    transform: translate3d(4px, 0, 0);
+  }
+}
+
+.login-page .danger-alert {
+  background: rgba(255, 23, 68, 0.1);
+  border: 1px solid rgba(255, 23, 68, 0.25);
+  color: #ff8a80;
+}
+
+.login-page .success-alert {
+  background: rgba(0, 230, 118, 0.1);
+  border: 1px solid rgba(0, 230, 118, 0.25);
+  color: #b9f6ca;
+}
+
+.login-page .login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.login-page .input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.login-page .label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.login-page .input-wrapper label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.login-page .forgot-link {
+  background: none;
+  border: none;
+  color: var(--accent-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s;
+  padding: 4px 0;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.login-page .forgot-link:hover {
+  color: var(--accent-secondary-hover);
+}
+
+.login-page .input-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.login-page .field-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--text-muted);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.login-page .input-field .glass-input {
+  padding-left: 44px;
+  padding-right: 44px;
+  min-height: 48px;
+  font-size: 16px;
+  box-sizing: border-box;
+}
+
+.login-page .password-toggle {
+  position: absolute;
+  right: 4px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  transition: color 0.2s;
+  z-index: 1;
+}
+
+.login-page .password-toggle:hover {
+  color: var(--text-primary);
+}
+
+.login-page .helper-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.login-page .login-btn,
+.login-page .back-btn {
+  width: 100%;
+  justify-content: center;
+  min-height: 48px;
+  font-size: 16px;
+  box-sizing: border-box;
+}
+
+.login-page .login-btn {
+  padding: 14px;
+  margin-top: 8px;
+}
+
+.login-page .back-btn {
+  padding: 12px;
+  margin-top: 4px;
+}
+
+/* Telefon / kichik ekran — proporsiyani saqlab, to'liq kenglik */
+@media (max-width: 480px) {
+  .login-page {
+    align-items: flex-start;
+    padding-top: max(24px, env(safe-area-inset-top));
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+  }
+
+  .login-page .login-container {
+    max-width: 100%;
+  }
+
+  .login-page .login-card {
+    padding: 28px 20px;
+    gap: 20px;
+  }
+
+  .login-page .logo-badge {
+    width: 56px;
+    height: 56px;
+  }
+
+  .login-page .glow {
+    width: 280px;
+    height: 280px;
+    filter: blur(80px);
+  }
+}
+
+/* Juda kichik ekranlar */
+@media (max-width: 360px) {
+  .login-page .login-card {
+    padding: 24px 16px;
+  }
+
+  .login-page .label-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

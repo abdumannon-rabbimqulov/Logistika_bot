@@ -1,31 +1,61 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
-import { UserRole } from "../types";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import type { AuthSession, LoginResult } from "../types/auth";
 import type { User, UserUpdateData } from "../types";
 import { apiRequest } from "../api";
 import { formatPhoneForApi } from "../utils/phone";
+import {
+  clearAuthSession,
+  loadAuthSession,
+  markProfileComplete,
+  persistAuthSession,
+  sessionFromLoginResponse,
+} from "../auth/session";
+import { getPostLoginPath } from "../auth/redirect";
+import { getTelegramInitData, initTelegramWebApp, isTelegramWebApp } from "../auth/telegram";
+import { fetchMeApi, loginApi, logoutApi, updateMeApi } from "../services/authApi";
 
 interface AuthContextType {
   user: User | null;
+  session: AuthSession | null;
   loading: boolean;
   isAuthenticated: boolean;
-  login: (phone_number?: string, password?: string, initData?: string) => Promise<any>;
+  isTelegramApp: boolean;
+  login: (
+    phone_number?: string,
+    password?: string,
+    initData?: string
+  ) => Promise<LoginResult>;
+  loginWithTelegram: () => Promise<LoginResult | null>;
   logout: () => Promise<void>;
   resetPhone: (phone_number: string) => Promise<any>;
   verifyResetCode: (code: string) => Promise<any>;
   resetPassword: (password: string, confirm: string) => Promise<any>;
   updateProfile: (data: UserUpdateData) => Promise<User>;
   refreshMe: () => Promise<User>;
+  completeDriverProfile: () => void;
+  getRedirectPath: () => string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isTelegramApp] = useState(isTelegramWebApp);
 
-  const fetchProfile = async (): Promise<User | null> => {
+  const applySession = useCallback((next: AuthSession | null) => {
+    setSession(next);
+    if (next) {
+      persistAuthSession(next);
+    } else {
+      clearAuthSession();
+    }
+  }, []);
+
+  const fetchProfile = useCallback(async (): Promise<User | null> => {
     try {
-      const profile = await apiRequest<User>("/auth/me");
+      const profile = await fetchMeApi();
       setUser(profile);
       if (profile.role) {
         localStorage.setItem("logistika_user_role", profile.role);
@@ -33,90 +63,106 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return profile;
     } catch (err) {
       console.error("Failed to fetch profile:", err);
-      // Clean tokens if profile call fails
-      localStorage.removeItem("logistika_access_token");
-      localStorage.removeItem("logistika_refresh_token");
-      localStorage.removeItem("logistika_user_role");
+      applySession(null);
       setUser(null);
       return null;
     }
-  };
+  }, [applySession]);
+
+  const finalizeLogin = useCallback(
+    async (data: Awaited<ReturnType<typeof loginApi>>): Promise<LoginResult> => {
+      const nextSession = sessionFromLoginResponse(data);
+      applySession(nextSession);
+
+      if (nextSession.status !== "need_driver_profile") {
+        await fetchProfile();
+      } else {
+        setUser(null);
+      }
+
+      const redirectTo = getPostLoginPath(nextSession.role, nextSession.status);
+      return {
+        session: nextSession,
+        redirectTo,
+        message: data.message,
+      };
+    },
+    [applySession, fetchProfile]
+  );
+
+  const login = useCallback(
+    async (phone_number?: string, password?: string, initData?: string): Promise<LoginResult> => {
+      setLoading(true);
+      try {
+        const payload: Record<string, string> = {};
+        if (initData) {
+          payload.init_data = initData;
+        } else {
+          if (!phone_number || !password) {
+            throw new Error("Telefon raqami va parol kerak.");
+          }
+          payload.phone_number = formatPhoneForApi(phone_number);
+          payload.password = password;
+        }
+
+        const data = await loginApi(payload);
+        return await finalizeLogin(data);
+      } catch (err) {
+        applySession(null);
+        setUser(null);
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [applySession, finalizeLogin]
+  );
+
+  const loginWithTelegram = useCallback(async (): Promise<LoginResult | null> => {
+    const initData = getTelegramInitData();
+    if (!initData) return null;
+    initTelegramWebApp();
+    return login(undefined, undefined, initData);
+  }, [login]);
 
   useEffect(() => {
-    const initAuth = async () => {
-      const token = localStorage.getItem("logistika_access_token");
-      if (token) {
-        await fetchProfile();
+    const bootstrap = async () => {
+      const stored = loadAuthSession();
+      if (!stored) {
+        setLoading(false);
+        return;
       }
+      applySession(stored);
+
+      if (stored.status === "need_driver_profile") {
+        setLoading(false);
+        return;
+      }
+
+      await fetchProfile();
       setLoading(false);
     };
 
-    initAuth();
+    bootstrap();
 
-    // Listen for custom event triggered by apiRequest interceptor
     const handleSessionExpired = () => {
+      applySession(null);
       setUser(null);
     };
-
     window.addEventListener("auth_session_expired", handleSessionExpired);
-    return () => {
-      window.removeEventListener("auth_session_expired", handleSessionExpired);
-    };
-  }, []);
-
-  const login = async (phone_number?: string, password?: string, initData?: string) => {
-    setLoading(true);
-    try {
-      const payload: any = {};
-      if (initData) {
-        payload.init_data = initData;
-      } else {
-        payload.phone_number = phone_number ? formatPhoneForApi(phone_number) : phone_number;
-        payload.password = password;
-      }
-
-      const data = await apiRequest<{
-        access_token: string;
-        refresh_token: string;
-        role: UserRole;
-        user_id: number;
-        status?: string;
-        message?: string;
-      }>("/auth/login", {
-        method: "POST",
-        body: JSON.stringify(payload),
-        skipAuth: true,
-      });
-
-      localStorage.setItem("logistika_access_token", data.access_token);
-      localStorage.setItem("logistika_refresh_token", data.refresh_token);
-      localStorage.setItem("logistika_user_role", data.role);
-
-      const profile = await fetchProfile();
-      return { success: true, data, profile };
-    } catch (err: any) {
-      setUser(null);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
+    return () => window.removeEventListener("auth_session_expired", handleSessionExpired);
+  }, [applySession, fetchProfile]);
 
   const logout = async () => {
     try {
-      const refreshToken = localStorage.getItem("logistika_refresh_token");
+      const refreshToken = session?.refreshToken ?? localStorage.getItem("logistika_refresh_token");
       if (refreshToken) {
-        await apiRequest("/auth/logout", {
-          method: "POST",
-          body: JSON.stringify({ refresh_token: refreshToken }),
-        });
+        await logoutApi(refreshToken);
       }
     } catch (err) {
-      console.warn("Logout request failed, logging out locally:", err);
+      console.warn("Logout request failed:", err);
     } finally {
-      localStorage.removeItem("logistika_access_token");
-      localStorage.removeItem("logistika_refresh_token");
-      localStorage.removeItem("logistika_user_role");
+      applySession(null);
       setUser(null);
     }
   };
@@ -127,13 +173,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       body: JSON.stringify({ phone_number: formatPhoneForApi(phone_number) }),
       skipAuth: true,
     });
-    // Set temp token to perform code verification
     localStorage.setItem("logistika_access_token", res.access_token);
     return res;
   };
 
   const verifyResetCode = async (code: string) => {
-    return await apiRequest<{ detail: string }>("/auth/verify-reset-code", {
+    return apiRequest<{ detail: string }>("/auth/verify-reset-code", {
       method: "POST",
       body: JSON.stringify({ code }),
     });
@@ -144,39 +189,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       method: "POST",
       body: JSON.stringify({ new_password: password, confirm_password: confirm }),
     });
-    // Clear temp token
     localStorage.removeItem("logistika_access_token");
     return res;
   };
 
   const updateProfile = async (data: UserUpdateData) => {
-    const updated = await apiRequest<User>("/auth/me", {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    });
+    const updated = await updateMeApi(data);
     setUser(updated);
     return updated;
   };
 
   const refreshMe = async () => {
-    const updated = await apiRequest<User>("/auth/me");
+    const updated = await fetchMeApi();
     setUser(updated);
     return updated;
   };
+
+  const completeDriverProfile = () => {
+    markProfileComplete();
+    if (session) {
+      const next = { ...session, status: "active" as const };
+      applySession(next);
+    }
+  };
+
+  const getRedirectPath = () => getPostLoginPath(session?.role ?? "guest", session?.status);
+
+  const isAuthenticated = Boolean(session?.accessToken);
 
   return (
     <AuthContext.Provider
       value={{
         user,
+        session,
         loading,
-        isAuthenticated: !!user,
+        isAuthenticated,
+        isTelegramApp,
         login,
+        loginWithTelegram,
         logout,
         resetPhone,
         verifyResetCode,
         resetPassword,
         updateProfile,
         refreshMe,
+        completeDriverProfile,
+        getRedirectPath,
       }}
     >
       {children}

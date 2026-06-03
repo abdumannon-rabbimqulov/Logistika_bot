@@ -78,8 +78,8 @@ export async function apiRequest<T>(endpoint: string, options: FetchOptions = {}
               }
 
               const data = await refreshRes.json();
-              localStorage.setItem("logistika_access_token", data.access_token);
-              localStorage.setItem("logistika_refresh_token", data.refresh_token);
+              const { applyRefreshedTokens } = await import("../services/authApi");
+              applyRefreshedTokens(data);
               return data.access_token as string;
             })();
 

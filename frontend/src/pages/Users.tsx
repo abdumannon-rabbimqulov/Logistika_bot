@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "../api";
 import type { User, UserListResponse } from "../types";
-import { UserRole } from "../types";
+import { UserRoleFilter } from "../types";
+import type { UserRole } from "../types/auth";
 import {
   Search,
   Filter,
@@ -142,10 +143,10 @@ export const Users: React.FC = () => {
             <Filter size={14} />
             <select className="glass-select" value={role} onChange={(e) => { setRole(e.target.value); setPage(1); }}>
               <option value="">Barcha Rollar</option>
-              <option value={UserRole.ADMIN}>Adminlar</option>
-              <option value={UserRole.DRIVER}>Haydovchilar</option>
-              <option value={UserRole.CLIENT}>Mijozlar</option>
-              <option value={UserRole.DISPATCHER}>Dispetcherlar</option>
+              <option value={UserRoleFilter.ADMIN}>Adminlar</option>
+              <option value={UserRoleFilter.DRIVER}>Haydovchilar</option>
+              <option value={UserRoleFilter.SENDER}>Yuk beruvchilar</option>
+              <option value={UserRoleFilter.GUEST}>Mehmon</option>
             </select>
           </div>
 
@@ -197,7 +198,7 @@ export const Users: React.FC = () => {
                     </td>
                     <td>{u.phone_number || <span className="text-muted">Kiritilmagan</span>}</td>
                     <td>
-                      <span className={`badge ${u.role === UserRole.ADMIN ? "badge-primary" : u.role === UserRole.DRIVER ? "badge-success" : u.role === UserRole.DISPATCHER ? "badge-info" : "badge-neutral"}`}>
+                      <span className={`badge ${u.role === UserRoleFilter.ADMIN ? "badge-primary" : u.role === UserRoleFilter.DRIVER ? "badge-success" : u.role === UserRoleFilter.SENDER ? "badge-info" : "badge-neutral"}`}>
                         {u.role || "client"}
                       </span>
                     </td>
@@ -330,10 +331,10 @@ export const Users: React.FC = () => {
                     onChange={(e) => setEditRole(e.target.value as UserRole)}
                   >
                     <option value="">Tanlang (Mijoz bo'ladi)</option>
-                    <option value={UserRole.ADMIN}>Admin</option>
-                    <option value={UserRole.DRIVER}>Haydovchi</option>
-                    <option value={UserRole.CLIENT}>Mijoz</option>
-                    <option value={UserRole.DISPATCHER}>Dispetcher</option>
+                    <option value={UserRoleFilter.ADMIN}>Admin</option>
+                    <option value={UserRoleFilter.DRIVER}>Haydovchi</option>
+                    <option value={UserRoleFilter.SENDER}>Yuk beruvchi</option>
+                    <option value={UserRoleFilter.GUEST}>Mehmon</option>
                   </select>
                 </div>
               </div>

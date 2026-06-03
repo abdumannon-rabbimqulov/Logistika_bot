@@ -10,6 +10,7 @@ import {
   User,
   LogOut,
   Navigation,
+  Layers,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -31,6 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = () => {
     { to: "/users", label: "Foydalanuvchilar", icon: Users },
     { to: "/ai-commands", label: "AI Loglar", icon: Cpu },
     { to: "/live-tracking", label: "Jonli Kuzatuv", icon: MapPin },
+    { to: "/truck-types", label: "Mashina turlari", icon: Layers },
     { to: "/profile", label: "Profil Sozlamalari", icon: User },
   ];
 
