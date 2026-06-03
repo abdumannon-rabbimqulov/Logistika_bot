@@ -1,6 +1,5 @@
-version: '3.8'
-
 services:
+  # 1. PostgreSQL bazasi
   db:
     image: postgres:15-alpine
     container_name: postgres_db
@@ -15,7 +14,17 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  # 2. Redis server 
+  logistika-redis:
+    image: redis:7-alpine
+    container_name: logistika-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
 
+  # 3. FastAPI Web dasturi
   web:
     build: .
     container_name: fastapi_web_app
@@ -30,7 +39,9 @@ services:
     restart: always
     depends_on:
       - db
+      - logistika-redis
 
+  # 4. Telegram Bot
   bot:
     build: .
     container_name: aiogram_telegram_bot
@@ -44,5 +55,9 @@ services:
     restart: always
     depends_on:
       - db
+      - logistika-redis
+
+# Barcha volume'lar bitta joyda jamlandi
 volumes:
   postgres_data:
+  redis_data:

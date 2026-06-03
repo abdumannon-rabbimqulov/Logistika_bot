@@ -3,7 +3,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Sidebar } from "../components/Sidebar";
 import { Settings, Server, X, ShieldAlert } from "lucide-react";
-import { API_BASE_URL } from "../api";
+import { API_BASE_URL, normalizeApiBaseUrl } from "../api";
 
 export const AdminLayout: React.FC = () => {
   const { isAuthenticated, user, loading } = useAuth();
@@ -74,7 +74,7 @@ export const AdminLayout: React.FC = () => {
   }
 
   const handleSaveSettings = () => {
-    localStorage.setItem("logistika_backend_url", backendUrl);
+    localStorage.setItem("logistika_backend_url", normalizeApiBaseUrl(backendUrl));
     setShowSettings(false);
     window.location.reload();
   };

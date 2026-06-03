@@ -1,14 +1,20 @@
 // Production-grade Fetch Wrapper with Auto-Refresh Token Interceptor
 
+/** Backend barcha route'lari /api prefiksi ostida (Postman: .../api/auth/login). */
+export function normalizeApiBaseUrl(url: string): string {
+  const trimmed = url.trim().replace(/\/+$/, "");
+  if (!trimmed) return trimmed;
+  return trimmed.endsWith("/api") ? trimmed : `${trimmed}/api`;
+}
+
 const getBaseUrl = (): string => {
   const savedUrl = localStorage.getItem("logistika_backend_url");
-  if (savedUrl) return savedUrl;
-  
-  // Default fallback for development and production
+  if (savedUrl) return normalizeApiBaseUrl(savedUrl);
+
   if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-    return "http://localhost:8000"; // FastAPI port
+    return "http://127.0.0.1:8000/api";
   }
-  return window.location.origin;
+  return `${window.location.origin}/api`;
 };
 
 export const API_BASE_URL = getBaseUrl();

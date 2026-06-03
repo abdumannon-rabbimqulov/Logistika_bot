@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { KeyRound, Phone, ShieldCheck, Lock, ArrowRight, CornerDownLeft, Eye, EyeOff } from "lucide-react";
+import { formatPhoneForApi } from "../utils/phone";
 
 export const Login: React.FC = () => {
   const { login, resetPhone, verifyResetCode, resetPassword, isAuthenticated } = useAuth();
@@ -43,13 +44,7 @@ export const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Normalize phone number: ensure it starts with '+'
-      let formattedPhone = phoneNumber.trim();
-      if (!formattedPhone.startsWith("+")) {
-        formattedPhone = "+" + formattedPhone;
-      }
-
-      await login(formattedPhone, password);
+      await login(formatPhoneForApi(phoneNumber), password);
       navigate("/dashboard");
     } catch (err: any) {
       setError(err.message || "Tizimga kirishda xatolik yuz berdi.");
@@ -66,14 +61,8 @@ export const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
-      let formattedPhone = phoneNumber.trim();
-      if (!formattedPhone.startsWith("+")) {
-        formattedPhone = "+" + formattedPhone;
-      }
-
       if (forgotStep === 1) {
-        // Step 1: Send SMS
-        await resetPhone(formattedPhone);
+        await resetPhone(formatPhoneForApi(phoneNumber));
         setSuccessMsg("Tasdiqlash kodi Telegram bot orqali yuborildi!");
         setForgotStep(2);
       } else if (forgotStep === 2) {

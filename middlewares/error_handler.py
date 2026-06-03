@@ -229,45 +229,5 @@ def setup_error_handlers(app: FastAPI):
     app.add_middleware(RequestIdMiddleware)
 
 
-_CONSOLE_LOG_FORMAT = "%(levelname)s:     %(message)s"
-
-
-def setup_logging(environment: str = "development"):
-    """Oddiy matn loglar (uvicorn access log bilan bir xil uslub)."""
-    import os
-    import sys
-
-    from config.config import LOG_LEVEL
-
-    level = getattr(logging, (LOG_LEVEL or "INFO").upper(), logging.INFO)
-    formatter = logging.Formatter(_CONSOLE_LOG_FORMAT)
-
-    root_logger = logging.getLogger()
-    root_logger.setLevel(level)
-    root_logger.handlers.clear()
-
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    root_logger.addHandler(console_handler)
-
-    if environment == "production":
-        try:
-            os.makedirs("logs", exist_ok=True)
-            file_handler = logging.FileHandler("logs/app.log")
-            file_handler.setFormatter(formatter)
-            root_logger.addHandler(file_handler)
-        except (OSError, PermissionError):
-            pass
-
-    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
-    logging.getLogger("asyncio").setLevel(logging.WARNING)
-    # Uvicorn access: INFO: 127.0.0.1:1234 - "GET /path HTTP/1.1" 200 OK
-    logging.getLogger("uvicorn.access").setLevel(logging.INFO)
-
-    logger.info("Logging configured (%s)", environment)
-
-
-
-
 
 

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { UserRole } from "../types";
 import type { User, UserUpdateData } from "../types";
 import { apiRequest } from "../api";
+import { formatPhoneForApi } from "../utils/phone";
 
 interface AuthContextType {
   user: User | null;
@@ -70,7 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (initData) {
         payload.init_data = initData;
       } else {
-        payload.phone_number = phone_number;
+        payload.phone_number = phone_number ? formatPhoneForApi(phone_number) : phone_number;
         payload.password = password;
       }
 
@@ -121,10 +122,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const resetPhone = async (phone_number: string) => {
-    // Call reset phone, gets access token in response for subsequent verification
     const res = await apiRequest<{ detail: string; access_token: string }>("/auth/reset-phone", {
       method: "POST",
-      body: JSON.stringify({ phone_number }),
+      body: JSON.stringify({ phone_number: formatPhoneForApi(phone_number) }),
       skipAuth: true,
     });
     // Set temp token to perform code verification

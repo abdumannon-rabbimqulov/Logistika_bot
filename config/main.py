@@ -4,21 +4,15 @@ from config.config import (
     Base,
     UPLOAD_DIR,
     STATIC_PATH,
-    LOG_LEVEL,
     ENVIRONMENT,
     API_PUBLIC_PREFIX,
     WEBAPP_URL,
 )
-from middlewares.error_handler import setup_error_handlers, setup_logging
+from middlewares.error_handler import setup_error_handlers
 import driver.models
 import order.models
 import ai.models
 import users.models
-
-# ─────────────────────────────────────────────────────────────
-# Setup logging va error handlers
-# ─────────────────────────────────────────────────────────────
-setup_logging(environment=ENVIRONMENT)
 
 from sqlalchemy.orm import configure_mappers
 configure_mappers()
