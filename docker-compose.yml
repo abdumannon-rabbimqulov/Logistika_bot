@@ -6,9 +6,9 @@ services:
     container_name: postgres_db
     restart: always
     environment:
-      - POSTGRES_USER=user
+      - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=2103
-      - POSTGRES_DB=logistic_db
+      - POSTGRES_DB=logistika_db
       - TZ=Asia/Toshkent
     ports:
       - "5432:5432"

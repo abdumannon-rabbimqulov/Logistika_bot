@@ -149,9 +149,6 @@ async def assistant_list_messages(
     return await crud.list_chat_messages(db, chat_id, limit=limit, before_id=before_id)
 
 
-# ════════════════════════════════════════════════
-# REST endpoints — Chat (peer)
-# ════════════════════════════════════════════════
 
 
 @router.post("/chats", response_model=schemas.ChatResponse, summary="Yangi chat yaratish")
