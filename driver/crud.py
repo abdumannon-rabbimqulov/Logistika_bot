@@ -1,10 +1,13 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete
-from typing import List, Optional
+from sqlalchemy import desc, select, update, delete
+from sqlalchemy.orm import selectinload
+from typing import List, Optional, Sequence
 from driver.models import (
     TruckType, Driver,
     DriverAnnouncement, AnnouncementWaypoint, AnnouncementOffer
 )
+from order.models import Order, OrderStatus
+from order.crud import sort_order_waypoints
 from driver.schemas import (
     TruckTypeCreate, TruckTypeUpdate,
     DriverCreate, DriverUpdate,
@@ -63,6 +66,65 @@ async def update_driver(db: AsyncSession, pk: int, data: DriverUpdate) -> Option
     await db.execute(update(Driver).where(Driver.id == pk).values(**data.model_dump(exclude_unset=True)))
     await db.commit()
     return await get_driver(db, pk)
+
+
+def format_balance_uzs(amount) -> str:
+    """Masalan: 1200000 -> '1 200 000 UZS'."""
+    from decimal import Decimal
+
+    value = int(Decimal(str(amount)))
+    formatted = f"{value:,}".replace(",", " ")
+    return f"{formatted} UZS"
+
+
+_TRIP_SCOPE_STATUSES: dict[str, Sequence[OrderStatus]] = {
+    "current": (OrderStatus.ACCEPTED, OrderStatus.IN_PROGRESS),
+    "completed": (OrderStatus.COMPLETED,),
+    "all": (
+        OrderStatus.ACCEPTED,
+        OrderStatus.IN_PROGRESS,
+        OrderStatus.COMPLETED,
+        OrderStatus.CANCELLED,
+    ),
+}
+
+
+async def get_driver_trips(
+    db: AsyncSession,
+    driver_id: int,
+    *,
+    scope: str = "all",
+    skip: int = 0,
+    limit: int = 50,
+) -> tuple[List[Order], int]:
+    """Haydovchiga biriktirilgan safarlar (buyurtmalar)."""
+    statuses = _TRIP_SCOPE_STATUSES.get(scope, _TRIP_SCOPE_STATUSES["all"])
+
+    base = (
+        select(Order)
+        .options(selectinload(Order.waypoints))
+        .where(Order.driver_id == driver_id, Order.status.in_(statuses))
+    )
+
+    from sqlalchemy import func
+
+    total = (
+        await db.execute(
+            select(func.count(Order.id)).where(
+                Order.driver_id == driver_id,
+                Order.status.in_(statuses),
+            )
+        )
+    ).scalar_one()
+
+    stmt = (
+        base.order_by(desc(Order.updated_at))
+        .offset(max(skip, 0))
+        .limit(min(max(limit, 1), 100))
+    )
+    result = await db.execute(stmt)
+    orders = [sort_order_waypoints(o) for o in result.scalars().all()]
+    return orders, total
 
 
 

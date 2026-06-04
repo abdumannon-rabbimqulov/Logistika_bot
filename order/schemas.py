@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional, List
@@ -125,6 +125,15 @@ class OrderResponse(OrderBase):
     updated_at: datetime
     waypoints: List[OrderWaypointResponse]
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("waypoints", mode="before")
+    @classmethod
+    def sort_waypoints_by_sequence(cls, value):
+        if not value:
+            return value
+        if isinstance(value, list):
+            return sorted(value, key=lambda w: getattr(w, "sequence", w.get("sequence", 0) if isinstance(w, dict) else 0))
+        return value
 
 # --- OrderOffer Schemas ---
 

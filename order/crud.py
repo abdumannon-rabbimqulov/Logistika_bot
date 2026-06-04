@@ -1,12 +1,19 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete
+from sqlalchemy import desc, select, update, delete
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
-from order.models import Order, OrderWaypoint, OrderOffer
+from order.models import Order, OrderStatus, OrderWaypoint, OrderOffer
 from order.schemas import (
     OrderCreate, OrderUpdate,
     OrderOfferCreate, OrderOfferUpdate
 )
+
+
+def sort_order_waypoints(order: Order) -> Order:
+    """Waypoints — sequence (pickup tartibi) bo'yicha."""
+    if order.waypoints:
+        order.waypoints.sort(key=lambda w: w.sequence)
+    return order
 
 
 async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int) -> Order:
@@ -28,7 +35,7 @@ async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int)
     result = await db.execute(
         select(Order).options(selectinload(Order.waypoints)).where(Order.id == obj.id)
     )
-    return result.scalar_one()
+    return sort_order_waypoints(result.scalar_one())
 
 async def get_order(db: AsyncSession, pk: int) -> Optional[Order]:
     result = await db.execute(
@@ -36,13 +43,17 @@ async def get_order(db: AsyncSession, pk: int) -> Optional[Order]:
         .options(selectinload(Order.waypoints))
         .where(Order.id == pk)
     )
-    return result.scalar_one_or_none()
+    order = result.scalar_one_or_none()
+    return sort_order_waypoints(order) if order else None
 
 async def get_all_orders(
-    db: AsyncSession, 
+    db: AsyncSession,
     customer_id: Optional[int] = None,
     driver_id: Optional[int] = None,
-    status: Optional[str] = None
+    status: Optional[str] = None,
+    *,
+    required_truck_type_id: Optional[int] = None,
+    unassigned_only: bool = False,
 ) -> List[Order]:
     stmt = select(Order).options(selectinload(Order.waypoints))
     if customer_id:
@@ -51,9 +62,36 @@ async def get_all_orders(
         stmt = stmt.where(Order.driver_id == driver_id)
     if status:
         stmt = stmt.where(Order.status == status)
-    
+    if required_truck_type_id is not None:
+        stmt = stmt.where(Order.required_truck_type_id == required_truck_type_id)
+    if unassigned_only:
+        stmt = stmt.where(Order.driver_id.is_(None))
+
+    stmt = stmt.order_by(desc(Order.created_at))
     result = await db.execute(stmt)
-    return result.scalars().all()
+    return [sort_order_waypoints(o) for o in result.scalars().all()]
+
+
+async def get_available_orders_for_driver(
+    db: AsyncSession,
+    truck_type_id: int,
+    *,
+    limit: int = 50,
+) -> List[Order]:
+    """Pending buyurtmalar — haydovchi mashina turiga mos, haydovchisiz."""
+    stmt = (
+        select(Order)
+        .options(selectinload(Order.waypoints))
+        .where(
+            Order.status == OrderStatus.PENDING,
+            Order.driver_id.is_(None),
+            Order.required_truck_type_id == truck_type_id,
+        )
+        .order_by(desc(Order.created_at))
+        .limit(min(max(limit, 1), 100))
+    )
+    result = await db.execute(stmt)
+    return [sort_order_waypoints(o) for o in result.scalars().all()]
 
 async def update_order(db: AsyncSession, pk: int, data: OrderUpdate) -> Optional[Order]:
     await db.execute(update(Order).where(Order.id == pk).values(**data.model_dump(exclude_unset=True)))

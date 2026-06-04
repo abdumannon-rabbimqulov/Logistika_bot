@@ -10,6 +10,8 @@ from fastapi import (
     Depends,
     File,
     HTTPException,
+    Query,
+    Response,
     UploadFile,
     WebSocket,
     WebSocketDisconnect,
@@ -22,6 +24,9 @@ from Admin_panel.validation import is_admin
 from config.config import STATIC_PATH, UPLOAD_DIR, async_session, get_db
 from driver import crud, schemas
 from driver.models import Driver
+from driver.profile import build_driver_profile
+from order import crud as order_crud
+from order import schemas as order_schemas
 from order.models import Order, OrderStatus, OrderTrack
 from services import live_location
 from users import crud as users_crud
@@ -121,33 +126,89 @@ async def create_driver_profile(
 
     return await crud.create_driver(db, data, user_id=current_user.id)
 
-@router.get("/me", response_model=schemas.DriverResponse, summary="Mening haydovchi profilim")
+async def _require_driver(db: AsyncSession, current_user: User) -> Driver:
+    driver = await crud.get_driver_by_user_id(db, current_user.id)
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver profile not found")
+    return driver
+
+
+@router.get(
+    "/me",
+    response_model=schemas.DriverProfileResponse,
+    summary="Mening haydovchi profilim (kabinet)",
+)
+@router.get(
+    "/profile",
+    response_model=schemas.DriverProfileResponse,
+    summary="Haydovchi profili — batafsil kabinet ma'lumotlari",
+)
 async def get_my_driver_profile(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    obj = await crud.get_driver_by_user_id(db, current_user.id)
-    if not obj:
-        raise HTTPException(status_code=404, detail="Driver profile not found")
-    return obj
+    driver = await _require_driver(db, current_user)
+    return await build_driver_profile(db, current_user, driver)
 
-@router.patch("/me", response_model=schemas.DriverResponse, summary="Profilni tahrirlash")
+
+@router.patch("/me", response_model=schemas.DriverProfileResponse, summary="Profilni tahrirlash")
 async def update_my_driver_profile(
     data: schemas.DriverUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    driver = await crud.get_driver_by_user_id(db, current_user.id)
-    if not driver:
-        raise HTTPException(status_code=404, detail="Driver profile not found")
+    driver = await _require_driver(db, current_user)
 
     dump = data.model_dump(exclude_unset=True)
     dump.pop("last_latitude", None)
     dump.pop("last_longitude", None)
     if dump:
-        updated = await crud.update_driver(db, driver.id, schemas.DriverUpdate(**dump))
-        return updated
-    return await crud.get_driver(db, driver.id)
+        await crud.update_driver(db, driver.id, schemas.DriverUpdate(**dump))
+        driver = await crud.get_driver(db, driver.id)
+    await db.refresh(current_user)
+    return await build_driver_profile(db, current_user, driver)
+
+
+@router.get(
+    "/trips",
+    response_model=List[order_schemas.OrderResponse],
+    summary="Haydovchi safarlari (buyurtmalar)",
+)
+async def list_driver_trips(
+    response: Response,
+    scope: schemas.DriverTripScope = Query(
+        schemas.DriverTripScope.ALL,
+        description="current — joriy; completed — tugallangan; all — barchasi",
+    ),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    driver = await _require_driver(db, current_user)
+    orders, total = await crud.get_driver_trips(
+        db, driver.id, scope=scope.value, skip=skip, limit=limit
+    )
+    response.headers["X-Total-Count"] = str(total)
+    return orders
+
+
+@router.get(
+    "/available-orders",
+    response_model=List[order_schemas.OrderResponse],
+    summary="Mos keluvchi yangi buyurtmalar (pending, mashina turiga mos)",
+)
+async def list_available_orders_for_driver(
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    driver = await _require_driver(db, current_user)
+    if driver.is_blocked:
+        raise HTTPException(status_code=403, detail="Haydovchi bloklangan")
+    return await order_crud.get_available_orders_for_driver(
+        db, driver.truck_type_id, limit=limit
+    )
 
 
 async def _save_order_track_if_needed(

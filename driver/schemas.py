@@ -107,6 +107,47 @@ class DriverUpdate(BaseModel):
     is_live_location_active: Optional[bool] = None
 
 
+class UserStatus(str, Enum):
+    LIVE = "LIVE"
+    OFFLINE = "OFFLINE"
+
+
+class GpsStatus(str, Enum):
+    ON = "ON"
+    OFF = "OFF"
+
+
+class DriverProfileResponse(BaseModel):
+    """Haydovchi kabineti — ixcham profil (GET /drivers/me, /drivers/profile)."""
+
+    id: int
+    user_id: int
+    name: str
+    rating: float
+    balance: str = Field(..., description="Formatlangan balans, masalan: 1 200 000 UZS")
+    balance_amount: Decimal
+    currency: str = "UZS"
+    user_status: UserStatus
+    gps_status: GpsStatus
+    phone_number: Optional[str] = None
+    truck_type_id: int
+    truck_type_name: Optional[str] = None
+    truck_number: str
+    truck_year: Optional[int] = None
+    current_city: Optional[str] = None
+    current_region: Optional[str] = None
+    is_available: bool
+    total_trips: int
+    on_time_percent: Decimal
+    is_blocked: bool = False
+
+
+class DriverTripScope(str, Enum):
+    CURRENT = "current"
+    COMPLETED = "completed"
+    ALL = "all"
+
+
 class DriverResponse(BaseModel):
     id: int
     user_id: int

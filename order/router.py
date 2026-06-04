@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from config.config import get_db
@@ -27,11 +27,42 @@ async def list_orders(
     customer_id: Optional[int] = None,
     driver_id: Optional[int] = None,
     status: Optional[str] = None,
+    required_truck_type_id: Optional[int] = Query(
+        None, description="Mashina turi bo'yicha filtr (haydovchi uchun)"
+    ),
+    unassigned_only: bool = Query(
+        False, description="Faqat haydovchisiz buyurtmalar (driver_id IS NULL)"
+    ),
+    match_my_truck: bool = Query(
+        False,
+        description="Haydovchi uchun: o'z mashina turidagi pending buyurtmalar",
+    ),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """Tizimdagi barcha yuk buyurtmalarini ko'rish. Filtrlar mavjud."""
-    return await crud.get_all_orders(db, customer_id, driver_id, status)
+    """Tizimdagi yuk buyurtmalari. Waypoints sequence bo'yicha tartiblangan."""
+    truck_type_id = required_truck_type_id
+    only_unassigned = unassigned_only
+    order_status = status
+
+    if match_my_truck:
+        from driver.crud import get_driver_by_user_id
+
+        driver = await get_driver_by_user_id(db, current_user.id)
+        if not driver:
+            raise HTTPException(status_code=403, detail="Faqat haydovchilar uchun")
+        truck_type_id = driver.truck_type_id
+        only_unassigned = True
+        order_status = order_status or "pending"
+
+    return await crud.get_all_orders(
+        db,
+        customer_id,
+        driver_id,
+        order_status,
+        required_truck_type_id=truck_type_id,
+        unassigned_only=only_unassigned,
+    )
 
 @router.get("/{pk}", response_model=schemas.OrderResponse, summary="Buyurtma tafsilotlari")
 async def get_order(

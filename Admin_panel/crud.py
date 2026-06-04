@@ -110,7 +110,9 @@ async def list_orders_admin(
         .limit(min(max(limit, 1), 200))
     )
     rows = (await db.execute(stmt)).scalars().all()
-    return list(rows), int(total)
+    from order.crud import sort_order_waypoints
+
+    return [sort_order_waypoints(o) for o in rows], int(total)
 
 
 async def update_order_admin(db: AsyncSession, order: Order, data: AdminOrderUpdate) -> Order:
