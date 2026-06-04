@@ -105,43 +105,6 @@ class DriverUpdate(BaseModel):
     current_region: Optional[str] = None
     is_available: Optional[bool] = None
     is_live_location_active: Optional[bool] = None
-    last_latitude: Optional[float] = Field(
-        None, ge=-90, le=90, description="Eski API: POST /me/location afzal"
-    )
-    last_longitude: Optional[float] = Field(
-        None, ge=-180, le=180, description="Eski API: POST /me/location afzal"
-    )
-
-
-class DriverLocationUpdate(BaseModel):
-    """Veb-sayt / Telegram Web App dan jonli GPS."""
-
-    latitude: float = Field(..., ge=-90, le=90)
-    longitude: float = Field(..., ge=-180, le=180)
-    live_period_sec: Optional[int] = Field(
-        None,
-        ge=30,
-        le=86400,
-        description="Jonli GPS amal qilish muddati (sekund). Default: LIVE_LOC_DEFAULT_PERIOD_SEC",
-    )
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {"latitude": 41.3111, "longitude": 69.2797, "live_period_sec": 1800}
-        }
-    )
-
-
-class DriverLocationResponse(BaseModel):
-    driver_id: int
-    user_id: Optional[int] = None
-    full_name: Optional[str] = None
-    truck_number: Optional[str] = None
-    truck_type_id: Optional[int] = None
-    lat: float
-    lon: float
-    ts: datetime
-    expires_at: Optional[datetime] = None
 
 
 class DriverResponse(BaseModel):

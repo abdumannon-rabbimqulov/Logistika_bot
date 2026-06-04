@@ -97,6 +97,13 @@ class Order(Base):
         uselist=False,
     )
 
+    tracks: Mapped[list["OrderTrack"]] = relationship(
+        "OrderTrack",
+        back_populates="order",
+        order_by="OrderTrack.recorded_at",
+        cascade="all, delete-orphan",
+    )
+
 
     @property
     def origin(self) -> "OrderWaypoint | None":
@@ -121,6 +128,22 @@ class Order(Base):
         stops = len(self.waypoints) if self.waypoints else 0
         return f"<Order(id={self.id}, cargo='{self.cargo_name}', stops={stops}, status={self.status})>"
 
+
+
+
+
+
+class OrderTrack(Base):
+    __tablename__ = "order_tracks"
+
+    id          : Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    order_id    : Mapped[int]      = mapped_column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
+    latitude    : Mapped[float]    = mapped_column(Numeric(9, 6), nullable=False)
+    longitude   : Mapped[float]    = mapped_column(Numeric(9, 6), nullable=False)
+    recorded_at : Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Order bilan teskari aloqa
+    order       = relationship("Order", back_populates="tracks")
 
 
 class OrderWaypoint(Base):

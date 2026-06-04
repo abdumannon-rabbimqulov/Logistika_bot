@@ -131,8 +131,11 @@ class Driver(Base):
         """GPS hozir aktiv va muddati o'tmagan"""
         if not self.is_live_location_active:
             return False
-        if self.live_location_expires and datetime.now(timezone.utc) > self.live_location_expires:
-            return False
+        if self.live_location_expires:
+            from services.datetime_utils import to_utc_naive, utc_now_naive
+
+            if utc_now_naive() > to_utc_naive(self.live_location_expires):
+                return False
         return True
 
     @property

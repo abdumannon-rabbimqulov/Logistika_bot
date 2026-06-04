@@ -1,5 +1,13 @@
 import { apiRequest, API_BASE_URL } from "../api";
 import type { DriverProfileCreatePayload, TruckType } from "../types/auth";
+import type {
+  AnnouncementCreatePayload,
+  AnnouncementOffer,
+  DriverAnnouncement,
+  DriverProfile,
+  DriverProfileUpdate,
+  OfferUpdatePayload,
+} from "../types/driver";
 
 /** POST /drivers/truck-types — TruckTypeCreate (driver/schemas.py) */
 export interface TruckTypePayload {
@@ -128,5 +136,43 @@ export async function createDriverProfile(payload: DriverProfileCreatePayload): 
   return apiRequest("/drivers/profile", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchDriverMe(): Promise<DriverProfile> {
+  return apiRequest<DriverProfile>("/drivers/me");
+}
+
+export async function updateDriverMe(data: DriverProfileUpdate): Promise<DriverProfile> {
+  return apiRequest<DriverProfile>("/drivers/me", {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function fetchAnnouncements(driverId?: number): Promise<DriverAnnouncement[]> {
+  const q = driverId != null ? `?driver_id=${driverId}` : "";
+  return apiRequest<DriverAnnouncement[]>(`/drivers/announcements${q}`);
+}
+
+export async function fetchAnnouncement(pk: number): Promise<DriverAnnouncement> {
+  return apiRequest<DriverAnnouncement>(`/drivers/announcements/${pk}`);
+}
+
+export async function createAnnouncement(data: AnnouncementCreatePayload): Promise<DriverAnnouncement> {
+  return apiRequest<DriverAnnouncement>("/drivers/announcements", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function fetchAnnouncementOffers(announcementId: number): Promise<AnnouncementOffer[]> {
+  return apiRequest<AnnouncementOffer[]>(`/drivers/announcements/${announcementId}/offers`);
+}
+
+export async function updateOffer(pk: number, data: OfferUpdatePayload): Promise<AnnouncementOffer> {
+  return apiRequest<AnnouncementOffer>(`/drivers/offers/${pk}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
   });
 }

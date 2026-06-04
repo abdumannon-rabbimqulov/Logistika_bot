@@ -1,6 +1,6 @@
 import React from "react";
 import { Outlet, useNavigate, useLocation, NavLink } from "react-router-dom";
-import { ArrowLeft, Home, User, Bot, MessagesSquare } from "lucide-react";
+import { ArrowLeft, Home, User, Bot, MessagesSquare, Megaphone } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import type { UserRole } from "../types/auth";
 
@@ -18,6 +18,9 @@ function pageTitle(pathname: string, role: "sender" | "driver", override?: strin
     if (pathname.endsWith("/chats")) return "Chatlar";
     return "Yuk beruvchi";
   }
+  if (pathname.includes("/announcements/")) return "Takliflar";
+  if (pathname.endsWith("/announcements")) return "E'lonlar";
+  if (pathname.endsWith("/profile")) return "Haydovchi profili";
   return "Haydovchi";
 }
 
@@ -33,13 +36,18 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({ role, title })
   const isAi = pathname.includes("/ai");
   const isChatsList = pathname.endsWith("/chats");
   const isChatDetail = /\/chats\/\d+/.test(pathname);
+  const isAnnouncements = pathname.includes("/announcements");
+  const isOfferDetail = /\/announcements\/\d+/.test(pathname);
 
   const headerTitle = pageTitle(pathname, role, title);
 
-  const showBack = !isHome && (isProfile || isAi || isChatsList || isChatDetail);
+  const showBack =
+    !isHome &&
+    (isProfile || isAi || isChatsList || isChatDetail || isAnnouncements);
 
   const goBack = () => {
-    if (isChatDetail) navigate(`${base}/chats`);
+    if (isOfferDetail) navigate(`${base}/announcements`);
+    else if (isChatDetail) navigate(`${base}/chats`);
     else if (isAi || isChatsList) navigate(base);
     else navigate(base);
   };
@@ -90,6 +98,17 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({ role, title })
                 <span>Chat</span>
               </NavLink>
             </>
+          )}
+          {role === "driver" && (
+            <NavLink
+              to={`${base}/announcements`}
+              className={({ isActive }) =>
+                `mobile-nav-item${isActive || isOfferDetail ? " active" : ""}`
+              }
+            >
+              <Megaphone size={22} />
+              <span>E&apos;lon</span>
+            </NavLink>
           )}
           <NavLink
             to={`${base}/profile`}

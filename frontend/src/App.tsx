@@ -6,6 +6,8 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { RootRedirect } from "./components/RootRedirect";
 import { AdminLayout } from "./layouts/AdminLayout";
 import { MobileAppLayout } from "./layouts/MobileAppLayout";
+import { DriverAppLayout } from "./layouts/DriverAppLayout";
+import { LocationProvider } from "./context/LocationContext";
 import { Login } from "./pages/Login";
 import { ForgotPasswordPage } from "./pages/auth/ForgotPasswordPage";
 import { Dashboard } from "./pages/Dashboard";
@@ -15,8 +17,12 @@ import { AICommands } from "./pages/AICommands";
 import { LiveTracking } from "./pages/LiveTracking";
 import { Profile } from "./pages/Profile";
 import { SenderHome } from "./pages/SenderHome";
-import { DriverHome } from "./pages/DriverHome";
+import { DriverHome } from "./pages/driver/DriverHome";
+import { DriverOrdersPage } from "./pages/driver/DriverOrdersPage";
 import { DriverSetupProfile } from "./pages/DriverSetupProfile";
+import { DriverProfilePage } from "./pages/driver/DriverProfilePage";
+import { AnnouncementsPage } from "./pages/driver/AnnouncementsPage";
+import { AnnouncementOffersPage } from "./pages/driver/AnnouncementOffersPage";
 import { MobileProfile } from "./pages/mobile/MobileProfile";
 import { TruckTypesAdmin } from "./pages/admin/TruckTypesAdmin";
 import { AIAssistantPage } from "./pages/sender/AIAssistantPage";
@@ -27,6 +33,7 @@ export const App: React.FC = () => {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <LocationProvider>
         <Routes>
           <Route
             path="/login"
@@ -73,12 +80,15 @@ export const App: React.FC = () => {
             path="/driver"
             element={
               <ProtectedRoute roles={["driver"]}>
-                <MobileAppLayout role="driver" />
+                <DriverAppLayout />
               </ProtectedRoute>
             }
           >
             <Route index element={<DriverHome />} />
-            <Route path="profile" element={<MobileProfile />} />
+            <Route path="orders" element={<DriverOrdersPage />} />
+            <Route path="profile" element={<DriverProfilePage />} />
+            <Route path="announcements" element={<AnnouncementsPage />} />
+            <Route path="announcements/:id" element={<AnnouncementOffersPage />} />
           </Route>
 
           <Route
@@ -100,6 +110,7 @@ export const App: React.FC = () => {
           <Route path="/" element={<RootRedirect />} />
           <Route path="*" element={<RootRedirect />} />
         </Routes>
+        </LocationProvider>
       </AuthProvider>
     </BrowserRouter>
   );

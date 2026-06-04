@@ -1,65 +1,48 @@
+import logging
 import os
 import shutil
+import time
 import uuid
-from datetime import datetime, timezone
-
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
-from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 
-from config.config import STATIC_PATH, UPLOAD_DIR, get_db
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from Admin_panel.validation import is_admin
+from config.config import STATIC_PATH, UPLOAD_DIR, async_session, get_db
 from driver import crud, schemas
 from driver.models import Driver
+from order.models import Order, OrderStatus, OrderTrack
 from services import live_location
-from users.auth import get_current_user
+from users import crud as users_crud
+from users.auth import get_current_user, verify_token
 from users.models import User
-from Admin_panel.validation import is_admin
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/drivers", tags=["Haydovchilar (Drivers)"])
 
+LAST_DB_WRITE: dict[int, float] = {}
+ORDER_TRACK_INTERVAL_SEC = 600
 
-def _parse_iso_dt(value: object) -> Optional[datetime]:
-    if value is None:
+
+def _normalize_ws_token(raw: Optional[str]) -> Optional[str]:
+    if not raw:
         return None
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, str):
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
-    return None
-
-
-def _location_payload_to_response(payload: dict) -> schemas.DriverLocationResponse:
-    return schemas.DriverLocationResponse(
-        driver_id=int(payload["driver_id"]),
-        user_id=payload.get("user_id"),
-        full_name=payload.get("full_name"),
-        truck_number=payload.get("truck_number"),
-        truck_type_id=payload.get("truck_type_id"),
-        lat=float(payload["lat"]),
-        lon=float(payload["lon"]),
-        ts=_parse_iso_dt(payload["ts"]) or datetime.now(timezone.utc),
-        expires_at=_parse_iso_dt(payload.get("expires_at")),
-    )
-
-
-async def _push_driver_location(
-    driver: Driver,
-    user: User,
-    latitude: float,
-    longitude: float,
-    live_period_sec: int = 0,
-) -> schemas.DriverLocationResponse:
-    payload = await live_location.update_driver_location(
-        driver_id=driver.id,
-        lat=latitude,
-        lon=longitude,
-        user_id=user.id,
-        full_name=user.full_name,
-        truck_number=driver.truck_number,
-        truck_type_id=driver.truck_type_id,
-        live_period=live_period_sec,
-    )
-    return _location_payload_to_response(payload)
+    token = raw.strip()
+    if token.lower().startswith("bearer "):
+        return token[7:].strip()
+    return token
 
 
 @router.post("/truck-types", response_model=schemas.TruckTypeResponse, status_code=status.HTTP_201_CREATED, summary="Yangi mashina turi qo'shish,admin uchun")
@@ -159,83 +142,129 @@ async def update_my_driver_profile(
         raise HTTPException(status_code=404, detail="Driver profile not found")
 
     dump = data.model_dump(exclude_unset=True)
-    lat = dump.pop("last_latitude", None)
-    lon = dump.pop("last_longitude", None)
-    live_flag = dump.pop("is_live_location_active", None)
-
-    if lat is not None and lon is not None:
-        await _push_driver_location(driver, current_user, lat, lon)
-    elif live_flag is False:
-        await live_location.stop_driver_location(driver.id)
-
+    dump.pop("last_latitude", None)
+    dump.pop("last_longitude", None)
     if dump:
         updated = await crud.update_driver(db, driver.id, schemas.DriverUpdate(**dump))
         return updated
     return await crud.get_driver(db, driver.id)
 
 
-@router.post(
-    "/me/location",
-    response_model=schemas.DriverLocationResponse,
-    summary="Jonli GPS (veb-sayt / Web App)",
-)
-async def update_my_location(
-    data: schemas.DriverLocationUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Sayt `watchPosition` dan kelgan koordinatalarni Redis + admin xaritaga uzatadi."""
-    driver = await crud.get_driver_by_user_id(db, current_user.id)
-    if not driver:
-        raise HTTPException(status_code=404, detail="Driver profile not found")
-    if driver.is_blocked:
-        raise HTTPException(status_code=403, detail="Haydovchi bloklangan")
+async def _save_order_track_if_needed(
+    db: AsyncSession, driver_id: int, lat: float, lon: float
+) -> None:
+    """IN_PROGRESS buyurtma bo'lsa har 10 daqiqada OrderTrack."""
+    now = time.time()
+    last = LAST_DB_WRITE.get(driver_id, 0)
+    if now - last < ORDER_TRACK_INTERVAL_SEC:
+        return
 
-    return await _push_driver_location(
-        driver,
-        current_user,
-        data.latitude,
-        data.longitude,
-        live_period_sec=data.live_period_sec or 0,
+    result = await db.execute(
+        select(Order).where(
+            Order.driver_id == driver_id,
+            Order.status == OrderStatus.IN_PROGRESS,
+        )
     )
+    active_order = result.scalar_one_or_none()
+    if not active_order:
+        return
+
+    db.add(
+        OrderTrack(
+            order_id=active_order.id,
+            latitude=lat,
+            longitude=lon,
+        )
+    )
+    await db.commit()
+    LAST_DB_WRITE[driver_id] = now
+    logger.info("OrderTrack #%s driver=%s", active_order.id, driver_id)
 
 
-@router.get(
-    "/me/location",
-    response_model=schemas.DriverLocationResponse,
-    summary="Joriy jonli GPS holati",
-)
-async def get_my_location(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+async def _resolve_driver_ws_session(
+    token: Optional[str],
+) -> Optional[tuple[User, Driver]]:
+    """JWT tekshiruvi — WebSocket accept() dan oldin."""
+    raw = _normalize_ws_token(token)
+    if not raw:
+        return None
+    payload = verify_token(raw)
+    if not payload or payload.get("type") != "access":
+        return None
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+
+    async with async_session() as db:
+        user = await users_crud.get_user_by_id(db, int(user_id))
+        if not user:
+            return None
+        driver = await crud.get_driver_by_user_id(db, user.id)
+        if not driver or driver.is_blocked:
+            return None
+        return user, driver
+
+
+@router.websocket("/ws/location")
+async def websocket_driver_location(
+    websocket: WebSocket,
+    token: Optional[str] = None,
 ):
-    driver = await crud.get_driver_by_user_id(db, current_user.id)
-    if not driver:
-        raise HTTPException(status_code=404, detail="Driver profile not found")
+    """
+    Jonli GPS — faqat WebSocket.
+    Token: query `?token=<access_jwt>` (Bearer prefiksi ixtiyoriy).
+    Xabarlar: { "latitude": float, "longitude": float } yoki { "event": "stop" }.
+    """
+    query_token = token or websocket.query_params.get("token")
+    session = await _resolve_driver_ws_session(query_token)
+    if session is None:
+        await websocket.close(code=4401, reason="Unauthorized")
+        return
 
-    payload = await live_location.get_driver_location(driver.id)
-    if not payload:
-        raise HTTPException(status_code=404, detail="Jonli lokatsiya yo'q")
-    return _location_payload_to_response(payload)
+    user, driver = session
+    driver_id = driver.id
+    stop_requested = False
 
+    await websocket.accept()
+    await websocket.send_json({"status": "connected", "driver_id": driver_id})
+    logger.info("Driver %s WS location connected", driver_id)
 
-@router.delete(
-    "/me/location",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Jonli GPS ni to'xtatish (sayt yopilganda)",
-)
-async def stop_my_location(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Web App yopilganda chaqiring — Redis va DB'da live holat o'chadi."""
-    driver = await crud.get_driver_by_user_id(db, current_user.id)
-    if not driver:
-        raise HTTPException(status_code=404, detail="Driver profile not found")
-    await live_location.stop_driver_location(driver.id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    try:
+        async with async_session() as db:
+            while True:
+                data = await websocket.receive_json()
+                if data.get("event") == "stop":
+                    stop_requested = True
+                    break
 
+                lat = float(data["latitude"])
+                lon = float(data["longitude"])
 
+                await live_location.update_driver_location(
+                    driver_id=driver_id,
+                    lat=lat,
+                    lon=lon,
+                    user_id=user.id,
+                    full_name=user.full_name,
+                    truck_number=driver.truck_number,
+                    truck_type_id=driver.truck_type_id,
+                    live_period=1800,
+                )
+                await _save_order_track_if_needed(db, driver_id, lat, lon)
+                await websocket.send_json({"status": "acknowledged"})
+
+    except WebSocketDisconnect:
+        logger.info("Driver %s WS disconnected", driver_id)
+    except Exception as exc:
+        logger.exception("WS location error: %s", exc)
+        try:
+            await websocket.close(code=1011, reason="Server error")
+        except Exception:
+            pass
+    finally:
+        LAST_DB_WRITE.pop(driver_id, None)
+        if stop_requested:
+            await live_location.stop_driver_location(driver_id)
 
 
 

@@ -22,6 +22,7 @@ from config.config import (
     async_session,
 )
 from driver.models import Driver
+from services.datetime_utils import to_utc_naive, utc_now_naive
 from users.models import User
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,7 @@ async def update_driver_location(
 
     `live_period` veb-sayt yuborgan muddat (sekund); 0 bo'lsa default ishlatiladi.
     """
-    now = datetime.now(timezone.utc)
+    now = utc_now_naive()
     period = live_period if live_period and live_period > 0 else LIVE_LOC_DEFAULT_PERIOD_SEC
     expires_at = now + timedelta(seconds=period)
 
@@ -142,6 +143,7 @@ async def _maybe_persist_to_db(
 
 async def _persist_to_db(driver_id: int, lat: float, lon: float, expires_at: datetime) -> None:
     """Driver GPS snapshot'ini Postgres'ga yozadi."""
+    expires_naive = to_utc_naive(expires_at)
     try:
         async with async_session() as db:
             await db.execute(
@@ -150,9 +152,9 @@ async def _persist_to_db(driver_id: int, lat: float, lon: float, expires_at: dat
                 .values(
                     last_latitude=float(lat),
                     last_longitude=float(lon),
-                    last_location_at=datetime.now(timezone.utc),
+                    last_location_at=utc_now_naive(),
                     is_live_location_active=True,
-                    live_location_expires=expires_at,
+                    live_location_expires=expires_naive,
                 )
             )
             await db.commit()
@@ -198,7 +200,7 @@ async def get_all_online_drivers() -> List[Dict]:
 
 async def _locations_from_db(driver_id: Optional[int] = None) -> List[Dict]:
     """Redis ishlamasa DB'dagi oxirgi GPS snapshotlardan fallback."""
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utc_now_naive()
     stmt = (
         select(Driver, User)
         .join(User, User.id == Driver.user_id)
