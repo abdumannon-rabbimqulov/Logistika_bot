@@ -148,7 +148,7 @@ async def delete_order(
     if order.customer_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
     
-    await crud.delete_order(db, pk)
+    await crud.delete_order(db, pk, deleted_by="sender")
     return None
 
 # --- OrderOffer Endpoints ---

@@ -1,8 +1,14 @@
+import logging
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, select, update, delete
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
+
 from order.models import Order, OrderStatus, OrderWaypoint, OrderOffer
+from services.notifications import DeletedBy, notify_drivers_order_deleted
+
+logger = logging.getLogger(__name__)
 
 
 def parse_order_status(raw: Optional[str]) -> Optional[OrderStatus]:
@@ -147,14 +153,51 @@ async def update_order(db: AsyncSession, pk: int, data: OrderUpdate) -> Optional
     await db.commit()
     return await get_order(db, pk)
 
-async def delete_order(db: AsyncSession, pk: int) -> bool:
+async def delete_order(
+    db: AsyncSession,
+    pk: int,
+    *,
+    deleted_by: DeletedBy = "admin",
+) -> bool:
+    """Buyurtmani o'chirish: taklif bergan haydovchilarga xabar, keyin offer → order."""
+    order_row = await db.execute(
+        select(Order.id, Order.cargo_name).where(Order.id == pk)
+    )
+    row = order_row.one_or_none()
+    if row is None:
+        return False
+
+    cargo_name = row.cargo_name
+
+    driver_ids_result = await db.execute(
+        select(OrderOffer.driver_id)
+        .where(OrderOffer.order_id == pk)
+        .distinct()
+    )
+    driver_ids = [int(d) for d in driver_ids_result.scalars().all()]
+
+    try:
+        await notify_drivers_order_deleted(
+            db, driver_ids, cargo_name, deleted_by=deleted_by
+        )
+    except Exception as exc:
+        logger.warning(
+            "Buyurtma #%s o'chirilganda haydovchilarga xabar yuborilmadi: %s",
+            pk,
+            exc,
+        )
+
+    await db.execute(delete(OrderOffer).where(OrderOffer.order_id == pk))
     await db.execute(delete(Order).where(Order.id == pk))
     await db.commit()
     return True
 
 
 async def create_order_offer(db: AsyncSession, data: OrderOfferCreate) -> OrderOffer:
-    obj = OrderOffer(**data.model_dump())
+    offer_dict = data.model_dump()
+    allowed_keys = OrderOffer.__table__.columns.keys()
+    safe_offer_data = {k: v for k, v in offer_dict.items() if k in allowed_keys}
+    obj = OrderOffer(**safe_offer_data)
     db.add(obj)
     await db.commit()
     await db.refresh(obj)
