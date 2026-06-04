@@ -161,7 +161,7 @@ async def create_new_chat(
     return await crud.create_chat(db, chat_data)
 
 
-@router.post(
+@router.get(
     "/chats/assistant",
     response_model=schemas.ChatResponse,
     summary="AI chat (alias: GET /assistant/chat)",
