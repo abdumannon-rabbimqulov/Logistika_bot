@@ -19,6 +19,23 @@ const getBaseUrl = (): string => {
 
 export const API_BASE_URL = getBaseUrl();
 
+/** Backend static fayllar (/static/uploads/...) — API origin bilan to'liq URL. */
+export function resolveMediaUrl(url: string | null | undefined): string | undefined {
+  if (!url?.trim()) return undefined;
+  const trimmed = url.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+
+  let path = trimmed;
+  if (!path.startsWith("/")) {
+    const bare = path.replace(/^static\/uploads\/?/i, "");
+    path = `/static/uploads/${bare}`;
+  }
+
+  const apiBase = getBaseUrl();
+  const origin = apiBase.replace(/\/api\/?$/i, "") || window.location.origin;
+  return `${origin}${path}`;
+}
+
 interface FetchOptions extends RequestInit {
   skipAuth?: boolean;
 }

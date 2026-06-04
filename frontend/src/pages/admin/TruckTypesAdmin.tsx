@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { resolveMediaUrl } from "../../api";
 import {
   fetchTruckTypes,
   fetchTruckType,
@@ -244,14 +245,14 @@ export const TruckTypesAdmin: React.FC = () => {
           <input type="file" accept="image/*" hidden onChange={handleImage} disabled={uploadingImage} />
         </label>
         <input
-          type="url"
-          placeholder="yoki image_url kiriting"
+          type="text"
+          placeholder="Yuklangan rasm yo‘li yoki URL"
           value={form.image_url ?? ""}
           onChange={(e) => setForm({ ...form, image_url: e.target.value || null })}
           style={{ marginTop: 8 }}
         />
         {form.image_url && (
-          <img src={form.image_url} alt="" className="truck-type-image-preview" />
+          <img src={resolveMediaUrl(form.image_url)} alt="" className="truck-type-image-preview" />
         )}
       </div>
 
@@ -282,7 +283,7 @@ export const TruckTypesAdmin: React.FC = () => {
         {items.map((t) => (
           <article key={t.id} className="truck-type-card">
             {t.image_url ? (
-              <img src={t.image_url} alt={t.name} />
+              <img src={resolveMediaUrl(t.image_url)} alt={t.name} />
             ) : (
               <div className="truck-type-thumb">Rasm yo&apos;q</div>
             )}
@@ -328,7 +329,12 @@ export const TruckTypesAdmin: React.FC = () => {
             <h3>{viewItem.name}</h3>
             <p className="sheet-hint">GET /drivers/truck-types/{viewItem.id}</p>
             {viewItem.image_url && (
-              <img src={viewItem.image_url} alt="" className="truck-type-image-preview" style={{ marginBottom: 12 }} />
+              <img
+                src={resolveMediaUrl(viewItem.image_url)}
+                alt=""
+                className="truck-type-image-preview"
+                style={{ marginBottom: 12 }}
+              />
             )}
             <dl className="truck-type-detail-dl">
               <dt>Max og&apos;irlik</dt>
