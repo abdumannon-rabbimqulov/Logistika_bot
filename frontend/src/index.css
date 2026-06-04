@@ -3,6 +3,7 @@
 @import './styles/mobile.css';
 @import './styles/login.css';
 @import './styles/truck-types.css';
+@import './styles/ai-chat.css';
 
 .layout-loading {
   height: 100vh;

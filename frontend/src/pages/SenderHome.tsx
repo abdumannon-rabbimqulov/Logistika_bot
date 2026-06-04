@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Package, MapPin, MessageCircle } from "lucide-react";
+import { Package, MapPin, Bot, MessagesSquare } from "lucide-react";
 
 export const SenderHome: React.FC = () => {
   return (
@@ -8,14 +8,22 @@ export const SenderHome: React.FC = () => {
       <div className="mobile-card">
         <Package size={28} style={{ color: "var(--accent-secondary)", marginBottom: 8 }} />
         <h3>Yuk beruvchi</h3>
-        <p>Buyurtma berish, AI yordamchi va haydovchi bilan bog&apos;lanish shu yerda bo&apos;ladi.</p>
+        <p>Buyurtma berish, AI yordamchi va haydovchi bilan bog&apos;lanish.</p>
       </div>
 
-      <Link to="/sender/profile" className="mobile-list-item" style={{ textDecoration: "none", color: "inherit" }}>
-        <MessageCircle size={24} style={{ color: "var(--accent-primary)" }} />
+      <Link to="/sender/ai" className="mobile-list-item" style={{ textDecoration: "none", color: "inherit" }}>
+        <Bot size={24} style={{ color: "var(--accent-secondary)" }} />
         <div>
-          <strong>Profil va sozlamalar</strong>
-          <p style={{ fontSize: 12, margin: "4px 0 0" }}>Ism, parol, chiqish</p>
+          <strong>AI yordamchi</strong>
+          <p style={{ fontSize: 12, margin: "4px 0 0" }}>Buyurtma va logistika bo&apos;yicha savollar</p>
+        </div>
+      </Link>
+
+      <Link to="/sender/chats" className="mobile-list-item" style={{ textDecoration: "none", color: "inherit" }}>
+        <MessagesSquare size={24} style={{ color: "var(--accent-primary)" }} />
+        <div>
+          <strong>Mening chatlarim</strong>
+          <p style={{ fontSize: 12, margin: "4px 0 0" }}>Haydovchi va qo&apos;llab-quvvatlash bilan yozishmalar</p>
         </div>
       </Link>
 

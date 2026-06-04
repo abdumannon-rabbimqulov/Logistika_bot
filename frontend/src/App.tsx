@@ -19,6 +19,9 @@ import { DriverHome } from "./pages/DriverHome";
 import { DriverSetupProfile } from "./pages/DriverSetupProfile";
 import { MobileProfile } from "./pages/mobile/MobileProfile";
 import { TruckTypesAdmin } from "./pages/admin/TruckTypesAdmin";
+import { AIAssistantPage } from "./pages/sender/AIAssistantPage";
+import { ChatsPage } from "./pages/sender/ChatsPage";
+import { ChatDetailPage } from "./pages/sender/ChatDetailPage";
 
 export const App: React.FC = () => {
   return (
@@ -51,6 +54,9 @@ export const App: React.FC = () => {
             }
           >
             <Route index element={<SenderHome />} />
+            <Route path="ai" element={<AIAssistantPage />} />
+            <Route path="chats" element={<ChatsPage />} />
+            <Route path="chats/:chatId" element={<ChatDetailPage />} />
             <Route path="profile" element={<MobileProfile />} />
           </Route>
 

@@ -143,22 +143,30 @@ class ChatBase(BaseModel):
     status: ChatStatus = Field(ChatStatus.OPEN,)
     title: Optional[str] = Field(None, max_length=255,)
 
-class ChatCreate(ChatBase):
-    user_id: Optional[int] = Field(None, )
-    driver_id: Optional[int] = Field(None,)
-    order_id: Optional[int] = Field(None, )
+
+class ChatCreateRequest(ChatBase):
+    """POST /ai/chats — client yuboradi (user_id JWT dan olinadi)."""
+
+    driver_id: Optional[int] = Field(None, description="Haydovchi bilan chat uchun")
+    order_id: Optional[int] = Field(None, description="Buyurtma bo'yicha chat uchun")
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "category": "conversation",
+                "status": "open",
                 "title": "Haydovchi bilan suhbat",
-                "user_id": 1,
                 "driver_id": 2,
-                "order_id": 50
+                "order_id": 50,
             }
         }
     )
+
+
+class ChatCreate(ChatBase):
+    user_id: Optional[int] = Field(None, )
+    driver_id: Optional[int] = Field(None,)
+    order_id: Optional[int] = Field(None, )
 
 class ChatUpdate(BaseModel):
     status: Optional[ChatStatus] = None

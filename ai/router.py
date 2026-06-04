@@ -149,29 +149,9 @@ async def assistant_list_messages(
     return await crud.list_chat_messages(db, chat_id, limit=limit, before_id=before_id)
 
 
-
-
-@router.post("/chats", response_model=schemas.ChatResponse, summary="Yangi chat yaratish")
-async def create_new_chat(
-    data: schemas.ChatBase,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    chat_data = schemas.ChatCreate(user_id=current_user.id, **data.model_dump())
-    return await crud.create_chat(db, chat_data)
-
-
-@router.get(
-    "/chats/assistant",
-    response_model=schemas.ChatResponse,
-    summary="AI chat (alias: GET /assistant/chat)",
-    deprecated=True,
-)
-async def get_or_create_assistant_chat_legacy(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    return await crud.get_or_create_ai_chat(db, current_user.id)
+# ════════════════════════════════════════════════
+# REST — Chat (static path'lar {chat_id} dan OLDIN)
+# ════════════════════════════════════════════════
 
 
 @router.get("/chats", response_model=List[schemas.ChatResponse], summary="Mening chatlarim")
@@ -180,6 +160,28 @@ async def list_my_chats(
     current_user: User = Depends(get_current_user),
 ):
     return await crud.list_user_chats(db, current_user.id)
+
+
+@router.post(
+    "/chats",
+    response_model=schemas.ChatResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Yangi chat yaratish",
+)
+async def create_new_chat(
+    data: schemas.ChatCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    chat_data = schemas.ChatCreate(
+        user_id=current_user.id,
+        driver_id=data.driver_id,
+        order_id=data.order_id,
+        category=data.category,
+        status=data.status,
+        title=data.title,
+    )
+    return await crud.create_chat(db, chat_data)
 
 
 @router.get("/chats/{chat_id}", response_model=schemas.ChatResponse, summary="Chat tafsilotlari")
