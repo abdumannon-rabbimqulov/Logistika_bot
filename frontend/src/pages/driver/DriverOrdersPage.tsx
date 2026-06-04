@@ -1,13 +1,7 @@
 import React from "react";
-import { AvailableOrdersSection } from "../../components/driver/AvailableOrdersSection";
+import { Navigate } from "react-router-dom";
 
+/** Buyurtmalar bosh sahifada — eski yo'nalishni saqlash */
 export const DriverOrdersPage: React.FC = () => {
-  return (
-    <div>
-      <p className="text-sm text-slate-400 mb-4">
-        Sizning mashina turiga mos, kutilayotgan buyurtmalar. Taklif POST /orders/&#123;id&#125;/offers
-      </p>
-      <AvailableOrdersSection />
-    </div>
-  );
+  return <Navigate to="/driver" replace />;
 };

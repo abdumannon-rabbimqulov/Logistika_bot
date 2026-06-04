@@ -1,5 +1,6 @@
 import { apiRequest, API_BASE_URL } from "../api";
 import type { DriverProfileCreatePayload, TruckType } from "../types/auth";
+import type { Order } from "../types/order";
 import type {
   AnnouncementCreatePayload,
   AnnouncementOffer,
@@ -141,6 +142,20 @@ export async function createDriverProfile(payload: DriverProfileCreatePayload): 
 
 export async function fetchDriverMe(): Promise<DriverProfile> {
   return apiRequest<DriverProfile>("/drivers/me");
+}
+
+export async function fetchDriverProfile(): Promise<DriverProfile> {
+  return apiRequest<DriverProfile>("/drivers/profile");
+}
+
+export async function fetchAvailableOrders(limit = 50): Promise<Order[]> {
+  return apiRequest<Order[]>(`/drivers/available-orders?limit=${limit}`);
+}
+
+export async function fetchDriverTrips(
+  scope: "current" | "completed" | "all" = "all"
+): Promise<Order[]> {
+  return apiRequest<Order[]>(`/drivers/trips?scope=${scope}`);
 }
 
 export async function updateDriverMe(data: DriverProfileUpdate): Promise<DriverProfile> {

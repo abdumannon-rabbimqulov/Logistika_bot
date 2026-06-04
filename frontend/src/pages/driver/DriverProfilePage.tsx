@@ -1,23 +1,46 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  ChevronRight,
+  Megaphone,
+  MapPin,
+  Route,
+  Star,
+  Truck,
+  Wallet,
+} from "lucide-react";
 import {
   fetchDriverMe,
   fetchTruckTypes,
   updateDriverMe,
 } from "../../services/driverApi";
-import { useLocation } from "../../context/LocationContext";
 import { useToast } from "../../components/ui/Toast";
 import { Skeleton } from "../../components/ui/Skeleton";
 import type { DriverProfile } from "../../types/driver";
 import type { TruckType } from "../../types/auth";
-import { MapPin, Radio, Star, Truck } from "lucide-react";
+
+const menuLinks = [
+  {
+    to: "/driver/trips",
+    icon: Route,
+    title: "Safarlar ro'yxati",
+    subtitle: "Joriy va tugallangan safarlar",
+  },
+  {
+    to: "/driver/announcements",
+    icon: Megaphone,
+    title: "Safar e'lonlari",
+    subtitle: "E'lonlar va takliflar",
+  },
+];
 
 export const DriverProfilePage: React.FC = () => {
   const { toast } = useToast();
-  const { enabled, active, toggle, error: gpsError } = useLocation();
   const [profile, setProfile] = useState<DriverProfile | null>(null);
   const [truckTypes, setTruckTypes] = useState<TruckType[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showForm, setShowForm] = useState(false);
 
   const [truckNumber, setTruckNumber] = useState("");
   const [truckYear, setTruckYear] = useState("");
@@ -54,6 +77,7 @@ export const DriverProfilePage: React.FC = () => {
       });
       setProfile(updated);
       toast("Profil saqlandi", "success");
+      setShowForm(false);
     } catch (ex: unknown) {
       toast(ex instanceof Error ? ex.message : "Xatolik", "error");
     } finally {
@@ -64,8 +88,9 @@ export const DriverProfilePage: React.FC = () => {
   if (loading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-24 w-full rounded-2xl" />
-        <Skeleton className="h-48 w-full rounded-2xl" />
+        <Skeleton className="h-32 w-full rounded-2xl" />
+        <Skeleton className="h-20 w-full rounded-2xl" />
+        <Skeleton className="h-20 w-full rounded-2xl" />
       </div>
     );
   }
@@ -74,114 +99,138 @@ export const DriverProfilePage: React.FC = () => {
     return <p className="text-center text-slate-400 py-12">Profil topilmadi</p>;
   }
 
-  return (
-    <div className="space-y-5 pb-6">
-      <div className="rounded-2xl border border-white/5 bg-slate-800/50 backdrop-blur-md p-5">
-        <div className="flex items-center gap-2 text-amber-400">
-          <Star size={22} fill="currentColor" />
-          <span className="text-2xl font-bold text-white">{Number(profile.rating).toFixed(1)}</span>
-          <span className="text-sm text-slate-400">· {profile.total_trips} safar</span>
-        </div>
-      </div>
+  const isLive = profile.user_status === "LIVE";
 
-      <div className="rounded-2xl border border-white/5 bg-slate-800/50 backdrop-blur-md p-5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div
-              className={`flex h-12 w-12 items-center justify-center rounded-2xl ${
-                enabled && active ? "bg-emerald-500/20" : "bg-slate-700/80"
-              }`}
-            >
-              <Radio className={enabled && active ? "text-emerald-400 animate-pulse" : "text-slate-400"} size={22} />
-            </div>
-            <div>
-              <p className="font-semibold text-white">Jonli lokatsiya</p>
-              <p className="text-xs text-slate-400">
-                Global kontekst — sahifa almashganda uzilmaydi
-              </p>
-            </div>
+  return (
+    <div className="space-y-4 pb-8">
+      <div className="rounded-2xl border border-white/5 bg-slate-800/60 backdrop-blur-md p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold text-white">{profile.name}</h2>
+            <p className="text-xs text-slate-500 mt-1">{profile.phone_number || "—"}</p>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={enabled}
-            onClick={toggle}
-            className={`relative h-9 w-16 rounded-full transition-colors ${
-              enabled ? "bg-emerald-500" : "bg-slate-600"
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold ${
+              isLive
+                ? "bg-emerald-500/15 text-emerald-300"
+                : "bg-slate-700 text-slate-400"
             }`}
           >
             <span
-              className={`absolute top-1 h-7 w-7 rounded-full bg-white shadow transition-all ${
-                enabled ? "left-8" : "left-1"
-              }`}
+              className={`h-1.5 w-1.5 rounded-full ${isLive ? "bg-emerald-400" : "bg-slate-500"}`}
             />
-          </button>
+            {profile.user_status}
+          </span>
         </div>
-        {gpsError && <p className="text-xs text-rose-400 mt-3">{gpsError}</p>}
+        <div className="mt-4 flex items-center gap-2">
+          <Star size={18} className="text-amber-400" fill="currentColor" />
+          <span className="text-lg font-bold text-white">
+            {Number(profile.rating).toFixed(1)}
+          </span>
+          <span className="text-sm text-slate-500">· {profile.total_trips} safar</span>
+        </div>
       </div>
 
-      <form
-        onSubmit={handleSave}
-        className="space-y-4 rounded-2xl border border-white/5 bg-slate-800/50 backdrop-blur-md p-5"
+      <div className="rounded-2xl border border-white/5 bg-gradient-to-br from-emerald-900/30 to-slate-800/60 p-5">
+        <div className="flex items-center gap-2 text-slate-400 text-xs uppercase tracking-wider mb-1">
+          <Wallet size={14} />
+          Balans
+        </div>
+        <p className="text-2xl font-bold text-white">{profile.balance}</p>
+        <p className="text-xs text-slate-500 mt-1">
+          GPS: {profile.gps_status} · {profile.truck_type_name || "Mashina"}
+        </p>
+      </div>
+
+      <nav className="space-y-2">
+        {menuLinks.map((item) => (
+          <Link
+            key={item.to}
+            to={item.to}
+            className="flex items-center gap-3 rounded-2xl border border-white/5 bg-slate-800/40 p-4 no-underline hover:bg-slate-800/70 transition"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-cyan-400">
+              <item.icon size={20} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-white text-sm">{item.title}</p>
+              <p className="text-xs text-slate-500">{item.subtitle}</p>
+            </div>
+            <ChevronRight size={18} className="text-slate-600" />
+          </Link>
+        ))}
+      </nav>
+
+      <button
+        type="button"
+        onClick={() => setShowForm((v) => !v)}
+        className="w-full flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-slate-800/50 py-3 text-sm font-semibold text-slate-300"
       >
-        <h3 className="font-bold text-white flex items-center gap-2">
-          <Truck size={18} /> Mashina
-        </h3>
-        {[
-          { label: "Mashina raqami", value: truckNumber, set: setTruckNumber, type: "text" },
-          { label: "Ishlab chiqarilgan yil", value: truckYear, set: setTruckYear, type: "number" },
-        ].map((f) => (
-          <div key={f.label}>
-            <label className="text-xs text-slate-400">{f.label}</label>
+        <Truck size={18} />
+        {showForm ? "Mashina sozlamalarini yashirish" : "Mashina sozlamalari"}
+      </button>
+
+      {showForm && (
+        <form
+          onSubmit={handleSave}
+          className="space-y-4 rounded-2xl border border-white/5 bg-slate-800/50 p-5"
+        >
+          {[
+            { label: "Mashina raqami", value: truckNumber, set: setTruckNumber, type: "text" },
+            { label: "Yil", value: truckYear, set: setTruckYear, type: "number" },
+          ].map((f) => (
+            <div key={f.label}>
+              <label className="text-xs text-slate-400">{f.label}</label>
+              <input
+                type={f.type}
+                className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white text-base"
+                value={f.value}
+                onChange={(e) => f.set(e.target.value)}
+              />
+            </div>
+          ))}
+          <div>
+            <label className="text-xs text-slate-400">Mashina turi</label>
+            <select
+              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white"
+              value={truckTypeId}
+              onChange={(e) => setTruckTypeId(e.target.value)}
+            >
+              {truckTypes.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-slate-400 flex items-center gap-1">
+              <MapPin size={12} /> Shahar
+            </label>
             <input
-              type={f.type}
-              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white text-base"
-              value={f.value}
-              onChange={(e) => f.set(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white"
+              value={currentCity}
+              onChange={(e) => setCurrentCity(e.target.value)}
+              required
             />
           </div>
-        ))}
-        <div>
-          <label className="text-xs text-slate-400">Mashina turi</label>
-          <select
-            className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white"
-            value={truckTypeId}
-            onChange={(e) => setTruckTypeId(e.target.value)}
+          <div>
+            <label className="text-xs text-slate-400">Viloyat</label>
+            <input
+              className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white"
+              value={currentRegion}
+              onChange={(e) => setCurrentRegion(e.target.value)}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full rounded-2xl bg-white text-slate-900 py-3.5 font-bold disabled:opacity-50"
           >
-            {truckTypes.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="text-xs text-slate-400 flex items-center gap-1">
-            <MapPin size={12} /> Shahar
-          </label>
-          <input
-            className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white"
-            value={currentCity}
-            onChange={(e) => setCurrentCity(e.target.value)}
-            required
-          />
-        </div>
-        <div>
-          <label className="text-xs text-slate-400">Viloyat</label>
-          <input
-            className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white"
-            value={currentRegion}
-            onChange={(e) => setCurrentRegion(e.target.value)}
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={saving}
-          className="w-full rounded-2xl bg-white text-slate-900 py-3.5 font-bold disabled:opacity-50 hover:bg-slate-100 transition"
-        >
-          {saving ? "Saqlanmoqda..." : "Saqlash"}
-        </button>
-      </form>
+            {saving ? "Saqlanmoqda..." : "Saqlash"}
+          </button>
+        </form>
+      )}
     </div>
   );
 };
