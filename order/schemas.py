@@ -4,14 +4,9 @@ from decimal import Decimal
 from typing import Optional, List
 from enum import Enum
 
-# --- ENUM Schemas ---
+from order.models import OrderStatus
 
-class OrderStatus(str, Enum):
-    PENDING     = "pending"
-    ACCEPTED    = "accepted"
-    IN_PROGRESS = "in_progress"
-    COMPLETED   = "completed"
-    CANCELLED   = "cancelled"
+# --- ENUM Schemas ---
 
 class WaypointType(str, Enum):
     PICKUP   = "pickup"

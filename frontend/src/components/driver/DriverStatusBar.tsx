@@ -11,7 +11,7 @@ export const DriverStatusBar: React.FC = () => {
     fetchDriverMe()
       .then(setProfile)
       .catch(() => setProfile(null));
-  }, [enabled, active]);
+  }, []);
 
   const isLive =
     profile?.user_status === "LIVE" || (enabled && active);

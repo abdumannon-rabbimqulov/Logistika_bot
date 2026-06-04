@@ -3,10 +3,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from config.config import get_db
 from order import crud, schemas
+from order.models import OrderStatus
 from users.auth import get_current_user
-from users.models import User
+from users.models import User, UserRole
 
 router = APIRouter(prefix="/orders", tags=["Buyurtmalar (Orders)"])
+
 
 # --- Order Endpoints ---
 
@@ -33,33 +35,72 @@ async def list_orders(
     unassigned_only: bool = Query(
         False, description="Faqat haydovchisiz buyurtmalar (driver_id IS NULL)"
     ),
+    filter_by_truck: bool = Query(
+        False,
+        description="Haydovchi uchun: faqat o'z mashina turiga mos buyurtmalar (required_truck_type_id)",
+    ),
     match_my_truck: bool = Query(
         False,
-        description="Haydovchi uchun: o'z mashina turidagi pending buyurtmalar",
+        description="(Eski) filter_by_truck=true bilan bir xil",
     ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Tizimdagi yuk buyurtmalari. Waypoints sequence bo'yicha tartiblangan."""
+    from driver.crud import get_driver_by_user_id
+
+    parsed_status = crud.parse_order_status(status)
+    apply_truck_filter = filter_by_truck or match_my_truck
+
+    # Haydovchi bozori — admin bilan bir xil `orders` jadvali, enum status + driver_id IS NULL
+    is_driver_marketplace = (
+        current_user.role == UserRole.DRIVER
+        and customer_id is None
+        and driver_id is None
+    )
+    if is_driver_marketplace:
+        driver = await get_driver_by_user_id(db, current_user.id)
+        truck_filter_id: Optional[int] = None
+        if apply_truck_filter:
+            if not driver:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Haydovchi profili topilmadi — mashina turiga filtrlash mumkin emas",
+                )
+            if driver.is_blocked:
+                raise HTTPException(status_code=403, detail="Haydovchi bloklangan")
+            truck_filter_id = driver.truck_type_id
+
+        marketplace_status = parsed_status or OrderStatus.PENDING
+        return await crud.list_driver_marketplace_orders(
+            db,
+            status=marketplace_status,
+            truck_type_id=truck_filter_id,
+        )
+
+    # Mijoz / boshqa rollar
     truck_type_id = required_truck_type_id
     only_unassigned = unassigned_only
-    order_status = status
 
-    if match_my_truck:
-        from driver.crud import get_driver_by_user_id
-
+    if apply_truck_filter:
         driver = await get_driver_by_user_id(db, current_user.id)
         if not driver:
-            raise HTTPException(status_code=403, detail="Faqat haydovchilar uchun")
+            raise HTTPException(
+                status_code=403,
+                detail="Haydovchi profili topilmadi — mashina turiga filtrlash mumkin emas",
+            )
+        if driver.is_blocked:
+            raise HTTPException(status_code=403, detail="Haydovchi bloklangan")
         truck_type_id = driver.truck_type_id
+
+    if match_my_truck:
         only_unassigned = True
-        order_status = order_status or "pending"
 
     return await crud.get_all_orders(
         db,
         customer_id,
         driver_id,
-        order_status,
+        status,
         required_truck_type_id=truck_type_id,
         unassigned_only=only_unassigned,
     )

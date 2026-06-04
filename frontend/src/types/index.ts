@@ -39,11 +39,11 @@ export interface UserUpdateData {
 }
 
 export const OrderStatus = {
-  PENDING: "pending",
-  ACCEPTED: "accepted",
-  IN_PROGRESS: "in_progress",
-  COMPLETED: "completed",
-  CANCELLED: "cancelled",
+  PENDING: "PENDING",
+  ACCEPTED: "ACCEPTED",
+  IN_PROGRESS: "IN_PROGRESS",
+  COMPLETED: "COMPLETED",
+  CANCELLED: "CANCELLED",
 } as const;
 export type OrderStatus = typeof OrderStatus[keyof typeof OrderStatus];
 

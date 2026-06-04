@@ -148,10 +148,6 @@ export async function fetchDriverProfile(): Promise<DriverProfile> {
   return apiRequest<DriverProfile>("/drivers/profile");
 }
 
-export async function fetchAvailableOrders(limit = 50): Promise<Order[]> {
-  return apiRequest<Order[]>(`/drivers/available-orders?limit=${limit}`);
-}
-
 export async function fetchDriverTrips(
   scope: "current" | "completed" | "all" = "all"
 ): Promise<Order[]> {

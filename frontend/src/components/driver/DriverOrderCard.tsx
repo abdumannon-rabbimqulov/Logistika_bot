@@ -54,11 +54,11 @@ function waypointAction(
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  pending: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-  accepted: "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",
-  in_progress: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-  completed: "bg-slate-500/15 text-slate-300 border-slate-500/30",
-  cancelled: "bg-rose-500/15 text-rose-300 border-rose-500/30",
+  PENDING: "bg-amber-500/15 text-amber-300 border-amber-500/30",
+  ACCEPTED: "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",
+  IN_PROGRESS: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+  COMPLETED: "bg-slate-500/15 text-slate-300 border-slate-500/30",
+  CANCELLED: "bg-rose-500/15 text-rose-300 border-rose-500/30",
 };
 
 interface DriverOrderCardProps {
@@ -74,14 +74,14 @@ export const DriverOrderCard: React.FC<DriverOrderCardProps> = ({
   showOfferButton = true,
   onOffer,
 }) => {
-  const sorted = [...order.waypoints].sort((a, b) => a.sequence - b.sequence);
+  const sorted = [...(order.waypoints ?? [])].sort((a, b) => a.sequence - b.sequence);
   const initial = String.fromCharCode(65 + (order.customer_id % 26));
   const distance =
     order.total_distance_km != null
       ? `${Number(order.total_distance_km).toLocaleString()} km`
       : "— km";
   const statusClass =
-    STATUS_STYLES[order.status] ?? STATUS_STYLES.pending;
+    STATUS_STYLES[order.status] ?? STATUS_STYLES.PENDING;
 
   return (
     <article className="rounded-2xl border border-white/8 bg-slate-800/50 backdrop-blur-md overflow-hidden shadow-lg shadow-black/25">
@@ -91,8 +91,8 @@ export const DriverOrderCard: React.FC<DriverOrderCardProps> = ({
             {initial}
           </span>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-white truncate">Buyurtma</p>
-            <p className="text-[11px] text-slate-500 truncate">#{order.id}</p>
+            <p className="text-sm font-semibold text-white truncate">{order.cargo_name}</p>
+            <p className="text-[11px] text-slate-500 truncate">Buyurtma #{order.id}</p>
           </div>
         </div>
         <span

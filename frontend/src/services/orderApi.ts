@@ -12,17 +12,53 @@ export interface OrderOffer {
   created_at: string;
 }
 
-export async function fetchOrders(params?: {
+export interface FetchOrdersParams {
   status?: string;
   driver_id?: number;
   customer_id?: number;
-}): Promise<Order[]> {
+  /** Haydovchi: true — faqat required_truck_type_id == driver.truck_type_id */
+  filter_by_truck?: boolean;
+}
+
+export async function fetchOrders(params?: FetchOrdersParams): Promise<Order[]> {
   const q = new URLSearchParams();
   if (params?.status) q.set("status", params.status);
   if (params?.driver_id != null) q.set("driver_id", String(params.driver_id));
   if (params?.customer_id != null) q.set("customer_id", String(params.customer_id));
+  if (params?.filter_by_truck != null) {
+    q.set("filter_by_truck", params.filter_by_truck ? "true" : "false");
+  }
   const qs = q.toString();
-  return apiRequest<Order[]>(`/orders${qs ? `?${qs}` : ""}`);
+  const path = qs ? `/orders/?${qs}` : "/orders/";
+
+  try {
+    const data = await apiRequest<Order[]>(path);
+    if (!Array.isArray(data)) {
+      console.warn("[fetchOrders] kutilgan massiv emas:", typeof data, data);
+      return [];
+    }
+    return data;
+  } catch (error) {
+    console.error("[fetchOrders]", path, error);
+    throw error;
+  }
+}
+
+/** Haydovchi: pending buyurtmalar; filterByTruck — mashina turiga mos filtr. */
+export async function fetchPendingOrders(filterByTruck = false): Promise<Order[]> {
+  const path = `/orders/?status=PENDING&filter_by_truck=${filterByTruck}`;
+  try {
+    const data = await fetchOrders({
+      status: "PENDING",
+      filter_by_truck: filterByTruck,
+    });
+    const unassigned = data.filter((o) => o.driver_id == null);
+    console.log("[fetchPendingOrders]", path, "→", unassigned.length, unassigned);
+    return unassigned;
+  } catch (error) {
+    console.error("[fetchPendingOrders]", path, error);
+    throw error;
+  }
 }
 
 export async function fetchOrder(pk: number): Promise<Order> {

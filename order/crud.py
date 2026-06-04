@@ -3,6 +3,19 @@ from sqlalchemy import desc, select, update, delete
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from order.models import Order, OrderStatus, OrderWaypoint, OrderOffer
+
+
+def parse_order_status(raw: Optional[str]) -> Optional[OrderStatus]:
+    """Query `status` (pending yoki PENDING) ni OrderStatus enumiga aylantiradi."""
+    if raw is None:
+        return None
+    normalized = raw.strip().lower()
+    if not normalized:
+        return None
+    for member in OrderStatus:
+        if member.value.lower() == normalized or member.name.lower() == normalized:
+            return member
+    return None
 from order.schemas import (
     OrderCreate, OrderUpdate,
     OrderOfferCreate, OrderOfferUpdate
@@ -54,20 +67,52 @@ async def get_all_orders(
     *,
     required_truck_type_id: Optional[int] = None,
     unassigned_only: bool = False,
+    limit: Optional[int] = None,
 ) -> List[Order]:
+    """Umumiy ro'yxat (mijoz/admin). Status — enum bo'yicha (string emas)."""
     stmt = select(Order).options(selectinload(Order.waypoints))
-    if customer_id:
+    if customer_id is not None:
         stmt = stmt.where(Order.customer_id == customer_id)
-    if driver_id:
+    if driver_id is not None:
         stmt = stmt.where(Order.driver_id == driver_id)
-    if status:
-        stmt = stmt.where(Order.status == status)
+    parsed_status = parse_order_status(status)
+    if parsed_status is not None:
+        stmt = stmt.where(Order.status == parsed_status)
     if required_truck_type_id is not None:
         stmt = stmt.where(Order.required_truck_type_id == required_truck_type_id)
     if unassigned_only:
         stmt = stmt.where(Order.driver_id.is_(None))
 
     stmt = stmt.order_by(desc(Order.created_at))
+    if limit is not None:
+        stmt = stmt.limit(min(max(limit, 1), 500))
+    result = await db.execute(stmt)
+    return [sort_order_waypoints(o) for o in result.scalars().all()]
+
+
+async def list_driver_marketplace_orders(
+    db: AsyncSession,
+    *,
+    status: OrderStatus = OrderStatus.PENDING,
+    truck_type_id: Optional[int] = None,
+    limit: int = 200,
+) -> List[Order]:
+    """Haydovchi bozori — admin `/system/orders` bilan bir xil Order jadvali.
+
+    Admin panel status filtrsiz hamma buyurtmani ko'radi; haydovchi uchun faqat
+    tayinlanmagan (driver_id IS NULL) va berilgan status (odatda pending).
+    truck_type_id berilsa — required_truck_type_id filtri (filter_by_truck).
+    """
+    stmt = (
+        select(Order)
+        .options(selectinload(Order.waypoints))
+        .where(Order.status == status)
+        .where(Order.driver_id.is_(None))
+    )
+    if truck_type_id is not None:
+        stmt = stmt.where(Order.required_truck_type_id == truck_type_id)
+
+    stmt = stmt.order_by(desc(Order.created_at)).limit(min(max(limit, 1), 500))
     result = await db.execute(stmt)
     return [sort_order_waypoints(o) for o in result.scalars().all()]
 
@@ -77,16 +122,20 @@ async def get_available_orders_for_driver(
     truck_type_id: int,
     *,
     limit: int = 50,
+    relax_truck: bool = False,
 ) -> List[Order]:
-    """Pending buyurtmalar — haydovchi mashina turiga mos, haydovchisiz."""
+    """Pending buyurtmalar — haydovchisiz; relax_truck bo'lsa mashina turi filtri yo'q."""
+    conditions = [
+        Order.status == OrderStatus.PENDING,
+        Order.driver_id.is_(None),
+    ]
+    if not relax_truck:
+        conditions.append(Order.required_truck_type_id == truck_type_id)
+
     stmt = (
         select(Order)
         .options(selectinload(Order.waypoints))
-        .where(
-            Order.status == OrderStatus.PENDING,
-            Order.driver_id.is_(None),
-            Order.required_truck_type_id == truck_type_id,
-        )
+        .where(*conditions)
         .order_by(desc(Order.created_at))
         .limit(min(max(limit, 1), 100))
     )

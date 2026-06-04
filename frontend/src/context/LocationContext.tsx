@@ -8,10 +8,8 @@ import React, {
 } from "react";
 import { getWebSocketUrl } from "../api";
 import { useAuth } from "./AuthContext";
-import { fetchDriverMe } from "../services/driverApi";
 
 const STORAGE_KEY = "logistika_gps_enabled";
-/** Serverga koordinata yuborish intervali (ms) */
 const SEND_INTERVAL_MS = 30_000;
 const WS_PATH = "/drivers/ws/location";
 const RECONNECT_MS = 5000;
@@ -40,8 +38,7 @@ function getAccessToken(): string {
   );
 }
 
-/** Dev: Vite proxy orqali; prod: API host. */
-export function buildDriverLocationWsUrl(): string | null {
+function buildDriverLocationWsUrl(): string | null {
   const token = getAccessToken();
   if (!token) return null;
 
@@ -68,57 +65,50 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const wsRef = useRef<WebSocket | null>(null);
   const watchIdRef = useRef<number | null>(null);
-  /** Faqat WS ochiq bo'lganda: serverga har 30 s yuborish */
   const sendIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const driverIdRef = useRef<number | null>(null);
-  const enabledRef = useRef(enabled);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const connectingRef = useRef(false);
-  const mountedRef = useRef(true);
+  const intentionalCloseRef = useRef(false);
+  const gpsSessionActiveRef = useRef(false);
   const coordsRef = useRef<Coords | null>(null);
 
+  const enabledRef = useRef(enabled);
+  const isDriverRef = useRef(isDriver);
   enabledRef.current = enabled;
+  isDriverRef.current = isDriver;
   coordsRef.current = coords;
 
-  const clearReconnectTimer = useCallback(() => {
+  const clearReconnectTimer = () => {
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
     }
-  }, []);
+  };
 
-  /** WebSocket yuborish intervalini to'xtatish (onclose / unmount) */
-  const clearSendInterval = useCallback(() => {
+  const clearSendInterval = () => {
     if (sendIntervalRef.current != null) {
       clearInterval(sendIntervalRef.current);
       sendIntervalRef.current = null;
     }
-  }, []);
+  };
 
-  /** Joriy koordinatalarni serverga yuborish — faqat WS OPEN */
-  const flushCoordsToServer = useCallback(() => {
+  const flushCoordsToServer = () => {
     const ws = wsRef.current;
     const c = coordsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN || !c) return;
+    ws.send(JSON.stringify({ latitude: c.latitude, longitude: c.longitude }));
+  };
 
-    ws.send(
-      JSON.stringify({
-        latitude: c.latitude,
-        longitude: c.longitude,
-      })
-    );
-  }, []);
-
-  /** WS onopen dan keyin: darhol 1 marta + har 30 s */
-  const startSendInterval = useCallback(() => {
+  const startSendInterval = () => {
     clearSendInterval();
     flushCoordsToServer();
-
     sendIntervalRef.current = setInterval(() => {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          const { latitude, longitude } = pos.coords;
-          const next = { latitude, longitude };
+          const next = {
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          };
           coordsRef.current = next;
           setCoords(next);
           flushCoordsToServer();
@@ -127,32 +117,32 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         { enableHighAccuracy: true, maximumAge: SEND_INTERVAL_MS, timeout: 15_000 }
       );
     }, SEND_INTERVAL_MS);
-  }, [clearSendInterval, flushCoordsToServer]);
+  };
 
-  const closeSocket = useCallback(
-    (sendStop = false) => {
-      clearSendInterval();
-      clearReconnectTimer();
-      connectingRef.current = false;
-      const ws = wsRef.current;
-      if (!ws) return;
+  const closeSocket = (sendStop = false) => {
+    clearSendInterval();
+    clearReconnectTimer();
+    connectingRef.current = false;
+    const ws = wsRef.current;
+    if (!ws) return;
 
-      if (sendStop && ws.readyState === WebSocket.OPEN) {
-        try {
-          ws.send(JSON.stringify({ event: "stop" }));
-        } catch {
-          /* ignore */
-        }
+    intentionalCloseRef.current = true;
+    if (sendStop && ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({ event: "stop" }));
+      } catch {
+        /* ignore */
       }
-      wsRef.current = null;
-      ws.close();
-      setActive(false);
-    },
-    [clearSendInterval, clearReconnectTimer]
-  );
+    }
+    wsRef.current = null;
+    ws.close();
+    intentionalCloseRef.current = false;
+    setActive(false);
+  };
 
-  const openWebSocket = useCallback(() => {
-    if (!enabledRef.current || !isDriver || connectingRef.current) return;
+  const openWebSocket = () => {
+    if (!enabledRef.current || !isDriverRef.current) return;
+    if (connectingRef.current) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
     if (wsRef.current?.readyState === WebSocket.CONNECTING) return;
 
@@ -169,7 +159,9 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     ws.onopen = () => {
       connectingRef.current = false;
       if (!enabledRef.current) {
+        intentionalCloseRef.current = true;
         ws.close();
+        intentionalCloseRef.current = false;
         return;
       }
       setError(null);
@@ -201,38 +193,50 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       clearSendInterval();
       if (wsRef.current === ws) wsRef.current = null;
       setActive(false);
-      if (!enabledRef.current || !mountedRef.current) return;
+
+      if (intentionalCloseRef.current || !enabledRef.current || !gpsSessionActiveRef.current) {
+        return;
+      }
 
       clearReconnectTimer();
       reconnectTimerRef.current = setTimeout(() => {
-        if (enabledRef.current) openWebSocket();
+        if (enabledRef.current && gpsSessionActiveRef.current) {
+          openWebSocket();
+        }
       }, RECONNECT_MS);
     };
-  }, [isDriver, clearSendInterval, clearReconnectTimer, startSendInterval]);
+  };
 
-  const stopTracking = useCallback(() => {
+  const stopGpsSession = (sendStop = false) => {
+    gpsSessionActiveRef.current = false;
+
     if (watchIdRef.current != null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
-    clearSendInterval();
-    closeSocket(true);
-  }, [clearSendInterval, closeSocket]);
 
-  const startTracking = useCallback(() => {
+    closeSocket(sendStop);
+  };
+
+  const startGpsSession = () => {
+    if (gpsSessionActiveRef.current) return;
     if (!navigator.geolocation) {
       setError("Geolokatsiya qo'llab-quvvatlanmaydi");
       return;
     }
 
-    openWebSocket();
+    gpsSessionActiveRef.current = true;
 
     const onPosition = (position: GeolocationPosition) => {
-      const { latitude, longitude } = position.coords;
-      const next = { latitude, longitude };
+      const next = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      };
       coordsRef.current = next;
       setCoords(next);
-      if (wsRef.current?.readyState !== WebSocket.OPEN) {
+
+      const state = wsRef.current?.readyState;
+      if (state !== WebSocket.OPEN && state !== WebSocket.CONNECTING) {
         openWebSocket();
       }
     };
@@ -251,39 +255,27 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       maximumAge: SEND_INTERVAL_MS,
       timeout: 20_000,
     });
-  }, [openWebSocket]);
 
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+    openWebSocket();
+  };
 
+  /** GPS: faqat enabled / isDriver o'zgarganda — bitta mount/unmount tsikli */
   useEffect(() => {
     if (!isDriver || !enabled) {
       sessionStorage.removeItem(STORAGE_KEY);
-      stopTracking();
+      stopGpsSession(true);
       setCoords(null);
       setError(null);
-      driverIdRef.current = null;
       return;
     }
 
     sessionStorage.setItem(STORAGE_KEY, "1");
-
-    fetchDriverMe()
-      .then((me) => {
-        driverIdRef.current = me.id;
-      })
-      .catch(() => {});
-
-    startTracking();
+    startGpsSession();
 
     return () => {
-      stopTracking();
+      stopGpsSession(true);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- faqat enable/rol o'zgarganda
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, isDriver]);
 
   const setEnabled = useCallback((on: boolean) => {

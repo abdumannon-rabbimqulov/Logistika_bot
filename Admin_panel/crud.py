@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 from ai.models import AICommand, AIUsage
 from driver.models import Driver
 from order.models import Order, OrderOffer, OrderStatus
+from order.crud import parse_order_status
 from users.models import User, UserRole
 
 from Admin_panel.schemas import (
@@ -89,8 +90,9 @@ async def list_orders_admin(
     limit: int = 50,
 ) -> Tuple[List[Order], int]:
     base = select(Order)
-    if status:
-        base = base.where(Order.status == status)
+    parsed_status = parse_order_status(status)
+    if parsed_status is not None:
+        base = base.where(Order.status == parsed_status)
     if customer_id is not None:
         base = base.where(Order.customer_id == customer_id)
     if driver_id is not None:

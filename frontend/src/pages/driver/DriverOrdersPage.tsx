@@ -1,7 +1,11 @@
 import React from "react";
-import { Navigate } from "react-router-dom";
+import { DriverOrdersList } from "../../components/driver/DriverOrdersList";
 
-/** Buyurtmalar bosh sahifada — eski yo'nalishni saqlash */
+/** Pastki nav: Buyurtma — pending buyurtmalar ro'yxati */
 export const DriverOrdersPage: React.FC = () => {
-  return <Navigate to="/driver" replace />;
+  return (
+    <div className="min-h-[50vh] w-full">
+      <DriverOrdersList title="Buyurtmalar" />
+    </div>
+  );
 };

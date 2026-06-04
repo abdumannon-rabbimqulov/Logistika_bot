@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "../api";
-import type { Order, OrderUpdateData } from "../types";
+import type { Order, OrderUpdateData, OrderWaypoint } from "../types";
 import { OrderStatus } from "../types";
 import {
   Filter,
@@ -13,6 +13,44 @@ import {
   Calendar,
   Truck,
 } from "lucide-react";
+
+function shortAddress(address: string): string {
+  const part = address.split(",")[0]?.trim() || address.trim();
+  return part.length > 36 ? `${part.slice(0, 34)}…` : part;
+}
+
+function dotClassForWaypoint(wp: OrderWaypoint, index: number, total: number): string {
+  if (index === 0) return "dot-pickup";
+  if (index === total - 1) return "dot-delivery";
+  const t = String(wp.waypoint_type).toLowerCase();
+  if (t === "pickup") return "dot-pickup";
+  if (t === "delivery") return "dot-delivery";
+  return "dot-transit";
+}
+
+const RouteTimelineCell: React.FC<{ waypoints: OrderWaypoint[] }> = ({ waypoints }) => {
+  const sorted = [...waypoints].sort((a, b) => a.sequence - b.sequence);
+  if (sorted.length === 0) {
+    return <span className="text-muted">Marshrut kiritilmagan</span>;
+  }
+  const compact = sorted.length > 3;
+
+  return (
+    <div className={`route-timeline-cell ${compact ? "route-timeline-compact" : ""}`}>
+      {sorted.map((w, index) => (
+        <div className="route-timeline-row" key={w.id}>
+          <div className="route-timeline-rail" aria-hidden>
+            <div className={`route-timeline-dot ${dotClassForWaypoint(w, index, sorted.length)}`} />
+            {index < sorted.length - 1 && <div className="route-timeline-connector" />}
+          </div>
+          <span className="route-timeline-label" title={w.address}>
+            {shortAddress(w.address)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 export const Orders: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -127,14 +165,6 @@ export const Orders: React.FC = () => {
     }
   };
 
-  // Get pickup and delivery addresses
-  const getRouteAddresses = (order: Order) => {
-    const sorted = [...order.waypoints].sort((a, b) => a.sequence - b.sequence);
-    const pickup = sorted.find(w => w.waypoint_type === "pickup")?.address || "Kiritilmagan";
-    const delivery = sorted.find(w => w.waypoint_type === "delivery")?.address || "Kiritilmagan";
-    return { pickup, delivery };
-  };
-
   return (
     <div className="orders-page">
       {/* FILTER BAR */}
@@ -190,9 +220,7 @@ export const Orders: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {orders.map((o) => {
-                  const { pickup, delivery } = getRouteAddresses(o);
-                  return (
+                {orders.map((o) => (
                     <tr key={o.id}>
                       <td>
                         <span className="order-id-badge">#{o.id}</span>
@@ -201,12 +229,8 @@ export const Orders: React.FC = () => {
                         <span className="cargo-name-bold">{o.cargo_name}</span>
                       </td>
                       <td>{o.weight} t</td>
-                      <td>
-                        <div className="route-cell">
-                          <span className="addr" title={pickup}><MapPin size={10} color="var(--success)" /> {pickup.split(",")[0]}</span>
-                          <span className="arrow-down">↓</span>
-                          <span className="addr" title={delivery}><MapPin size={10} color="var(--danger)" /> {delivery.split(",")[0]}</span>
-                        </div>
+                      <td className="route-timeline-td">
+                        <RouteTimelineCell waypoints={o.waypoints} />
                       </td>
                       <td>
                         <span className="price-tag">{Number(o.price).toLocaleString()} {o.currency}</span>
@@ -235,8 +259,7 @@ export const Orders: React.FC = () => {
                         </div>
                       </td>
                     </tr>
-                  );
-                })}
+                ))}
               </tbody>
             </table>
           </div>
@@ -299,11 +322,13 @@ export const Orders: React.FC = () => {
               <div className="timeline-container">
                 <h5><MapPin size={14} /> Marshrut nuqtalari</h5>
                 <div className="timeline">
-                  {selectedOrder.waypoints.map((w, index) => (
+                  {[...selectedOrder.waypoints]
+                    .sort((a, b) => a.sequence - b.sequence)
+                    .map((w, index, sorted) => (
                     <div className="timeline-item" key={w.id}>
                       <div className="timeline-dot-wrapper">
-                        <div className={`timeline-dot ${w.waypoint_type === "pickup" ? "dot-pickup" : w.waypoint_type === "delivery" ? "dot-delivery" : "dot-transit"}`}></div>
-                        {index < selectedOrder.waypoints.length - 1 && <div className="timeline-line"></div>}
+                        <div className={`timeline-dot ${dotClassForWaypoint(w, index, sorted.length)}`}></div>
+                        {index < sorted.length - 1 && <div className="timeline-line"></div>}
                       </div>
                       <div className="timeline-content">
                         <div className="timeline-header-row">
@@ -441,28 +466,97 @@ export const Orders: React.FC = () => {
           font-weight: 600;
         }
 
-        .route-cell {
+        .route-timeline-td {
+          min-width: 140px;
+          max-width: 220px;
+          vertical-align: top;
+        }
+
+        .route-timeline-cell {
           display: flex;
           flex-direction: column;
-          gap: 2px;
+          gap: 0;
+          padding: 2px 0;
         }
 
-        .route-cell .addr {
+        .route-timeline-row {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          min-height: 0;
+        }
+
+        .route-timeline-rail {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          width: 10px;
+          flex-shrink: 0;
+        }
+
+        .route-timeline-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+
+        .route-timeline-cell .dot-pickup {
+          background: var(--success);
+          box-shadow: 0 0 4px var(--success-glow);
+        }
+
+        .route-timeline-cell .dot-delivery {
+          background: var(--danger);
+          box-shadow: 0 0 4px var(--danger-glow);
+        }
+
+        .route-timeline-cell .dot-transit {
+          background: #d97706;
+          box-shadow: 0 0 4px rgba(217, 119, 6, 0.35);
+        }
+
+        .route-timeline-connector {
+          width: 2px;
+          flex: 1;
+          min-height: 6px;
+          background: var(--border-color);
+          margin: 2px 0;
+        }
+
+        .route-timeline-label {
           font-size: 13px;
           font-weight: 500;
-          white-space: nowrap;
+          line-height: 1.25;
+          color: var(--text-primary);
+          padding-bottom: 6px;
           overflow: hidden;
           text-overflow: ellipsis;
+          white-space: nowrap;
           max-width: 180px;
-          display: flex;
-          align-items: center;
-          gap: 4px;
         }
 
-        .arrow-down {
+        .route-timeline-row:last-child .route-timeline-label {
+          padding-bottom: 0;
+        }
+
+        .route-timeline-compact .route-timeline-label {
           font-size: 11px;
-          color: var(--text-muted);
-          padding-left: 4px;
+          max-width: 168px;
+          padding-bottom: 4px;
+        }
+
+        .route-timeline-compact .route-timeline-dot {
+          width: 6px;
+          height: 6px;
+        }
+
+        .route-timeline-compact .route-timeline-rail {
+          width: 8px;
+        }
+
+        .route-timeline-compact .route-timeline-connector {
+          min-height: 4px;
         }
 
         .price-tag {

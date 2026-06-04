@@ -1,9 +1,9 @@
 export type OrderStatus =
-  | "pending"
-  | "accepted"
-  | "in_progress"
-  | "completed"
-  | "cancelled";
+  | "PENDING"
+  | "ACCEPTED"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "CANCELLED";
 
 export type OfferStatus =
   | "pending"

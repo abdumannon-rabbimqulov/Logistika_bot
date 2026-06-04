@@ -4,7 +4,7 @@ import { AvailableOrdersSection } from "../../components/driver/AvailableOrdersS
 
 export const DriverHome: React.FC = () => {
   return (
-    <div className="flex flex-col min-h-full -mt-1">
+    <div className="flex flex-col flex-1 min-h-0 -mt-1">
       <header className="relative shrink-0 pb-3 border-b border-white/5 mb-4">
         <DriverStatusBar />
       </header>

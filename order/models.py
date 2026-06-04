@@ -16,12 +16,14 @@ if TYPE_CHECKING:
     from driver.models import Driver
 
 
-class OrderStatus(enum.Enum):
-    PENDING = "pending"         # Kutilmoqda (Yangi buyurtma, hali hech kim qabul qilmagan)
-    ACCEPTED = "accepted"       # Qabul qilindi (Haydovchi yoki ijrochi tomonidan tasdiqlangan)
-    IN_PROGRESS = "in_progress" # Jarayonda (Yuk yo'lda yoki ish bajarilmoqda)
-    COMPLETED = "completed"     # Yakunlandi (Yuk manzilga yetib bordi va topshirildi)
-    CANCELLED = "cancelled"     # Bekor qilindi (Mijoz yoki tizim tomonidan to'xtatildi)
+class OrderStatus(str, enum.Enum):
+    """PostgreSQL orderstatus enum — qiymatlar katta harfda saqlanadi."""
+
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
 
 
 
@@ -61,8 +63,14 @@ class Order(Base):
     scheduled_start : Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     scheduled_end   : Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    status : Mapped[OrderStatus] = mapped_column(
-        SQLEnum(OrderStatus), default=OrderStatus.PENDING, nullable=False
+    status: Mapped[OrderStatus] = mapped_column(
+        SQLEnum(
+            OrderStatus,
+            name="orderstatus",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        default=OrderStatus.PENDING,
+        nullable=False,
     )
 
     created_at : Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))

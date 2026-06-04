@@ -200,14 +200,25 @@ async def list_driver_trips(
 )
 async def list_available_orders_for_driver(
     limit: int = Query(50, ge=1, le=100),
+    relax_truck_match: bool = Query(
+        False,
+        description="Test: mashina turini filtrlamaslik (yoki RELAX_DRIVER_ORDER_FILTERS=1)",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     driver = await _require_driver(db, current_user)
     if driver.is_blocked:
         raise HTTPException(status_code=403, detail="Haydovchi bloklangan")
+    relax_env = os.getenv("RELAX_DRIVER_ORDER_FILTERS", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+    relax = relax_truck_match or relax_env
     return await order_crud.get_available_orders_for_driver(
-        db, driver.truck_type_id, limit=limit
+        db, driver.truck_type_id, limit=limit, relax_truck=relax
     )
 
 
