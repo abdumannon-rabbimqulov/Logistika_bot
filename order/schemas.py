@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict, field_validator
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional, List
 from enum import Enum
@@ -57,6 +57,19 @@ class OrderWaypointCreate(OrderWaypointBase):
     sequence: int = Field(1, ge=1, description="Tartib raqami")
     address: str = Field(..., min_length=1, max_length=300, description="To'liq manzil")
 
+    @field_validator(
+        "scheduled_arrival",
+        "scheduled_departure",
+        mode="before",
+    )
+    @classmethod
+    def _naive_optional_datetimes(cls, value):
+        if value is None or not isinstance(value, datetime):
+            return value
+        if value.tzinfo is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+
 
 class OrderWaypointResponse(OrderWaypointBase):
     id: int
@@ -81,6 +94,15 @@ class OrderBase(BaseModel):
 
 class OrderCreate(OrderBase):
     waypoints: List[OrderWaypointCreate] = Field(..., min_length=2)
+
+    @field_validator("scheduled_start", "scheduled_end", mode="before")
+    @classmethod
+    def _naive_optional_datetimes(cls, value):
+        if value is None or not isinstance(value, datetime):
+            return value
+        if value.tzinfo is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
 
     model_config = ConfigDict(
         json_schema_extra={

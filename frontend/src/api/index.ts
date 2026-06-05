@@ -43,6 +43,49 @@ interface FetchOptions extends RequestInit {
 // Global active refresh promise to deduplicate multiple simultaneous refresh calls
 let activeRefreshPromise: Promise<string> | null = null;
 
+/** Access tokenni refresh qiladi (HTTP va WebSocket uchun umumiy). */
+export async function refreshAccessToken(): Promise<string> {
+  const refreshToken = localStorage.getItem("logistika_refresh_token");
+  if (!refreshToken) {
+    throw new Error("Refresh token topilmadi");
+  }
+
+  if (activeRefreshPromise) {
+    return activeRefreshPromise;
+  }
+
+  const baseUrl = getBaseUrl();
+  activeRefreshPromise = (async () => {
+    const refreshRes = await fetch(`${baseUrl}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (!refreshRes.ok) {
+      throw new Error("Refresh token expired");
+    }
+
+    const data = await refreshRes.json();
+    const { applyRefreshedTokens } = await import("../services/authApi");
+    applyRefreshedTokens(data);
+    return data.access_token as string;
+  })();
+
+  try {
+    return await activeRefreshPromise;
+  } finally {
+    activeRefreshPromise = null;
+  }
+}
+
+function clearAuthSession(): void {
+  localStorage.removeItem("logistika_access_token");
+  localStorage.removeItem("logistika_refresh_token");
+  localStorage.removeItem("logistika_user_role");
+  window.dispatchEvent(new Event("auth_session_expired"));
+}
+
 export async function apiRequest<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
   const { skipAuth = false, ...init } = options;
   const baseUrl = getBaseUrl();
@@ -72,48 +115,13 @@ export async function apiRequest<T>(endpoint: string, options: FetchOptions = {}
 
     // Auto Refresh Token Interceptor
     if (response.status === 401 && !skipAuth) {
-      const refreshToken = localStorage.getItem("logistika_refresh_token");
-      if (refreshToken) {
+      if (localStorage.getItem("logistika_refresh_token")) {
         try {
-          let newAccessToken = "";
-          
-          if (activeRefreshPromise) {
-            // Wait for existing refresh to complete
-            newAccessToken = await activeRefreshPromise;
-          } else {
-            // Initiate refresh
-            activeRefreshPromise = (async () => {
-              const refreshUrl = `${baseUrl}/auth/refresh`;
-              const refreshRes = await fetch(refreshUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ refresh_token: refreshToken }),
-              });
-
-              if (!refreshRes.ok) {
-                throw new Error("Refresh token expired");
-              }
-
-              const data = await refreshRes.json();
-              const { applyRefreshedTokens } = await import("../services/authApi");
-              applyRefreshedTokens(data);
-              return data.access_token as string;
-            })();
-
-            newAccessToken = await activeRefreshPromise;
-            activeRefreshPromise = null;
-          }
-
-          // Retry the original request with the new token
+          const newAccessToken = await refreshAccessToken();
           headers.set("Authorization", `Bearer ${newAccessToken}`);
           response = await fetch(url, finalOptions);
-        } catch (refreshErr) {
-          activeRefreshPromise = null;
-          // Clear credentials and force redirect
-          localStorage.removeItem("logistika_access_token");
-          localStorage.removeItem("logistika_refresh_token");
-          localStorage.removeItem("logistika_user_role");
-          window.dispatchEvent(new Event("auth_session_expired"));
+        } catch {
+          clearAuthSession();
           throw new Error("Sessiya muddati tugadi. Tizimga qayta kiring.");
         }
       }

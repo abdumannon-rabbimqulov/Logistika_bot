@@ -1,6 +1,6 @@
 import React from "react";
 import { Outlet, useNavigate, useLocation, NavLink } from "react-router-dom";
-import { ArrowLeft, Home, User, Bot, MessagesSquare, Megaphone } from "lucide-react";
+import { ArrowLeft, Home, User, Bot, MessagesSquare, Megaphone, Package } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import type { UserRole } from "../types/auth";
 
@@ -13,6 +13,9 @@ function pageTitle(pathname: string, role: "sender" | "driver", override?: strin
   if (override) return override;
   if (pathname.endsWith("/profile")) return "Profil";
   if (role === "sender") {
+    if (pathname.endsWith("/orders/create")) return "Yangi buyurtma";
+    if (pathname.match(/\/orders\/\d+/)) return "Buyurtma";
+    if (pathname.endsWith("/orders")) return "Buyurtmalar";
     if (pathname.includes("/ai")) return "AI yordamchi";
     if (pathname.match(/\/chats\/\d+/)) return "Chat";
     if (pathname.endsWith("/chats")) return "Chatlar";
@@ -34,6 +37,9 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({ role, title })
   const isHome = pathname === base || pathname === `${base}/`;
   const isProfile = pathname.endsWith("/profile");
   const isAi = pathname.includes("/ai");
+  const isOrdersList = pathname.endsWith("/orders");
+  const isOrderCreate = pathname.endsWith("/orders/create");
+  const isOrderDetail = /\/orders\/\d+/.test(pathname);
   const isChatsList = pathname.endsWith("/chats");
   const isChatDetail = /\/chats\/\d+/.test(pathname);
   const isAnnouncements = pathname.includes("/announcements");
@@ -43,12 +49,20 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({ role, title })
 
   const showBack =
     !isHome &&
-    (isProfile || isAi || isChatsList || isChatDetail || isAnnouncements);
+    (isProfile ||
+      isAi ||
+      isOrdersList ||
+      isOrderCreate ||
+      isOrderDetail ||
+      isChatsList ||
+      isChatDetail ||
+      isAnnouncements);
 
   const goBack = () => {
     if (isOfferDetail) navigate(`${base}/announcements`);
+    else if (isOrderDetail || isOrderCreate) navigate(`${base}/orders`);
     else if (isChatDetail) navigate(`${base}/chats`);
-    else if (isAi || isChatsList) navigate(base);
+    else if (isAi || isChatsList || isOrdersList) navigate(base);
     else navigate(base);
   };
 
@@ -81,6 +95,15 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({ role, title })
           </NavLink>
           {role === "sender" && (
             <>
+              <NavLink
+                to={`${base}/orders`}
+                className={({ isActive }) =>
+                  `mobile-nav-item${isActive || isOrderCreate || isOrderDetail ? " active" : ""}`
+                }
+              >
+                <Package size={22} />
+                <span>Buyurtma</span>
+              </NavLink>
               <NavLink
                 to={`${base}/ai`}
                 className={({ isActive }) => `mobile-nav-item${isActive ? " active" : ""}`}

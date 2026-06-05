@@ -56,6 +56,24 @@ def get_redis() -> aioredis.Redis:
     return _redis
 
 
+async def close_redis() -> None:
+    """Ilova yopilganda async Redis klientini xavfsiz yopish."""
+    global _redis
+    if _redis is None:
+        return
+
+    client = _redis
+    _redis = None
+
+    try:
+        await client.aclose()
+    except RuntimeError as exc:
+        # uvicorn reload / event loop yopilganda redis drayveri xato bermasligi uchun
+        logger.debug("Redis aclose skipped (event loop closed): %s", exc)
+    except (RedisError, OSError) as exc:
+        logger.warning("Redis aclose failed: %s", exc)
+
+
 async def update_driver_location(
     *,
     driver_id: int,
@@ -275,9 +293,9 @@ async def subscribe_location_updates() -> AsyncIterator[Dict]:
     finally:
         try:
             await pubsub.unsubscribe(CHANNEL)
-        except Exception:
+        except (RuntimeError, RedisError, OSError):
             pass
         try:
-            await pubsub.close()
-        except Exception:
+            await pubsub.aclose()
+        except (RuntimeError, RedisError, OSError):
             pass

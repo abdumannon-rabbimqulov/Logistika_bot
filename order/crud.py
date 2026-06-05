@@ -6,8 +6,9 @@ from sqlalchemy.orm import selectinload
 from typing import List, Optional
 
 from order.models import Order, OrderStatus, OrderWaypoint, OrderOffer
+from services.datetime_utils import to_utc_naive, utc_now_naive
 from services.notifications import DeletedBy, notify_drivers_order_deleted
-
+from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
@@ -35,9 +36,22 @@ def sort_order_waypoints(order: Order) -> Order:
     return order
 
 
+def _naive_datetime_fields(data: dict) -> dict:
+    """TIMESTAMP WITHOUT TIME ZONE ustunlariga faqat naive datetime yuborish."""
+    result = {}
+    for key, value in data.items():
+        if key in ("created_at", "updated_at"):
+            continue
+        if isinstance(value, datetime):
+            result[key] = to_utc_naive(value)
+        else:
+            result[key] = value
+    return result
+
+
 async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int) -> Order:
     waypoints_data = data.waypoints
-    order_dict = data.model_dump()
+    order_dict = _naive_datetime_fields(data.model_dump())
     del order_dict["waypoints"]
 
     obj = Order(customer_id=customer_id, **order_dict)
@@ -45,7 +59,10 @@ async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int)
     await db.flush()
 
     for wp_data in waypoints_data:
-        wp = OrderWaypoint(order_id=obj.id, **wp_data.model_dump())
+        wp = OrderWaypoint(
+            order_id=obj.id,
+            **_naive_datetime_fields(wp_data.model_dump()),
+        )
         db.add(wp)
 
     await db.commit()
@@ -75,7 +92,6 @@ async def get_all_orders(
     unassigned_only: bool = False,
     limit: Optional[int] = None,
 ) -> List[Order]:
-    """Umumiy ro'yxat (mijoz/admin). Status — enum bo'yicha (string emas)."""
     stmt = select(Order).options(selectinload(Order.waypoints))
     if customer_id is not None:
         stmt = stmt.where(Order.customer_id == customer_id)
@@ -214,8 +230,7 @@ async def get_order_offers(db: AsyncSession, order_id: int) -> List[OrderOffer]:
 async def update_order_offer(db: AsyncSession, pk: int, data: OrderOfferUpdate) -> Optional[OrderOffer]:
     update_data = data.model_dump(exclude_unset=True)
     if 'counter_price' in update_data:
-        from datetime import datetime, timezone
-        update_data['counter_at'] = datetime.now(timezone.utc)
+        update_data['counter_at'] = utc_now_naive()
     
     await db.execute(update(OrderOffer).where(OrderOffer.id == pk).values(**update_data))
     await db.commit()

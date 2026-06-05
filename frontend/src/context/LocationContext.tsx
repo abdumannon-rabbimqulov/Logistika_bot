@@ -6,13 +6,11 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { getWebSocketUrl } from "../api";
 import { useAuth } from "./AuthContext";
+import { useDriverWebSocket } from "../hooks/useDriverWebSocket";
 
 const STORAGE_KEY = "logistika_gps_enabled";
 const SEND_INTERVAL_MS = 30_000;
-const WS_PATH = "/drivers/ws/location";
-const RECONNECT_MS = 5000;
 
 interface Coords {
   latitude: number;
@@ -30,60 +28,34 @@ interface LocationContextValue {
 
 const LocationContext = createContext<LocationContextValue | null>(null);
 
-function getAccessToken(): string {
-  return (
-    localStorage.getItem("logistika_access_token") ||
-    localStorage.getItem("token") ||
-    ""
-  );
-}
-
-function buildDriverLocationWsUrl(): string | null {
-  const token = getAccessToken();
-  if (!token) return null;
-
-  const encoded = encodeURIComponent(token);
-  const isLocalDev =
-    window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1";
-
-  if (isLocalDev) {
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    return `${proto}://${window.location.host}/api${WS_PATH}?token=${encoded}`;
-  }
-  return `${getWebSocketUrl(WS_PATH)}?token=${encoded}`;
-}
-
 export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const isDriver = user?.role === "driver";
 
   const [enabled, setEnabledState] = useState(() => sessionStorage.getItem(STORAGE_KEY) === "1");
-  const [active, setActive] = useState(false);
+  const [gpsSessionActive, setGpsSessionActive] = useState(false);
   const [coords, setCoords] = useState<Coords | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [gpsError, setGpsError] = useState<string | null>(null);
 
-  const wsRef = useRef<WebSocket | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const sendIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const connectingRef = useRef(false);
-  const intentionalCloseRef = useRef(false);
-  const gpsSessionActiveRef = useRef(false);
   const coordsRef = useRef<Coords | null>(null);
-
-  const enabledRef = useRef(enabled);
-  const isDriverRef = useRef(isDriver);
-  enabledRef.current = enabled;
-  isDriverRef.current = isDriver;
   coordsRef.current = coords;
 
-  const clearReconnectTimer = () => {
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
-    }
-  };
+  const wsEnabled = enabled && isDriver && gpsSessionActive;
+
+  const { active, error: wsError, send } = useDriverWebSocket({
+    enabled: wsEnabled,
+    onOpen: () => {
+      flushCoordsToServer();
+    },
+    onMessage: (data) => {
+      const msg = data as { status?: string };
+      if (msg.status === "connected" || msg.status === "acknowledged") {
+        setGpsError(null);
+      }
+    },
+  });
 
   const clearSendInterval = () => {
     if (sendIntervalRef.current != null) {
@@ -93,10 +65,9 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const flushCoordsToServer = () => {
-    const ws = wsRef.current;
     const c = coordsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN || !c) return;
-    ws.send(JSON.stringify({ latitude: c.latitude, longitude: c.longitude }));
+    if (!c) return;
+    send({ latitude: c.latitude, longitude: c.longitude });
   };
 
   const startSendInterval = () => {
@@ -119,113 +90,25 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }, SEND_INTERVAL_MS);
   };
 
-  const closeSocket = (sendStop = false) => {
-    clearSendInterval();
-    clearReconnectTimer();
-    connectingRef.current = false;
-    const ws = wsRef.current;
-    if (!ws) return;
-
-    intentionalCloseRef.current = true;
-    if (sendStop && ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(JSON.stringify({ event: "stop" }));
-      } catch {
-        /* ignore */
-      }
-    }
-    wsRef.current = null;
-    ws.close();
-    intentionalCloseRef.current = false;
-    setActive(false);
-  };
-
-  const openWebSocket = () => {
-    if (!enabledRef.current || !isDriverRef.current) return;
-    if (connectingRef.current) return;
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
-    if (wsRef.current?.readyState === WebSocket.CONNECTING) return;
-
-    const url = buildDriverLocationWsUrl();
-    if (!url) {
-      setError("Avtorizatsiya tokeni topilmadi");
-      return;
-    }
-
-    connectingRef.current = true;
-    const ws = new WebSocket(url);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      connectingRef.current = false;
-      if (!enabledRef.current) {
-        intentionalCloseRef.current = true;
-        ws.close();
-        intentionalCloseRef.current = false;
-        return;
-      }
-      setError(null);
-      setActive(true);
-      startSendInterval();
-    };
-
-    ws.onmessage = (ev) => {
-      try {
-        const data = JSON.parse(ev.data as string) as { status?: string };
-        if (data.status === "connected" || data.status === "acknowledged") {
-          setActive(true);
-          setError(null);
-        }
-      } catch {
-        /* ignore */
-      }
-    };
-
-    ws.onerror = () => {
-      connectingRef.current = false;
-      clearSendInterval();
-      if (enabledRef.current) setError("WebSocket ulanishi xatolik");
-      setActive(false);
-    };
-
-    ws.onclose = () => {
-      connectingRef.current = false;
-      clearSendInterval();
-      if (wsRef.current === ws) wsRef.current = null;
-      setActive(false);
-
-      if (intentionalCloseRef.current || !enabledRef.current || !gpsSessionActiveRef.current) {
-        return;
-      }
-
-      clearReconnectTimer();
-      reconnectTimerRef.current = setTimeout(() => {
-        if (enabledRef.current && gpsSessionActiveRef.current) {
-          openWebSocket();
-        }
-      }, RECONNECT_MS);
-    };
-  };
-
-  const stopGpsSession = (sendStop = false) => {
-    gpsSessionActiveRef.current = false;
+  const stopGpsSession = () => {
+    setGpsSessionActive(false);
 
     if (watchIdRef.current != null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
 
-    closeSocket(sendStop);
+    clearSendInterval();
   };
 
   const startGpsSession = () => {
-    if (gpsSessionActiveRef.current) return;
+    if (gpsSessionActive) return;
     if (!navigator.geolocation) {
-      setError("Geolokatsiya qo'llab-quvvatlanmaydi");
+      setGpsError("Geolokatsiya qo'llab-quvvatlanmaydi");
       return;
     }
 
-    gpsSessionActiveRef.current = true;
+    setGpsSessionActive(true);
 
     const onPosition = (position: GeolocationPosition) => {
       const next = {
@@ -234,15 +117,10 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       };
       coordsRef.current = next;
       setCoords(next);
-
-      const state = wsRef.current?.readyState;
-      if (state !== WebSocket.OPEN && state !== WebSocket.CONNECTING) {
-        openWebSocket();
-      }
     };
 
     const onError = (err: GeolocationPositionError) => {
-      setError(err.message || "GPS xatolik");
+      setGpsError(err.message || "GPS xatolik");
     };
 
     navigator.geolocation.getCurrentPosition(onPosition, onError, {
@@ -255,17 +133,25 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       maximumAge: SEND_INTERVAL_MS,
       timeout: 20_000,
     });
-
-    openWebSocket();
   };
 
-  /** GPS: faqat enabled / isDriver o'zgarganda — bitta mount/unmount tsikli */
+  useEffect(() => {
+    if (active) {
+      startSendInterval();
+    } else {
+      clearSendInterval();
+    }
+    return () => clearSendInterval();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+
+  /** GPS: faqat enabled / isDriver o'zgarganda */
   useEffect(() => {
     if (!isDriver || !enabled) {
       sessionStorage.removeItem(STORAGE_KEY);
-      stopGpsSession(true);
+      stopGpsSession();
       setCoords(null);
-      setError(null);
+      setGpsError(null);
       return;
     }
 
@@ -273,7 +159,7 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     startGpsSession();
 
     return () => {
-      stopGpsSession(true);
+      stopGpsSession();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, isDriver]);
@@ -285,6 +171,8 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const toggle = useCallback(() => {
     setEnabledState((v) => !v);
   }, []);
+
+  const error = gpsError ?? wsError;
 
   return (
     <LocationContext.Provider value={{ enabled, active, coords, error, setEnabled, toggle }}>

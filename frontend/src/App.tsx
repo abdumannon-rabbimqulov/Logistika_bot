@@ -29,6 +29,9 @@ import { TruckTypesAdmin } from "./pages/admin/TruckTypesAdmin";
 import { AIAssistantPage } from "./pages/sender/AIAssistantPage";
 import { ChatsPage } from "./pages/sender/ChatsPage";
 import { ChatDetailPage } from "./pages/sender/ChatDetailPage";
+import { OrderCreatePage } from "./pages/sender/OrderCreatePage";
+import { OrderListPage } from "./pages/sender/OrderListPage";
+import { OrderDetailPage } from "./pages/sender/OrderDetailPage";
 
 export const App: React.FC = () => {
   return (
@@ -62,6 +65,9 @@ export const App: React.FC = () => {
             }
           >
             <Route index element={<SenderHome />} />
+            <Route path="orders" element={<OrderListPage />} />
+            <Route path="orders/create" element={<OrderCreatePage />} />
+            <Route path="orders/:orderId" element={<OrderDetailPage />} />
             <Route path="ai" element={<AIAssistantPage />} />
             <Route path="chats" element={<ChatsPage />} />
             <Route path="chats/:chatId" element={<ChatDetailPage />} />

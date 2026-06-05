@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     BigInteger, Integer, String, Numeric, DateTime,
-    ForeignKey, Enum as SQLEnum, Text, SmallInteger,Boolean
+    ForeignKey, Enum as SQLEnum, Text, SmallInteger, Boolean, JSON, func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from config.config import Base
@@ -14,6 +14,59 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ai.models import Chat, Rating
     from driver.models import Driver
+
+
+class Region(Base):
+    """O'zbekiston viloyati / shahar (MIMAXUZ + dirixtt GeoJSON)."""
+
+    __tablename__ = "regions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    soato_id: Mapped[int | None] = mapped_column(Integer, unique=True, nullable=True, index=True)
+    name_uz: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    name_oz: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    name_ru: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    name_en: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    slug: Mapped[str | None] = mapped_column(String(80), unique=True, nullable=True)
+
+    centroid_lat: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
+    centroid_lng: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
+    bounds: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    geojson: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    districts: Mapped[list["District"]] = relationship(
+        "District",
+        back_populates="region",
+        cascade="all, delete-orphan",
+    )
+
+    def __repr__(self) -> str:
+        return f"<Region(id={self.id}, name_uz='{self.name_uz}')>"
+
+
+class District(Base):
+    """Viloyat ichidagi tuman / shahar (region_id FK)."""
+
+    __tablename__ = "districts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    region_id: Mapped[int] = mapped_column(Integer, ForeignKey("regions.id", ondelete="CASCADE"), nullable=False, index=True)
+    soato_id: Mapped[int | None] = mapped_column(Integer, unique=True, nullable=True, index=True)
+    name_uz: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    name_oz: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    name_ru: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    name_en: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    slug: Mapped[str | None] = mapped_column(String(80), nullable=True)
+
+    centroid_lat: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
+    centroid_lng: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
+    bounds: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    geojson: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    region: Mapped["Region"] = relationship("Region", back_populates="districts")
+
+    def __repr__(self) -> str:
+        return f"<District(id={self.id}, region_id={self.region_id}, name_uz='{self.name_uz}')>"
 
 
 class OrderStatus(str, enum.Enum):
@@ -73,9 +126,12 @@ class Order(Base):
         nullable=False,
     )
 
-    created_at : Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at : Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc),
-                                                  onupdate=lambda: datetime.now(timezone.utc))
+    created_at : Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+    updated_at : Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     customer   = relationship("User",      foreign_keys=[customer_id], backref="customer_orders")
     driver     = relationship("Driver",    foreign_keys=[driver_id],   backref="driver_orders")
@@ -148,7 +204,9 @@ class OrderTrack(Base):
     order_id    : Mapped[int]      = mapped_column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
     latitude    : Mapped[float]    = mapped_column(Numeric(9, 6), nullable=False)
     longitude   : Mapped[float]    = mapped_column(Numeric(9, 6), nullable=False)
-    recorded_at : Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    recorded_at : Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
 
     # Order bilan teskari aloqa
     order       = relationship("Order", back_populates="tracks")
@@ -190,9 +248,12 @@ class OrderWaypoint(Base):
         SQLEnum(WaypointStatus), default=WaypointStatus.PENDING, nullable=False
     )
 
-    created_at : Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at : Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc),
-                                                  onupdate=lambda: datetime.now(timezone.utc))
+    created_at : Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+    updated_at : Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     order : Mapped["Order"] = relationship("Order", back_populates="waypoints")
 
@@ -262,9 +323,12 @@ class OrderOffer(Base):
 
     status_reason : Mapped[str | None] = mapped_column(String(300), nullable=True)
 
-    created_at  : Mapped[datetime]          = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at  : Mapped[datetime]          = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc),
-                                                            onupdate=lambda: datetime.now(timezone.utc))
+    created_at  : Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+    updated_at  : Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
     accepted_at : Mapped[datetime | None]   = mapped_column(DateTime, nullable=True)
     cancelled_at: Mapped[datetime | None]   = mapped_column(DateTime, nullable=True)
 

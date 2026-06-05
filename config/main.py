@@ -19,6 +19,7 @@ configure_mappers()
 
 from driver.router import router as driver_router
 from order.router import router as order_router
+from order.geo_router import router as geo_router
 from ai.router import router as ai_router
 from users.router import router as auth_router
 from users.tariff_router import router as tariff_admin_router
@@ -63,6 +64,13 @@ async def startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+
+@app.on_event("shutdown")
+async def shutdown():
+    from services.live_location import close_redis
+
+    await close_redis()
+
 def _register_api_routers(
     target: FastAPI,
     *,
@@ -72,6 +80,7 @@ def _register_api_routers(
     kwargs = {"prefix": prefix, "include_in_schema": include_in_schema}
     target.include_router(driver_router, **kwargs)
     target.include_router(order_router, **kwargs)
+    target.include_router(geo_router, **kwargs)
     target.include_router(ai_router, **kwargs)
     auth_prefix = f"{prefix}/auth".replace("//", "/")
     target.include_router(

@@ -9,7 +9,15 @@ export interface OrderOffer {
   currency: string;
   status: string;
   comment?: string | null;
+  counter_price?: number | null;
+  counter_comment?: string | null;
+  driver_latitude?: number | null;
+  driver_longitude?: number | null;
+  distance_to_pickup_km?: number | null;
+  is_seen?: boolean;
   created_at: string;
+  updated_at?: string;
+  accepted_at?: string | null;
 }
 
 export interface FetchOrdersParams {
