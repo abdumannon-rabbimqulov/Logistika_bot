@@ -30,6 +30,7 @@ async def send_verification_code(bot: Bot, telegram_id: int) -> str:
         parse_mode="HTML",
         reply_markup=keyboard
     )
+    print(f"Generated verification code for Telegram ID {telegram_id}: {code}------------------")
 
     return code
 

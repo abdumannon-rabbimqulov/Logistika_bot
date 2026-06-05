@@ -13,6 +13,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d logistika_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   # 2. Redis server 
   logistika-redis:
@@ -48,8 +53,10 @@ services:
       - config/uvicorn_logging.json
     restart: always
     depends_on:
-      - db
-      - logistika-redis
+      db:
+        condition: service_healthy
+      logistika-redis:
+        condition: service_started
 
   # 4. Telegram Bot
   bot:
@@ -64,8 +71,10 @@ services:
     command: python main.py
     restart: always
     depends_on:
-      - db
-      - logistika-redis
+      db:
+        condition: service_healthy
+      logistika-redis:
+        condition: service_started
 
 # Barcha volume'lar bitta joyda jamlandi
 volumes:
