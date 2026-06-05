@@ -112,3 +112,15 @@ async def get_current_admin(
         )
     return current_user
 
+
+async def get_current_sender(
+    current_user: User = Depends(get_current_active_user),
+) -> User:
+    """Faqat yuk beruvchi (mijoz) — buyurtma yaratish/tahrirlash/o'chirish."""
+    if current_user.role != UserRole.SENDER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bu amal faqat yuk beruvchi (sender) uchun.",
+        )
+    return current_user
+

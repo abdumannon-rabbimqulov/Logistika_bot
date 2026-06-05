@@ -35,8 +35,12 @@ class OrderWaypointBase(BaseModel):
     waypoint_type: WaypointType = Field(WaypointType.PICKUP, description="Nuqta turi")
     address: str = Field(..., max_length=300, description="To'liq manzil (shahar/ko'cha)")
     landmark: Optional[str] = Field(None, max_length=200, description="Mo'ljal")
-    latitude: Optional[float] = Field(None)
-    longitude: Optional[float] = Field(None)
+    latitude: Optional[float] = Field(
+        None, ge=-90, le=90, description="GPS kenglik (ixtiyoriy, xaritadan tanlangan bo'lsa)"
+    )
+    longitude: Optional[float] = Field(
+        None, ge=-180, le=180, description="GPS uzunlik (ixtiyoriy, xaritadan tanlangan bo'lsa)"
+    )
     distance_from_prev_km: Optional[Decimal] = Field(None)
     scheduled_arrival: Optional[datetime] = None
     scheduled_departure: Optional[datetime] = None
@@ -46,8 +50,13 @@ class OrderWaypointBase(BaseModel):
     note: Optional[str] = Field(None)
     status: WaypointStatus = WaypointStatus.PENDING
 
+
 class OrderWaypointCreate(OrderWaypointBase):
-    pass
+    """Yangi buyurtma waypoint — address majburiy, GPS ixtiyoriy (NULL bo'lishi mumkin)."""
+
+    sequence: int = Field(1, ge=1, description="Tartib raqami")
+    address: str = Field(..., min_length=1, max_length=300, description="To'liq manzil")
+
 
 class OrderWaypointResponse(OrderWaypointBase):
     id: int
@@ -61,17 +70,17 @@ class OrderWaypointResponse(OrderWaypointBase):
 # --- Order Schemas ---
 
 class OrderBase(BaseModel):
-    cargo_name: str = Field(..., max_length=200)
-    weight: Decimal = Field(...)
-    volume: Optional[Decimal] = Field(None)
-    required_truck_type_id: int = Field(...)
-    price: Decimal = Field(...)
+    cargo_name: str = Field(..., min_length=1, max_length=200)
+    weight: Decimal = Field(..., gt=0)
+    volume: Optional[Decimal] = Field(None, gt=0)
+    required_truck_type_id: int = Field(..., gt=0, description="Yuk mashinasi turi (majburiy)")
+    price: Decimal = Field(..., gt=0)
     currency: str = Field("UZS")
     scheduled_start: Optional[datetime] = None
     scheduled_end: Optional[datetime] = None
 
 class OrderCreate(OrderBase):
-    waypoints: List[OrderWaypointCreate]
+    waypoints: List[OrderWaypointCreate] = Field(..., min_length=2)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -87,17 +96,21 @@ class OrderCreate(OrderBase):
                         "sequence": 1,
                         "waypoint_type": "pickup",
                         "address": "Toshkent, Sergeli sanoat zonasi",
+                        "latitude": 41.220394,
+                        "longitude": 69.350832,
                         "contact_name": "Aziz",
-                        "contact_phone": "+998901112233"
+                        "contact_phone": "+998901112233",
                     },
                     {
                         "sequence": 2,
                         "waypoint_type": "delivery",
                         "address": "Samarqand, Shahar markazi",
+                        "latitude": 39.6542,
+                        "longitude": 66.9597,
                         "contact_name": "Jasur",
-                        "contact_phone": "+998934445566"
-                    }
-                ]
+                        "contact_phone": "+998934445566",
+                    },
+                ],
             }
         }
     )
