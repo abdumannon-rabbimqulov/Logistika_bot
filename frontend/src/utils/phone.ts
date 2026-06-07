@@ -3,8 +3,8 @@
  */
 export function formatPhoneForApi(phone: string): string {
   let value = phone.trim().replace(/\s+/g, "").replace(/-/g, "");
-  if (value.startsWith("+")) {
-    value = value.slice(1);
+  if (value && !value.startsWith("+") && value.length > 9) {
+    value = "+" + value;
   }
   return value;
 }

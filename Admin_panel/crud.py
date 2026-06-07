@@ -21,6 +21,7 @@ from Admin_panel.schemas import (
     AdminOrderUpdate,
     OrdersByDay,
 )
+from utils.validation import normalize_phone_number
 
 
 # ════════════════════════════════════════════════════════════
@@ -46,13 +47,32 @@ async def list_users(
     if is_active is not None:
         base = base.where(User.is_active == is_active)
     if search:
-        like = f"%{search.strip()}%"
+        cleaned_search = search.strip()
+        like = f"%{cleaned_search}%"
+        
+        phone_conditions = []
+        digits = "".join(c for c in cleaned_search if c.isdigit())
+        if digits:
+            try:
+                norm_phone = normalize_phone_number(cleaned_search)
+                plus_less = norm_phone.lstrip('+')
+                phone_conditions.extend([
+                    User.phone_number.ilike(f"%{norm_phone}%"),
+                    User.phone_number.ilike(f"%{plus_less}%")
+                ])
+            except Exception:
+                phone_conditions.append(User.phone_number.ilike(f"%{digits}%"))
+                if not cleaned_search.startswith("+"):
+                    phone_conditions.append(User.phone_number.ilike(f"%+{digits}%"))
+        else:
+            phone_conditions.append(User.phone_number.ilike(like))
+
         base = base.where(
             or_(
                 User.full_name.ilike(like),
                 User.username.ilike(like),
-                User.phone_number.ilike(like),
                 User.email.ilike(like),
+                *phone_conditions
             )
         )
 

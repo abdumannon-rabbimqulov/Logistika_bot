@@ -50,6 +50,14 @@ class OrderWaypointBase(BaseModel):
     note: Optional[str] = Field(None)
     status: WaypointStatus = WaypointStatus.PENDING
 
+    @field_validator("contact_phone", mode="before")
+    @classmethod
+    def validate_contact_phone(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        from utils.validation import normalize_phone_number
+        return normalize_phone_number(v)
+
 
 class OrderWaypointCreate(OrderWaypointBase):
     """Yangi buyurtma waypoint — address majburiy, GPS ixtiyoriy (NULL bo'lishi mumkin)."""

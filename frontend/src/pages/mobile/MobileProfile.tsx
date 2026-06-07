@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { changePasswordApi, deactivateMeApi } from "../../services/authApi";
 import { ConfirmModal } from "../../components/mobile/ConfirmModal";
 import { LogOut, Trash2 } from "lucide-react";
+import { formatPhoneForApi } from "../../utils/phone";
 
 export const MobileProfile: React.FC = () => {
   const { user, session, updateProfile, logout, refreshMe } = useAuth();
@@ -37,10 +38,10 @@ export const MobileProfile: React.FC = () => {
     setMsg("");
     try {
       await updateProfile({
-        full_name: fullName,
+        full_name: fullName.trim(),
         language,
-        phone_number: phone || undefined,
-        bio: bio || undefined,
+        phone_number: phone.trim() ? formatPhoneForApi(phone.trim()) : undefined,
+        bio: bio.trim() || undefined,
       } as Parameters<typeof updateProfile>[0]);
       setMsg("Profil saqlandi");
     } catch (ex: unknown) {
@@ -119,7 +120,7 @@ export const MobileProfile: React.FC = () => {
           </div>
           <div className="mobile-field">
             <label>Telefon</label>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="998901234567" />
+            <input value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^0-9+]/g, ""))} placeholder="998901234567" />
           </div>
           <div className="mobile-field">
             <label>Til</label>

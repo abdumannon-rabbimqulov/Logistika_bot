@@ -2,7 +2,7 @@ from datetime import datetime, date
 from decimal import Decimal
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
 
 
 
@@ -40,6 +40,14 @@ class UserUpdate(BaseModel):
     phone_number: Optional[str] = Field(None, max_length=20)
     language:     Optional[str] = Field(None, min_length=2, max_length=10)
     bio:          Optional[str] = Field(None, max_length=500)
+
+    @field_validator("phone_number", mode="before")
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        from utils.validation import normalize_phone_number
+        return normalize_phone_number(v)
 
 
 

@@ -46,7 +46,7 @@ export const Users: React.FC = () => {
     try {
       const skip = (page - 1) * limit;
       let queryParams = `?skip=${skip}&limit=${limit}`;
-      if (search) queryParams += `&search=${encodeURIComponent(search)}`;
+      if (search.trim()) queryParams += `&search=${encodeURIComponent(search.trim())}`;
       if (role) queryParams += `&role=${role}`;
       if (status === "banned") queryParams += `&is_banned=true`;
       if (status === "active") queryParams += `&is_banned=false`;

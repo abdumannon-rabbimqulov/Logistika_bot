@@ -44,7 +44,7 @@ export const DriverSetupProfile: React.FC = () => {
       await createDriverProfile({
         current_city: currentCity.trim(),
         current_region: currentRegion.trim() || undefined,
-        phone_number: phoneNumber.trim() ? formatPhoneForApi(phoneNumber) : undefined,
+        phone_number: phoneNumber.trim() ? formatPhoneForApi(phoneNumber.trim()) : undefined,
         truck_number: truckNumber.trim(),
         truck_type_id: Number(truckTypeId),
         truck_year: truckYear ? Number(truckYear) : undefined,
@@ -90,7 +90,7 @@ export const DriverSetupProfile: React.FC = () => {
                 type="tel"
                 placeholder="998901234567"
                 value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
+                onChange={(e) => setPhoneNumber(e.target.value.replace(/[^0-9+]/g, ""))}
               />
             </div>
             <div className="mobile-field">

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional, List
@@ -82,6 +82,14 @@ class DriverBase(BaseModel):
 
 class DriverCreate(DriverBase):
     phone_number: Optional[str] = Field(None, max_length=20, description="Aloqa raqami (User.phone_number ga yoziladi)")
+
+    @field_validator("phone_number", mode="before")
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        from utils.validation import normalize_phone_number
+        return normalize_phone_number(v)
 
     model_config = ConfigDict(
         json_schema_extra={

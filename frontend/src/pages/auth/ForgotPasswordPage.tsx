@@ -24,7 +24,7 @@ export const ForgotPasswordPage: React.FC = () => {
     setLoading(true);
     try {
       if (step === 1) {
-        await resetPhone(formatPhoneForApi(phone));
+        await resetPhone(formatPhoneForApi(phone.trim()));
         setSuccess("Kod Telegram bot orqali yuborildi");
         setStep(2);
       } else if (step === 2) {
@@ -93,7 +93,7 @@ export const ForgotPasswordPage: React.FC = () => {
                     className="glass-input"
                     placeholder="998901234567"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => setPhone(e.target.value.replace(/[^0-9+]/g, ""))}
                     disabled={loading}
                     required
                   />

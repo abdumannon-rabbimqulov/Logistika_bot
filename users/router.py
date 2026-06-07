@@ -33,6 +33,7 @@ from users.schemas import (
     UserUpdate,
 )
 from driver.crud import  get_driver_by_user_id
+from utils.validation import normalize_phone_number
 
 import redis
 from datetime import timedelta, datetime, timezone
@@ -90,6 +91,12 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ):
     user = None
+
+    if phone_number:
+        try:
+            phone_number = normalize_phone_number(phone_number)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
 
     if init_data:
         if not BOT_TOKEN:
@@ -163,6 +170,10 @@ async def reset_phone(
     phone_number: str = Body(..., embed=True),
     db: AsyncSession = Depends(get_db),
 ):
+    try:
+        phone_number = normalize_phone_number(phone_number)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     user = await get_user_by_phone(db, phone_number)
     if not user:
         raise HTTPException(

@@ -43,28 +43,49 @@ PATTERNS = {
 # VALIDATORS
 # ─────────────────────────────────────────────────────────────
 
+def normalize_phone_number(phone_str: str) -> str:
+    """
+    Normalize phone number using phonenumbers (Google libphonenumber).
+    Cleans character string to international E.164 format (e.g. +998956260108).
+    Defaults to UZ region if no country code is specified (9 digits).
+    """
+    if not phone_str:
+        raise ValueError("Telefon raqami bo'sh bo'lishi mumkin emas")
+        
+    import phonenumbers
+    
+    # Remove whitespace, dashes, parentheses
+    cleaned = "".join(c for c in phone_str if c.isdigit() or c == "+")
+    
+    if not cleaned:
+        raise ValueError(f"❌ Noto'g'ri telefon raqami formati: {phone_str}")
+        
+    # Standardize country code: if it does not start with '+' and is > 9 digits,
+    # assume it is already an international number without '+' and prepend '+'
+    if not cleaned.startswith("+"):
+        if len(cleaned) == 9:
+            # UZ local format, e.g. "956260108"
+            pass
+        elif len(cleaned) > 9:
+            # International number without '+', e.g. "998956260108" -> prepend '+'
+            cleaned = "+" + cleaned
+            
+    try:
+        parsed = phonenumbers.parse(cleaned, "UZ")
+        if not phonenumbers.is_valid_number(parsed):
+            raise ValueError("Invalid phone number")
+        return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
+    except Exception as e:
+        raise ValueError(f"❌ Telefon raqami yaroqsiz: {phone_str}. Tafsilotlar: {str(e)}")
+
+
 def validate_phone_number(value: Optional[str]) -> Optional[str]:
     """
-    Phone number validate qilish.
-    Supports: +998YYXXXXXXX, 0YYXXXXXXX, YYXXXXXXX
+    Phone number validate qilish (backwards compatibility).
     """
     if not value:
         return None
-    
-    # Remove spaces and dashes
-    cleaned = re.sub(r'[\s\-\(\)]+', '', value)
-    
-    # Check format
-    if not re.match(r"^\+998\d{9}$|^0\d{9}$|\d{9}$", cleaned):
-        raise ValueError(f"❌ Invalid phone format: {value}")
-    
-    # Normalize to +998 format
-    if cleaned.startswith("0"):
-        cleaned = "+998" + cleaned[1:]
-    elif not cleaned.startswith("+"):
-        cleaned = "+998" + cleaned
-    
-    return cleaned
+    return normalize_phone_number(value)
 
 
 def validate_truck_plate(value: str) -> str:

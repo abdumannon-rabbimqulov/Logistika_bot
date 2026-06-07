@@ -1,10 +1,11 @@
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from users.models import User, UserRole
 from users.schemas import UserUpdate
+from utils.validation import normalize_phone_number
 
 
 
@@ -15,8 +16,20 @@ async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
 
 
 async def get_user_by_phone(db: AsyncSession, phone_number: str) -> Optional[User]:
+    try:
+        norm_phone = normalize_phone_number(phone_number)
+        plus_less = norm_phone.lstrip('+')
+    except Exception:
+        norm_phone = phone_number
+        plus_less = phone_number.lstrip('+') if phone_number.startswith('+') else phone_number
+
     result = await db.execute(
-        select(User).where(User.phone_number == phone_number)
+        select(User).where(
+            or_(
+                User.phone_number == norm_phone,
+                User.phone_number == plus_less
+            )
+        )
     )
     return result.scalar_one_or_none()
 

@@ -32,7 +32,7 @@ export const Login: React.FC = () => {
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phoneNumber || !password) {
+    if (!phoneNumber.trim() || !password) {
       setError("Telefon raqami va parolni kiriting.");
       return;
     }
@@ -41,7 +41,7 @@ export const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const result = await login(formatPhoneForApi(phoneNumber), password);
+      const result = await login(formatPhoneForApi(phoneNumber.trim()), password);
       navigate(result.redirectTo, { replace: true });
     } catch (err: any) {
       setError(err.message || "Tizimga kirishda xatolik yuz berdi.");
@@ -58,7 +58,7 @@ export const Login: React.FC = () => {
 
     try {
       if (forgotStep === 1) {
-        await resetPhone(formatPhoneForApi(phoneNumber));
+        await resetPhone(formatPhoneForApi(phoneNumber.trim()));
         setSuccessMsg("Tasdiqlash kodi Telegram bot orqali yuborildi!");
         setForgotStep(2);
       } else if (forgotStep === 2) {
@@ -133,7 +133,7 @@ export const Login: React.FC = () => {
                     type="tel"
                     placeholder="998901234567"
                     value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    onChange={(e) => setPhoneNumber(e.target.value.replace(/[^0-9+]/g, ""))}
                     className="glass-input"
                     disabled={isLoading}
                   />
@@ -191,7 +191,7 @@ export const Login: React.FC = () => {
                       type="tel"
                       placeholder="998901234567"
                       value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      onChange={(e) => setPhoneNumber(e.target.value.replace(/[^0-9+]/g, ""))}
                       className="glass-input"
                       disabled={isLoading}
                     />
