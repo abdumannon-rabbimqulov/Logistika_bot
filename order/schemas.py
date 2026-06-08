@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, field_serializer
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional, List
@@ -9,24 +9,24 @@ from order.models import OrderStatus
 # --- ENUM Schemas ---
 
 class WaypointType(str, Enum):
-    PICKUP   = "pickup"
-    DELIVERY = "delivery"
-    TRANSIT  = "transit"
+    PICKUP   = "PICKUP"
+    DELIVERY = "DELIVERY"
+    TRANSIT  = "TRANSIT"
 
 class WaypointStatus(str, Enum):
-    PENDING   = "pending"
-    ARRIVED   = "arrived"
-    COMPLETED = "completed"
-    SKIPPED   = "skipped"
+    PENDING   = "PENDING"
+    ARRIVED   = "ARRIVED"
+    COMPLETED = "COMPLETED"
+    SKIPPED   = "SKIPPED"
 
 class OfferStatus(str, Enum):
-    PENDING   = "pending"
-    SEEN      = "seen"
-    ACCEPTED  = "accepted"
-    REJECTED  = "rejected"
-    CANCELLED = "cancelled"
-    EXPIRED   = "expired"
-    OUTBID    = "outbid"
+    PENDING   = "PENDING"
+    SEEN      = "SEEN"
+    ACCEPTED  = "ACCEPTED"
+    REJECTED  = "REJECTED"
+    CANCELLED = "CANCELLED"
+    EXPIRED   = "EXPIRED"
+    OUTBID    = "OUTBID"
 
 # --- OrderWaypoint Schemas ---
 
@@ -57,6 +57,23 @@ class OrderWaypointBase(BaseModel):
             return v
         from utils.validation import normalize_phone_number
         return normalize_phone_number(v)
+
+    @field_validator("waypoint_type", "status", mode="before", check_fields=False)
+    @classmethod
+    def uppercase_enum_input(cls, v):
+        if isinstance(v, str):
+            return v.upper()
+        if hasattr(v, "value"):
+            return str(v.value).upper()
+        return v
+
+    @field_serializer("waypoint_type", "status", check_fields=False)
+    def serialize_enum_lower(self, enum_val, _info):
+        if hasattr(enum_val, "value"):
+            return enum_val.value.lower()
+        if isinstance(enum_val, str):
+            return enum_val.lower()
+        return enum_val
 
 
 class OrderWaypointCreate(OrderWaypointBase):
@@ -153,6 +170,15 @@ class OrderUpdate(BaseModel):
     status: Optional[OrderStatus] = None
     driver_id: Optional[int] = None
 
+    @field_validator("status", mode="before", check_fields=False)
+    @classmethod
+    def uppercase_enum_input(cls, v):
+        if isinstance(v, str):
+            return v.upper()
+        if hasattr(v, "value"):
+            return str(v.value).upper()
+        return v
+
 class OrderResponse(OrderBase):
     id: int
     customer_id: int
@@ -172,6 +198,14 @@ class OrderResponse(OrderBase):
         if isinstance(value, list):
             return sorted(value, key=lambda w: getattr(w, "sequence", w.get("sequence", 0) if isinstance(w, dict) else 0))
         return value
+
+    @field_serializer("status", check_fields=False)
+    def serialize_enum_lower(self, enum_val, _info):
+        if hasattr(enum_val, "value"):
+            return enum_val.value.lower()
+        if isinstance(enum_val, str):
+            return enum_val.lower()
+        return enum_val
 
 # --- OrderOffer Schemas ---
 
@@ -196,6 +230,15 @@ class OrderOfferUpdate(BaseModel):
     counter_comment: Optional[str] = None
     status: Optional[OfferStatus] = None
 
+    @field_validator("status", mode="before", check_fields=False)
+    @classmethod
+    def uppercase_enum_input(cls, v):
+        if isinstance(v, str):
+            return v.upper()
+        if hasattr(v, "value"):
+            return str(v.value).upper()
+        return v
+
 class OrderOfferResponse(OrderOfferBase):
     id: int
     order_id: int
@@ -211,3 +254,11 @@ class OrderOfferResponse(OrderOfferBase):
     updated_at: datetime
     accepted_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
+
+    @field_serializer("status", check_fields=False)
+    def serialize_enum_lower(self, enum_val, _info):
+        if hasattr(enum_val, "value"):
+            return enum_val.value.lower()
+        if isinstance(enum_val, str):
+            return enum_val.lower()
+        return enum_val
