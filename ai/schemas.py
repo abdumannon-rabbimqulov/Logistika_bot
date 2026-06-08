@@ -2,23 +2,24 @@ from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime, date
 from typing import Optional, List, Any, Literal
 from enum import Enum
+from utils.validation import CaseInsensitiveSchemaEnum
 
 
 
-class ChatCategory(str, Enum):
+class ChatCategory(CaseInsensitiveSchemaEnum):
     COMPLAINT    = "complaint"
     SUGGESTION   = "suggestion"
     CONVERSATION = "conversation"
     AI_COMMAND   = "ai_command"
     SUPPORT      = "support"
 
-class ChatStatus(str, Enum):
+class ChatStatus(CaseInsensitiveSchemaEnum):
     OPEN      = "open"
     RESOLVED  = "resolved"
     PENDING   = "pending"
     ESCALATED = "escalated"
 
-class MessageType(str, Enum):
+class MessageType(CaseInsensitiveSchemaEnum):
     TEXT     = "text"
     VOICE    = "voice"
     IMAGE    = "image"
@@ -27,35 +28,35 @@ class MessageType(str, Enum):
     SYSTEM   = "system"
     AI_REPLY = "ai_reply"
 
-class SenderType(str, Enum):
+class SenderType(CaseInsensitiveSchemaEnum):
     USER   = "user"
     DRIVER = "driver"
     AI     = "ai"
     SYSTEM = "system"
 
-class AttachmentType(str, Enum):
+class AttachmentType(CaseInsensitiveSchemaEnum):
     IMAGE = "image"
     VIDEO = "video"
     VOICE = "voice"
     FILE  = "file"
 
-class RatingTarget(str, Enum):
+class RatingTarget(CaseInsensitiveSchemaEnum):
     USER   = "user"
     DRIVER = "driver"
 
-class AIAnalysisType(str, Enum):
+class AIAnalysisType(CaseInsensitiveSchemaEnum):
     CHAT_REVIEW      = "chat_review"
     COMPLAINT_VERIFY = "complaint_verify"
     SENTIMENT        = "sentiment"
     RATING_VERIFY    = "rating_verify"
 
-class AIVerdict(str, Enum):
+class AIVerdict(CaseInsensitiveSchemaEnum):
     VALID     = "valid"
     INVALID   = "invalid"
     PARTIAL   = "partial"
     UNCERTAIN = "uncertain"
 
-class AICommandType(str, Enum):
+class AICommandType(CaseInsensitiveSchemaEnum):
     FIND_ORDER      = "find_order"
     TRACK_ORDER     = "track_order"
     CANCEL_ORDER    = "cancel_order"
@@ -64,7 +65,7 @@ class AICommandType(str, Enum):
     CONTACT_SUPPORT = "contact_support"
     CUSTOM          = "custom"
 
-class AICommandStatus(str, Enum):
+class AICommandStatus(CaseInsensitiveSchemaEnum):
     PENDING = "pending"
     RUNNING = "running"
     SUCCESS = "success"

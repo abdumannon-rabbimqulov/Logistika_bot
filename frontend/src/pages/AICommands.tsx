@@ -106,10 +106,13 @@ export const AICommands: React.FC = () => {
             <Filter size={14} />
             <select className="glass-select" value={commandType} onChange={(e) => { setCommandType(e.target.value); setPage(1); }}>
               <option value="">Barcha AI Buyruqlar</option>
-              <option value="create_order">Buyurtma yaratish</option>
-              <option value="register_driver">Haydovchi ro'yxatdan o'tishi</option>
-              <option value="get_tariffs">Tariflarni olish</option>
-              <option value="unknown">Noma'lum so'rovlar</option>
+              <option value="find_order">Buyurtma qidirish (find_order)</option>
+              <option value="track_order">Kuzatish (track_order)</option>
+              <option value="cancel_order">Bekor qilish (cancel_order)</option>
+              <option value="get_rating">Reytingni olish (get_rating)</option>
+              <option value="get_history">Tarixni olish (get_history)</option>
+              <option value="contact_support">Qo'llab-quvvatlash (contact_support)</option>
+              <option value="custom">Boshqa (custom)</option>
             </select>
           </div>
         </div>

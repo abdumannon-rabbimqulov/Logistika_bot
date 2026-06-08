@@ -91,7 +91,7 @@ export const ForgotPasswordPage: React.FC = () => {
                   <input
                     type="tel"
                     className="glass-input"
-                    placeholder="998901234567"
+                    placeholder="90 123 45 67 yoki xalqaro raqam"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/[^0-9+]/g, ""))}
                     disabled={loading}

@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from Admin_panel import crud as admin_crud
 from Admin_panel import schemas as admin_schemas
 from Admin_panel.validation import is_admin
+from ai.models import AICommandType, AICommandStatus
 from config.config import ADMIN_IDS, async_session, get_db
 from order import crud as order_crud
 from order import schemas as order_schemas
@@ -203,8 +204,8 @@ async def admin_list_ai_commands(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(is_admin),
     user_id: Optional[int] = None,
-    status_filter: Optional[str] = Query(None, alias="status"),
-    command_type: Optional[str] = None,
+    status_filter: Optional[AICommandStatus] = Query(None, alias="status"),
+    command_type: Optional[AICommandType] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
 ):

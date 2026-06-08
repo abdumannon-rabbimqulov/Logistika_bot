@@ -6,7 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from users.models import UserRole
 
@@ -44,6 +44,13 @@ class AdminUserUpdate(BaseModel):
     is_active: Optional[bool] = None
     language: Optional[str] = Field(None, min_length=2, max_length=10)
     full_name: Optional[str] = Field(None, max_length=128)
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def lower_role(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return v.lower()
+        return v
 
 
 # ════════════════════════════════════════════════════════════

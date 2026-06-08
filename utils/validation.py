@@ -15,6 +15,20 @@ class ValidationError(Exception):
     pass
 
 
+class CaseInsensitiveSchemaEnum(str, __import__('enum').Enum):
+    """
+    Pydantic schema enums uchun case-insensitive base class.
+    Frontend'dan katta/kichik harflarda yuborilsa ham avtomatik mosini topadi.
+    """
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            for member in cls:
+                if member.value.lower() == value.lower():
+                    return member
+        return super()._missing_(value)
+
+
 # ─────────────────────────────────────────────────────────────
 # REGEX PATTERNS
 # ─────────────────────────────────────────────────────────────

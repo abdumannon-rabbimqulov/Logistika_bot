@@ -38,86 +38,86 @@ export const App: React.FC = () => {
     <BrowserRouter>
       <AuthProvider>
         <LocationProvider>
-        <Routes>
-          <Route
-            path="/login"
-            element={
-              <GuestRoute>
-                <Login />
-              </GuestRoute>
-            }
-          />
-          <Route
-            path="/forgot-password"
-            element={
-              <GuestRoute>
-                <ForgotPasswordPage />
-              </GuestRoute>
-            }
-          />
+          <Routes>
+            <Route
+              path="/login"
+              element={
+                <GuestRoute>
+                  <Login />
+                </GuestRoute>
+              }
+            />
+            <Route
+              path="/forgot-password"
+              element={
+                <GuestRoute>
+                  <ForgotPasswordPage />
+                </GuestRoute>
+              }
+            />
 
-          <Route
-            path="/sender"
-            element={
-              <ProtectedRoute roles={["sender"]}>
-                <MobileAppLayout role="sender" />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<SenderHome />} />
-            <Route path="orders" element={<OrderListPage />} />
-            <Route path="orders/create" element={<OrderCreatePage />} />
-            <Route path="orders/:orderId" element={<OrderDetailPage />} />
-            <Route path="ai" element={<AIAssistantPage />} />
-            <Route path="chats" element={<ChatsPage />} />
-            <Route path="chats/:chatId" element={<ChatDetailPage />} />
-            <Route path="profile" element={<MobileProfile />} />
-          </Route>
+            <Route
+              path="/sender"
+              element={
+                <ProtectedRoute roles={["sender"]}>
+                  <MobileAppLayout role="sender" />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<SenderHome />} />
+              <Route path="orders" element={<OrderListPage />} />
+              <Route path="orders/create" element={<OrderCreatePage />} />
+              <Route path="orders/:orderId" element={<OrderDetailPage />} />
+              <Route path="ai" element={<AIAssistantPage />} />
+              <Route path="chats" element={<ChatsPage />} />
+              <Route path="chats/:chatId" element={<ChatDetailPage />} />
+              <Route path="profile" element={<MobileProfile />} />
+            </Route>
 
-          <Route
-            path="/driver/setup-profile"
-            element={
-              <ProtectedRoute roles={["driver"]} allowNeedProfile>
-                <DriverSetupProfile />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/driver/setup-profile"
+              element={
+                <ProtectedRoute roles={["driver"]} allowNeedProfile>
+                  <DriverSetupProfile />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/driver"
-            element={
-              <ProtectedRoute roles={["driver"]}>
-                <DriverAppLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<DriverHome />} />
-            <Route path="orders" element={<DriverOrdersPage />} />
-            <Route path="trips" element={<DriverTripsPage />} />
-            <Route path="profile" element={<DriverProfilePage />} />
-            <Route path="announcements" element={<AnnouncementsPage />} />
-            <Route path="announcements/:id" element={<AnnouncementOffersPage />} />
-          </Route>
+            <Route
+              path="/driver"
+              element={
+                <ProtectedRoute roles={["driver"]}>
+                  <DriverAppLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<DriverHome />} />
+              <Route path="orders" element={<DriverOrdersPage />} />
+              <Route path="trips" element={<DriverTripsPage />} />
+              <Route path="profile" element={<DriverProfilePage />} />
+              <Route path="announcements" element={<AnnouncementsPage />} />
+              <Route path="announcements/:id" element={<AnnouncementOffersPage />} />
+            </Route>
 
-          <Route
-            element={
-              <ProtectedRoute roles={["admin"]}>
-                <AdminLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/orders" element={<Orders />} />
-            <Route path="/users" element={<Users />} />
-            <Route path="/ai-commands" element={<AICommands />} />
-            <Route path="/live-tracking" element={<LiveTracking />} />
-            <Route path="/truck-types" element={<TruckTypesAdmin />} />
-            <Route path="/profile" element={<Profile />} />
-          </Route>
+            <Route
+              element={
+                <ProtectedRoute roles={["admin"]}>
+                  <AdminLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/orders" element={<Orders />} />
+              <Route path="/users" element={<Users />} />
+              <Route path="/ai-commands" element={<AICommands />} />
+              <Route path="/live-tracking" element={<LiveTracking />} />
+              <Route path="/truck-types" element={<TruckTypesAdmin />} />
+              <Route path="/profile" element={<Profile />} />
+            </Route>
 
-          <Route path="/" element={<RootRedirect />} />
-          <Route path="*" element={<RootRedirect />} />
-        </Routes>
+            <Route path="/" element={<RootRedirect />} />
+            <Route path="*" element={<RootRedirect />} />
+          </Routes>
         </LocationProvider>
       </AuthProvider>
     </BrowserRouter>

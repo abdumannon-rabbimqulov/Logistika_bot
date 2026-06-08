@@ -10,6 +10,7 @@ from keyboards.reply import (
 )
 from users.models import UserRole
 import database as db
+from utils.validation import normalize_phone_number
 
 router = Router()
 
@@ -82,7 +83,11 @@ async def select_language(message: types.Message, state: FSMContext):
 
 @router.message(Registration.phone_number, F.contact)
 async def get_phone(message: types.Message, state: FSMContext):
-    await state.update_data(phone_number=message.contact.phone_number)
+    try:
+        normalized_phone = normalize_phone_number(message.contact.phone_number)
+    except ValueError:
+        normalized_phone = message.contact.phone_number
+    await state.update_data(phone_number=normalized_phone)
     data = await state.get_data()
     lang = data.get("language", "uz")
 

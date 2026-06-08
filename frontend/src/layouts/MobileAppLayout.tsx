@@ -1,6 +1,6 @@
 import React from "react";
 import { Outlet, useNavigate, useLocation, NavLink } from "react-router-dom";
-import { ArrowLeft, Home, User, Bot, MessagesSquare, Megaphone, Package } from "lucide-react";
+import { ArrowLeft, Home, User, MessagesSquare, Megaphone, Package } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import type { UserRole } from "../types/auth";
 
@@ -103,13 +103,6 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({ role, title })
               >
                 <Package size={22} />
                 <span>Buyurtma</span>
-              </NavLink>
-              <NavLink
-                to={`${base}/ai`}
-                className={({ isActive }) => `mobile-nav-item${isActive ? " active" : ""}`}
-              >
-                <Bot size={22} />
-                <span>AI</span>
               </NavLink>
               <NavLink
                 to={`${base}/chats`}

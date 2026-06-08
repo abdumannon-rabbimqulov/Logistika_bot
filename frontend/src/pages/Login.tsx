@@ -131,7 +131,7 @@ export const Login: React.FC = () => {
                   <Phone size={18} className="field-icon" />
                   <input
                     type="tel"
-                    placeholder="998901234567"
+                    placeholder="90 123 45 67 yoki xalqaro raqam"
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value.replace(/[^0-9+]/g, ""))}
                     className="glass-input"
@@ -189,7 +189,7 @@ export const Login: React.FC = () => {
                     <Phone size={18} className="field-icon" />
                     <input
                       type="tel"
-                      placeholder="998901234567"
+                      placeholder="90 123 45 67 yoki xalqaro raqam"
                       value={phoneNumber}
                       onChange={(e) => setPhoneNumber(e.target.value.replace(/[^0-9+]/g, ""))}
                       className="glass-input"

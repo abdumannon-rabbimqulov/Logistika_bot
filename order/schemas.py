@@ -3,30 +3,31 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional, List
 from enum import Enum
+from utils.validation import CaseInsensitiveSchemaEnum
 
 from order.models import OrderStatus
 
 # --- ENUM Schemas ---
 
-class WaypointType(str, Enum):
+class WaypointType(CaseInsensitiveSchemaEnum):
     PICKUP   = "PICKUP"
     DELIVERY = "DELIVERY"
     TRANSIT  = "TRANSIT"
 
-class WaypointStatus(str, Enum):
+class WaypointStatus(CaseInsensitiveSchemaEnum):
     PENDING   = "PENDING"
     ARRIVED   = "ARRIVED"
     COMPLETED = "COMPLETED"
     SKIPPED   = "SKIPPED"
 
-class OfferStatus(str, Enum):
-    PENDING   = "PENDING"
-    SEEN      = "SEEN"
-    ACCEPTED  = "ACCEPTED"
-    REJECTED  = "REJECTED"
-    CANCELLED = "CANCELLED"
-    EXPIRED   = "EXPIRED"
-    OUTBID    = "OUTBID"
+class OfferStatus(CaseInsensitiveSchemaEnum):
+    PENDING   = "pending"
+    SEEN      = "seen"
+    ACCEPTED  = "accepted"
+    REJECTED  = "rejected"
+    CANCELLED = "cancelled"
+    EXPIRED   = "expired"
+    OUTBID    = "outbid"
 
 # --- OrderWaypoint Schemas ---
 
@@ -254,6 +255,15 @@ class OrderOfferResponse(OrderOfferBase):
     updated_at: datetime
     accepted_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("status", mode="before", check_fields=False)
+    @classmethod
+    def uppercase_enum_input(cls, v):
+        if isinstance(v, str):
+            return v.upper()
+        if hasattr(v, "value"):
+            return str(v.value).upper()
+        return v
 
     @field_serializer("status", check_fields=False)
     def serialize_enum_lower(self, enum_val, _info):

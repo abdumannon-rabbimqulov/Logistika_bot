@@ -5,6 +5,7 @@ import { useLocation } from "../../context/LocationContext";
 import { useToast } from "../ui/Toast";
 import { Skeleton } from "../ui/Skeleton";
 import { DriverOrderCard } from "./DriverOrderCard";
+import { OfferModal } from "./OfferModal";
 import type { Order } from "../../types/order";
 
 export type DriverOrdersFilterMode = "all" | "my_truck";
@@ -29,6 +30,7 @@ export const DriverOrdersList: React.FC<DriverOrdersListProps> = ({
   const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   const filterByTruck = filterMode === "my_truck";
   const emptyMessage = EMPTY_MESSAGES[filterMode];
@@ -58,17 +60,23 @@ export const DriverOrdersList: React.FC<DriverOrdersListProps> = ({
     load();
   }, [load]);
 
-  const handleOffer = async (order: Order) => {
-    setBusyId(order.id);
+  const handleOfferClick = (order: Order) => {
+    setSelectedOrder(order);
+  };
+
+  const submitOffer = async (price: number, comment: string) => {
+    if (!selectedOrder) return;
+    setBusyId(selectedOrder.id);
     try {
-      await createOrderOffer(order.id, {
-        offered_price: Number(order.price),
-        currency: order.currency,
-        comment: "Ro'yxat narxida taklif",
+      await createOrderOffer(selectedOrder.id, {
+        offered_price: price,
+        currency: selectedOrder.currency,
+        comment: comment || "Yangi taklif",
         driver_latitude: coords?.latitude ?? null,
         driver_longitude: coords?.longitude ?? null,
       });
       toast("Taklif yuborildi", "success");
+      setSelectedOrder(null);
       await load(true);
     } catch (ex: unknown) {
       toast(ex instanceof Error ? ex.message : "Taklif xatolik", "error");
@@ -165,12 +173,21 @@ export const DriverOrdersList: React.FC<DriverOrdersListProps> = ({
               <DriverOrderCard
                 order={order}
                 busy={busyId === order.id}
-                onOffer={handleOffer}
+                onOffer={handleOfferClick}
               />
             </li>
           ))}
         </ul>
       )}
+
+      <OfferModal
+        isOpen={!!selectedOrder}
+        onClose={() => setSelectedOrder(null)}
+        onSubmit={submitOffer}
+        orderPrice={selectedOrder?.price || 0}
+        orderCurrency={selectedOrder?.currency || "UZS"}
+        busy={busyId !== null}
+      />
     </section>
   );
 };

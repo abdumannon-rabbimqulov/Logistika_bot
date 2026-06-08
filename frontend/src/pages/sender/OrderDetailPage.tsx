@@ -111,12 +111,12 @@ export const OrderDetailPage: React.FC = () => {
 
   if (error || !order) {
     return (
-      <div className="mobile-card text-center">
+      <div className="rounded-2xl border border-white/5 bg-slate-800/60 backdrop-blur-md p-6 shadow-lg text-center mx-4">
         <p className="text-rose-400 text-sm">{error ?? "Buyurtma topilmadi"}</p>
         <button
           type="button"
           onClick={() => navigate("/sender/orders")}
-          className="mt-3 text-sm text-cyan-400"
+          className="mt-4 rounded-xl bg-slate-700/50 px-4 py-2 text-sm font-semibold text-cyan-400 transition hover:bg-slate-600"
         >
           Ro&apos;yxatga qaytish
         </button>
@@ -128,8 +128,8 @@ export const OrderDetailPage: React.FC = () => {
   const canAcceptOffers = order.status === "PENDING" && order.driver_id == null;
 
   return (
-    <div className="space-y-4 pb-6">
-      <section className="mobile-card space-y-3">
+    <div className="space-y-4 pb-6 px-4 mt-4">
+      <section className="rounded-2xl border border-white/5 bg-slate-800/60 backdrop-blur-md p-5 shadow-lg space-y-4">
         <div className="flex items-start justify-between gap-2">
           <div>
             <h3 className="!mb-0">{order.cargo_name}</h3>
@@ -172,19 +172,19 @@ export const OrderDetailPage: React.FC = () => {
         )}
       </section>
 
-      <section className="mobile-card">
-        <h3 className="text-sm font-semibold text-slate-300 mb-3">Marshrut</h3>
+      <section className="rounded-2xl border border-white/5 bg-slate-800/60 backdrop-blur-md p-5 shadow-lg">
+        <h3 className="text-sm font-semibold text-slate-300 mb-4">Marshrut</h3>
         <SenderWaypointTimeline waypoints={order.waypoints} />
       </section>
 
       <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-slate-300">
+        <h3 className="text-sm font-semibold text-slate-300 ml-1">
           Haydovchi takliflari ({offers.length})
         </h3>
 
         {offers.length === 0 ? (
-          <div className="mobile-card text-center py-6">
-            <p className="text-sm text-slate-500">Hozircha takliflar yo&apos;q</p>
+          <div className="rounded-2xl border border-white/5 bg-slate-800/60 backdrop-blur-md p-8 shadow-lg text-center">
+            <p className="text-sm text-slate-400">Hozircha takliflar yo&apos;q</p>
           </div>
         ) : (
           <ul className="space-y-3">
@@ -222,12 +222,12 @@ export const OrderDetailPage: React.FC = () => {
                   )}
 
                   {canAcceptOffers && isPending && (
-                    <div className="flex gap-2 pt-1">
+                    <div className="flex gap-2 pt-2">
                       <button
                         type="button"
                         disabled={busy}
                         onClick={() => handleOfferAction(offer.id, "accepted")}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30 disabled:opacity-50"
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-900/20 disabled:opacity-50 transition active:scale-[0.99]"
                       >
                         {busy ? (
                           <Loader2 size={14} className="animate-spin" />
@@ -240,7 +240,7 @@ export const OrderDetailPage: React.FC = () => {
                         type="button"
                         disabled={busy}
                         onClick={() => handleOfferAction(offer.id, "rejected")}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold bg-rose-500/15 text-rose-300 ring-1 ring-rose-500/30 disabled:opacity-50"
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20 disabled:opacity-50 transition hover:bg-rose-500/20 active:scale-[0.99]"
                       >
                         {busy ? (
                           <Loader2 size={14} className="animate-spin" />

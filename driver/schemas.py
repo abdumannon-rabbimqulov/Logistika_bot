@@ -3,34 +3,35 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional, List
 from enum import Enum
+from utils.validation import CaseInsensitiveSchemaEnum
 
 
-class AnnouncementOfferStatus(str, Enum):
-    PENDING   = "PENDING"
-    SEEN      = "SEEN"
-    ACCEPTED  = "ACCEPTED"
-    REJECTED  = "REJECTED"
-    CANCELLED = "CANCELLED"
-    EXPIRED   = "EXPIRED"
-    OUTBID    = "OUTBID"
+class AnnouncementOfferStatus(CaseInsensitiveSchemaEnum):
+    PENDING   = "pending"
+    SEEN      = "seen"
+    ACCEPTED  = "accepted"
+    REJECTED  = "rejected"
+    CANCELLED = "cancelled"
+    EXPIRED   = "expired"
+    OUTBID    = "outbid"
 
-class AnnouncementWaypointType(str, Enum):
-    ORIGIN      = "ORIGIN"
-    DESTINATION = "DESTINATION"
-    TRANSIT     = "TRANSIT"
+class AnnouncementWaypointType(CaseInsensitiveSchemaEnum):
+    ORIGIN      = "origin"
+    DESTINATION = "destination"
+    TRANSIT     = "transit"
 
-class AnnouncementStatus(str, Enum):
-    ACTIVE    = "ACTIVE"
-    FILLED    = "FILLED"
-    EXPIRED   = "EXPIRED"
-    CANCELLED = "CANCELLED"
+class AnnouncementStatus(CaseInsensitiveSchemaEnum):
+    ACTIVE    = "active"
+    FILLED    = "filled"
+    EXPIRED   = "expired"
+    CANCELLED = "cancelled"
 
-class DriverVerificationStatus(str, Enum):
-    PENDING  = "PENDING"
-    APPROVED = "APPROVED"
-    REJECTED = "REJECTED"
+class DriverVerificationStatus(CaseInsensitiveSchemaEnum):
+    PENDING  = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
 
-class DocumentType(str, Enum):
+class DocumentType(CaseInsensitiveSchemaEnum):
     DRIVER_LICENSE    = "DRIVER_LICENSE"
     PASSPORT          = "PASSPORT"
     TRUCK_TECH_PASS   = "TRUCK_TECH_PASS"
@@ -115,12 +116,12 @@ class DriverUpdate(BaseModel):
     is_live_location_active: Optional[bool] = None
 
 
-class UserStatus(str, Enum):
+class UserStatus(CaseInsensitiveSchemaEnum):
     LIVE = "LIVE"
     OFFLINE = "OFFLINE"
 
 
-class GpsStatus(str, Enum):
+class GpsStatus(CaseInsensitiveSchemaEnum):
     ON = "ON"
     OFF = "OFF"
 
@@ -150,7 +151,7 @@ class DriverProfileResponse(BaseModel):
     is_blocked: bool = False
 
 
-class DriverTripScope(str, Enum):
+class DriverTripScope(CaseInsensitiveSchemaEnum):
     CURRENT = "current"
     COMPLETED = "completed"
     ALL = "all"
