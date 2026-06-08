@@ -8,6 +8,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from config.config import Base
+from utils.db_types import CaseInsensitiveEnum
 
 from typing import TYPE_CHECKING
 
@@ -221,7 +222,7 @@ class OrderWaypoint(Base):
     sequence : Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
     waypoint_type : Mapped[WaypointType] = mapped_column(
-        SQLEnum(WaypointType), nullable=False
+        CaseInsensitiveEnum(WaypointType), nullable=False
     )
 
     address     : Mapped[str | None] = mapped_column(String(300), nullable=True)
@@ -245,7 +246,7 @@ class OrderWaypoint(Base):
 
     note   : Mapped[str | None] = mapped_column(Text, nullable=True)
     status : Mapped[WaypointStatus] = mapped_column(
-        SQLEnum(WaypointStatus), default=WaypointStatus.PENDING, nullable=False
+        CaseInsensitiveEnum(WaypointStatus), default=WaypointStatus.PENDING, nullable=False
     )
 
     created_at : Mapped[datetime] = mapped_column(
@@ -318,7 +319,7 @@ class OrderOffer(Base):
     seen_at       : Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
 
     status : Mapped[OfferStatus] = mapped_column(
-        SQLEnum(OfferStatus), default=OfferStatus.PENDING, nullable=False, index=True
+        CaseInsensitiveEnum(OfferStatus), default=OfferStatus.PENDING, nullable=False, index=True
     )
 
     status_reason : Mapped[str | None] = mapped_column(String(300), nullable=True)

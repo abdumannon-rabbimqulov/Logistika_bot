@@ -10,6 +10,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from config.config import Base
+from utils.db_types import CaseInsensitiveEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -183,7 +184,7 @@ class DriverAnnouncement(Base):
     description : Mapped[str|None] = mapped_column(String(500), nullable=True)
 
     status : Mapped[AnnouncementStatus] = mapped_column(
-        SQLEnum(AnnouncementStatus), default=AnnouncementStatus.ACTIVE, nullable=False, index=True
+        CaseInsensitiveEnum(AnnouncementStatus), default=AnnouncementStatus.ACTIVE, nullable=False, index=True
     )
 
     created_at : Mapped[datetime] = mapped_column(DateTime, default=func.now())
@@ -237,7 +238,7 @@ class AnnouncementWaypoint(Base):
 
     sequence      : Mapped[int]            = mapped_column(SmallInteger, nullable=False)
     waypoint_type : Mapped[AnnouncementWaypointType] = mapped_column(
-                        SQLEnum(AnnouncementWaypointType), nullable=False
+                        CaseInsensitiveEnum(AnnouncementWaypointType), nullable=False
                     )
 
 
@@ -300,7 +301,7 @@ class AnnouncementOffer(Base):
     expires_at : Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
 
     status : Mapped[AnnouncementOfferStatus] = mapped_column(
-        SQLEnum(AnnouncementOfferStatus),
+        CaseInsensitiveEnum(AnnouncementOfferStatus),
         default=AnnouncementOfferStatus.PENDING,
         nullable=False,
         index=True,
