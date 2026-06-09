@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import {
   Flag,
   MapPin,
@@ -84,78 +85,80 @@ export const DriverOrderCard: React.FC<DriverOrderCardProps> = ({
     STATUS_STYLES[order.status] ?? STATUS_STYLES.PENDING;
 
   return (
-    <article className="rounded-2xl border border-white/8 bg-slate-800/50 backdrop-blur-md overflow-hidden shadow-lg shadow-black/25">
-      <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500/30 to-violet-600/30 text-sm font-bold text-white ring-1 ring-white/15">
-            {initial}
+    <article className="rounded-2xl border border-white/8 bg-slate-800/50 backdrop-blur-md overflow-hidden shadow-lg shadow-black/25 hover:border-cyan-500/30 transition-all">
+      <Link to={`/driver/orders/${order.id}`} className="block no-underline text-inherit hover:text-inherit">
+        <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500/30 to-violet-600/30 text-sm font-bold text-white ring-1 ring-white/15">
+              {initial}
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-white truncate">{order.cargo_name}</p>
+              <p className="text-[11px] text-slate-500 truncate">Buyurtma #{order.id}</p>
+            </div>
+          </div>
+          <span
+            className={`shrink-0 rounded-lg border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${statusClass}`}
+          >
+            {order.status}
           </span>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-white truncate">{order.cargo_name}</p>
-            <p className="text-[11px] text-slate-500 truncate">Buyurtma #{order.id}</p>
+        </div>
+
+        <div className="mx-4 mb-3 rounded-xl bg-slate-900/60 border border-white/5 px-3 py-3">
+          <div className="relative space-y-0">
+            {sorted.map((wp, index) => {
+              const { label, Icon, iconClass, badgeClass } = waypointAction(
+                wp,
+                index,
+                sorted.length
+              );
+              const isLast = index === sorted.length - 1;
+
+              return (
+                <div key={wp.id} className="flex gap-3 relative">
+                  {!isLast && (
+                    <span
+                      className="absolute left-[15px] top-8 bottom-0 w-0 border-l-2 border-dashed border-slate-600/80"
+                      aria-hidden
+                    />
+                  )}
+                  <span
+                    className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-1 ${badgeClass}`}
+                  >
+                    <Icon size={16} className={iconClass} />
+                  </span>
+                  <div className={`flex-1 min-w-0 ${isLast ? "pb-0" : "pb-4"}`}>
+                    <p className="text-[10px] font-bold text-slate-500">
+                      {index + 1}. {cityFromAddress(wp.address)}
+                    </p>
+                    <p className="text-xs font-medium text-slate-200 mt-0.5">{label}</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">
+                      {wp.address}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
-        <span
-          className={`shrink-0 rounded-lg border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${statusClass}`}
-        >
-          {order.status}
-        </span>
-      </div>
 
-      <div className="mx-4 mb-3 rounded-xl bg-slate-900/60 border border-white/5 px-3 py-3">
-        <div className="relative space-y-0">
-          {sorted.map((wp, index) => {
-            const { label, Icon, iconClass, badgeClass } = waypointAction(
-              wp,
-              index,
-              sorted.length
-            );
-            const isLast = index === sorted.length - 1;
-
-            return (
-              <div key={wp.id} className="flex gap-3 relative">
-                {!isLast && (
-                  <span
-                    className="absolute left-[15px] top-8 bottom-0 w-0 border-l-2 border-dashed border-slate-600/80"
-                    aria-hidden
-                  />
-                )}
-                <span
-                  className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-1 ${badgeClass}`}
-                >
-                  <Icon size={16} className={iconClass} />
-                </span>
-                <div className={`flex-1 min-w-0 ${isLast ? "pb-0" : "pb-4"}`}>
-                  <p className="text-[10px] font-bold text-slate-500">
-                    {index + 1}. {cityFromAddress(wp.address)}
-                  </p>
-                  <p className="text-xs font-medium text-slate-200 mt-0.5">{label}</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">
-                    {wp.address}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="px-4 pb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-400">
-        <span className="inline-flex items-center gap-1.5">
-          <Scale size={14} className="text-amber-400/90" />
-          {order.weight} Tonna
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <Route size={14} className="text-cyan-400/90" />
-          {distance}
-        </span>
-        <span className="inline-flex items-center gap-1.5 ml-auto">
-          <Tag size={14} className="text-emerald-400/90" />
-          <span className="text-sm font-bold text-white">
-            {Number(order.price).toLocaleString()} {order.currency}
+        <div className="px-4 pb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-400">
+          <span className="inline-flex items-center gap-1.5">
+            <Scale size={14} className="text-amber-400/90" />
+            {order.weight} Tonna
           </span>
-        </span>
-      </div>
+          <span className="inline-flex items-center gap-1.5">
+            <Route size={14} className="text-cyan-400/90" />
+            {distance}
+          </span>
+          <span className="inline-flex items-center gap-1.5 ml-auto">
+            <Tag size={14} className="text-emerald-400/90" />
+            <span className="text-sm font-bold text-white">
+              {Number(order.price).toLocaleString()} {order.currency}
+            </span>
+          </span>
+        </div>
+      </Link>
 
       {showOfferButton && onOffer && (
         <div className="px-4 pb-4">

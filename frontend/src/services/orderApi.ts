@@ -98,3 +98,9 @@ export async function patchOrderOffer(
     body: JSON.stringify(data),
   });
 }
+
+export async function acceptOrderDirectApi(orderId: number): Promise<Order> {
+  return apiRequest<Order>(`/orders/${orderId}/accept`, {
+    method: "POST",
+  });
+}

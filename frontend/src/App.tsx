@@ -22,6 +22,7 @@ import { DriverOrdersPage } from "./pages/driver/DriverOrdersPage";
 import { DriverSetupProfile } from "./pages/DriverSetupProfile";
 import { DriverProfilePage } from "./pages/driver/DriverProfilePage";
 import { DriverTripsPage } from "./pages/driver/DriverTripsPage";
+import { DriverOrderDetailPage } from "./pages/driver/DriverOrderDetailPage";
 import { AnnouncementsPage } from "./pages/driver/AnnouncementsPage";
 import { AnnouncementOffersPage } from "./pages/driver/AnnouncementOffersPage";
 import { MobileProfile } from "./pages/mobile/MobileProfile";
@@ -93,6 +94,7 @@ export const App: React.FC = () => {
             >
               <Route index element={<DriverHome />} />
               <Route path="orders" element={<DriverOrdersPage />} />
+              <Route path="orders/:orderId" element={<DriverOrderDetailPage />} />
               <Route path="trips" element={<DriverTripsPage />} />
               <Route path="profile" element={<DriverProfilePage />} />
               <Route path="announcements" element={<AnnouncementsPage />} />

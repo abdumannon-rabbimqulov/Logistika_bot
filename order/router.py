@@ -211,6 +211,54 @@ async def delete_order(
     return None
 
 
+@router.post(
+    "/{order_id}/accept",
+    response_model=schemas.OrderResponse,
+    summary="Buyurtmani qabul qilish (haydovchi)",
+)
+async def accept_order_directly(
+    order_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Haydovchi buyurtmani to'g'ridan-to'g'ri (taklif qilingan shartlar/narxda) qabul qiladi."""
+    from driver.crud import get_driver_by_user_id
+    from order.models import OrderOffer, OfferStatus
+    from sqlalchemy import update
+
+    driver = await get_driver_by_user_id(db, current_user.id)
+    if not driver:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Faqat haydovchilar buyurtmani qabul qilishi mumkin.",
+        )
+    if driver.is_blocked:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Haydovchi bloklangan.",
+        )
+
+    order = await _get_order_or_404(db, order_id)
+    if order.driver_id is not None or order.status != OrderStatus.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Buyurtma allaqachon band qilingan yoki faol emas.",
+        )
+
+    order.driver_id = driver.id
+    order.status = OrderStatus.ACCEPTED
+
+    # Qolgan barcha takliflarni OUTBID qilish
+    await db.execute(
+        update(OrderOffer)
+        .where(OrderOffer.order_id == order.id)
+        .values(status=OfferStatus.OUTBID)
+    )
+    await db.commit()
+    await db.refresh(order)
+    return order
+
+
 # --- OrderOffer Endpoints ---
 
 

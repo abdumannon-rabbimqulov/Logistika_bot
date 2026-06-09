@@ -6,6 +6,7 @@ import { DriverBottomNav } from "../components/driver/DriverBottomNav";
 function titleForPath(pathname: string): string {
   if (pathname.endsWith("/profile")) return "Profil";
   if (pathname.endsWith("/trips")) return "Safarlar";
+  if (pathname.includes("/orders/")) return "Buyurtma tafsilotlari";
   if (pathname.endsWith("/orders")) return "Buyurtmalar";
   if (pathname.includes("/announcements/")) return "Takliflar";
   if (pathname.endsWith("/announcements")) return "E'lonlar";
