@@ -69,11 +69,12 @@ async def ask_assistant(
     chat = await _resolve_ai_chat(db, user, chat_id)
     chat_id = chat.id
 
-    user_role = user.role.value if user.role else "guest"
+    user_role = user.role.value if user.role else "sender"
     user_lang = user.language or "uz"
-    log_agent = agent.LogistikaAgent(
-        user_id=user.id, role=user_role, language=user_lang
-    )
+    if user_role == "driver":
+        log_agent = agent.DriverAgent(user_id=user.id, language=user_lang)
+    else:
+        log_agent = agent.SenderAgent(user_id=user.id, language=user_lang)
 
     user_msg = await crud.create_message(
         db,

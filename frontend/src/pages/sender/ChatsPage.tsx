@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   CHAT_CATEGORY_LABELS,
   createChat,
@@ -18,6 +18,9 @@ export const ChatsPage: React.FC = () => {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<ChatCategory>("conversation");
   const [creating, setCreating] = useState(false);
+  const { pathname } = useLocation();
+  const isDriver = pathname.startsWith("/driver");
+  const baseRoute = isDriver ? "/driver" : "/sender";
 
   const load = async () => {
     setLoading(true);
@@ -97,7 +100,7 @@ export const ChatsPage: React.FC = () => {
         {chats
           .filter((c) => c.category !== "ai_command")
           .map((chat) => (
-            <Link key={chat.id} to={`/sender/chats/${chat.id}`} className="ai-chat-list-item">
+            <Link key={chat.id} to={`${baseRoute}/chats/${chat.id}`} className="ai-chat-list-item">
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <strong>{chat.title || `#${chat.id}`}</strong>

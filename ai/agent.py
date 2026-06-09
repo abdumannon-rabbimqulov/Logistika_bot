@@ -39,11 +39,62 @@ logger = logging.getLogger(__name__)
 
 
 
-def build_system_instruction(role: str, language: str) -> str:
-    """Roleingiz va tilingizni o'rnatuvchi system instruction qaytaradi."""
-    role_part = ROLE_INSTRUCTIONS.get(role, ROLE_INSTRUCTIONS["guest"])
+SENDER_SYSTEM_INSTRUCTION = """
+Siz "SenderAgent" — yuk beruvchi mijoz yordamchisisiz.
+Mas'uliyatingiz faqat yuk yaratish (create_order), faol buyurtmalarni tekshirish (list_my_orders, cancel_order) va haydovchilar taklifini boshqarish (list_offers_for_my_order, accept_offer, reject_offer, find_announcements, make_offer_on_announcement, rate_driver).
+Qoidalar:
+1. Qisqa, lo'nda va faqat aniq ma'lumotlar bilan javob bering.
+2. Kerakli ma'lumotlar to'liq bo'lsa, darhol tegishli toolni chaqiring. Ortiqcha gapirmang.
+"""
+
+DRIVER_SYSTEM_INSTRUCTION = """
+Siz "DriverAgent" — haydovchi yordamchisisiz.
+Mas'uliyatingiz faqat faol yuklarni qidirish (find_orders, get_order), narx taklifi (bid/offer) berish (make_offer_on_order) va o'z safar e'lonlaringizni boshqarish (create_announcement, list_my_announcements, list_offers_on_my_announcement, accept_announcement_offer, reject_announcement_offer, update_my_driver_profile, update_gps, rate_user).
+Qoidalar:
+1. Qisqa, lo'nda va faqat aniq ma'lumotlar bilan javob bering.
+2. Kerakli ma'lumotlar to'liq bo'lsa, darhol tegishli toolni chaqiring. Ortiqcha gapirmang.
+"""
+
+def build_sender_instruction(language: str) -> str:
     lang_part = LANG_DIRECTIVE.get(language, LANG_DIRECTIVE["uz"])
-    return f"{SYSTEM_INSTRUCTION_BASE.strip()}\n\n{role_part}\n\n{lang_part}"
+    return f"{SENDER_SYSTEM_INSTRUCTION.strip()}\n\n{lang_part}"
+
+def build_driver_instruction(language: str) -> str:
+    lang_part = LANG_DIRECTIVE.get(language, LANG_DIRECTIVE["uz"])
+    return f"{DRIVER_SYSTEM_INSTRUCTION.strip()}\n\n{lang_part}"
+
+SENDER_TOOL_NAMES = {
+    "get_my_profile",
+    "update_my_profile",
+    "list_truck_types",
+    "get_order",
+    "create_order",
+    "list_my_orders",
+    "cancel_order",
+    "list_offers_for_my_order",
+    "accept_offer",
+    "reject_offer",
+    "find_announcements",
+    "make_offer_on_announcement",
+    "rate_driver",
+}
+
+DRIVER_TOOL_NAMES = {
+    "get_my_profile",
+    "update_my_profile",
+    "list_truck_types",
+    "get_order",
+    "find_orders",
+    "make_offer_on_order",
+    "create_announcement",
+    "list_my_announcements",
+    "list_offers_on_my_announcement",
+    "accept_announcement_offer",
+    "reject_announcement_offer",
+    "update_my_driver_profile",
+    "update_gps",
+    "rate_user",
+}
 
 
 
@@ -1139,17 +1190,14 @@ class LogistikaToolkit:
 ActionCallback = Optional[Callable[[str], Awaitable[None]]]
 
 
-class LogistikaAgent:
-    """Gemini AI Agent — role-aware, language-locked, async-safe."""
+class BaseAgent:
+    """Base class for AI agents providing Gemini integration and tool execution loop."""
 
-    def __init__(self, user_id: int, role: str = "guest", language: str = "uz"):
+    def __init__(self, user_id: int, system_instruction: str, tools_decl: List[Dict[str, Any]], allowed_tool_names: set[str]):
         self.user_id = user_id
-        self.role = role or "guest"
-        self.language = language or "uz"
-        self.system_instruction = build_system_instruction(self.role, self.language)
-        self.tools_decl = get_tools_for_role(self.role)
-
-    # ── Asosiy oqim ────────────────────────────────────
+        self.system_instruction = system_instruction
+        self.tools_decl = tools_decl
+        self.allowed_tool_names = allowed_tool_names
 
     @staticmethod
     def _build_contents(
@@ -1176,14 +1224,25 @@ class LogistikaAgent:
                 return part.function_call
         return None
 
+    @staticmethod
+    def _extract_usage(response: Any) -> Dict[str, int]:
+        meta = getattr(response, "usage_metadata", None)
+        if not meta:
+            return {"input": 0, "output": 0, "total": 0}
+        return {
+            "input": int(getattr(meta, "prompt_token_count", 0) or 0),
+            "output": int(getattr(meta, "candidates_token_count", 0) or 0),
+            "total": int(getattr(meta, "total_token_count", 0) or 0),
+        }
+
     async def _execute_tool(
         self,
         func_name: str,
         args: Dict[str, Any],
         on_action_callback: ActionCallback,
     ) -> str:
-        if not _is_tool_allowed(func_name, self.role):
-            return f"Sizning roleingiz ({self.role}) bu amalni bajarishga ruxsat bermaydi."
+        if func_name not in self.allowed_tool_names:
+            return "Ushbu amalni bajarishga ruxsatingiz yo'q."
 
         if on_action_callback:
             await on_action_callback(f"Bajarilmoqda: {func_name}...")
@@ -1270,13 +1329,30 @@ class LogistikaAgent:
 
         return ("Juda ko'p ketma-ket amal bajarildi. Qisqaroq so'rang.", total_usage)
 
-    @staticmethod
-    def _extract_usage(response: Any) -> Dict[str, int]:
-        meta = getattr(response, "usage_metadata", None)
-        if not meta:
-            return {"input": 0, "output": 0, "total": 0}
-        return {
-            "input": int(getattr(meta, "prompt_token_count", 0) or 0),
-            "output": int(getattr(meta, "candidates_token_count", 0) or 0),
-            "total": int(getattr(meta, "total_token_count", 0) or 0),
-        }
+
+class SenderAgent(BaseAgent):
+    """Agent for cargo senders (customers)."""
+
+    def __init__(self, user_id: int, language: str = "uz"):
+        system_instruction = build_sender_instruction(language)
+        tools_decl = [t["declaration"] for t in TOOL_DEFINITIONS if t["method"] in SENDER_TOOL_NAMES]
+        super().__init__(
+            user_id=user_id,
+            system_instruction=system_instruction,
+            tools_decl=tools_decl,
+            allowed_tool_names=SENDER_TOOL_NAMES,
+        )
+
+
+class DriverAgent(BaseAgent):
+    """Agent for drivers."""
+
+    def __init__(self, user_id: int, language: str = "uz"):
+        system_instruction = build_driver_instruction(language)
+        tools_decl = [t["declaration"] for t in TOOL_DEFINITIONS if t["method"] in DRIVER_TOOL_NAMES]
+        super().__init__(
+            user_id=user_id,
+            system_instruction=system_instruction,
+            tools_decl=tools_decl,
+            allowed_tool_names=DRIVER_TOOL_NAMES,
+        )

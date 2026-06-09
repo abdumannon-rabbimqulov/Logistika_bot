@@ -155,7 +155,7 @@ export const AICommands: React.FC = () => {
                     </td>
                     <td className="raw-input-cell">
                       <span className="raw-text-preview" title={cmd.raw_input || ""}>
-                        {cmd.raw_input || <span className="text-muted">Audio / File</span>}
+                        {cmd.raw_input || <span className="text-muted">—</span>}
                       </span>
                     </td>
                     <td>{getStatusBadge(cmd.status)}</td>

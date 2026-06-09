@@ -99,6 +99,9 @@ export const App: React.FC = () => {
               <Route path="profile" element={<DriverProfilePage />} />
               <Route path="announcements" element={<AnnouncementsPage />} />
               <Route path="announcements/:id" element={<AnnouncementOffersPage />} />
+              <Route path="ai" element={<AIAssistantPage />} />
+              <Route path="chats" element={<ChatsPage />} />
+              <Route path="chats/:chatId" element={<ChatDetailPage />} />
             </Route>
 
             <Route

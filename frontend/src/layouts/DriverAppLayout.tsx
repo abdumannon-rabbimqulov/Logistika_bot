@@ -10,6 +10,9 @@ function titleForPath(pathname: string): string {
   if (pathname.endsWith("/orders")) return "Buyurtmalar";
   if (pathname.includes("/announcements/")) return "Takliflar";
   if (pathname.endsWith("/announcements")) return "E'lonlar";
+  if (pathname.includes("/chats/")) return "Suhbat";
+  if (pathname.endsWith("/chats")) return "Chatlar";
+  if (pathname.includes("/ai")) return "AI Yordamchi";
   return "";
 }
 
@@ -20,6 +23,10 @@ export const DriverAppLayout: React.FC = () => {
   const isHome = pathname === "/driver" || pathname === "/driver/";
   const showBack = !isHome;
   const title = titleForPath(pathname);
+  
+  const isAi = pathname.includes("/ai");
+  const isChatDetail = pathname.includes("/chats/");
+  const hideBottomNav = isAi || isChatDetail;
 
   return (
     <div className="min-h-[100dvh] bg-slate-900 text-slate-100 flex justify-center">
@@ -50,7 +57,7 @@ export const DriverAppLayout: React.FC = () => {
           <Outlet />
         </main>
 
-        <DriverBottomNav />
+        {!hideBottomNav && <DriverBottomNav />}
       </div>
     </div>
   );

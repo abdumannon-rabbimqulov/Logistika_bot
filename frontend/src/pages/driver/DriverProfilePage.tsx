@@ -1,10 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
-  ChevronRight,
-  Megaphone,
   MapPin,
-  Route,
   Star,
   Truck,
   Wallet,
@@ -21,20 +18,7 @@ import type { DriverProfile } from "../../types/driver";
 import type { TruckType } from "../../types/auth";
 import { useAuth } from "../../context/AuthContext";
 
-const menuLinks = [
-  {
-    to: "/driver/trips",
-    icon: Route,
-    title: "Safarlar ro'yxati",
-    subtitle: "Joriy va tugallangan safarlar",
-  },
-  {
-    to: "/driver/announcements",
-    icon: Megaphone,
-    title: "Safar e'lonlari",
-    subtitle: "E'lonlar va takliflar",
-  },
-];
+
 
 export const DriverProfilePage: React.FC = () => {
   const { toast } = useToast();
@@ -123,11 +107,10 @@ export const DriverProfilePage: React.FC = () => {
             <p className="text-xs text-slate-500 mt-1">{profile.phone_number || "—"}</p>
           </div>
           <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold ${
-              isLive
+            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold ${isLive
                 ? "bg-emerald-500/15 text-emerald-300"
                 : "bg-slate-700 text-slate-400"
-            }`}
+              }`}
           >
             <span
               className={`h-1.5 w-1.5 rounded-full ${isLive ? "bg-emerald-400" : "bg-slate-500"}`}
@@ -155,24 +138,7 @@ export const DriverProfilePage: React.FC = () => {
         </p>
       </div>
 
-      <nav className="space-y-2">
-        {menuLinks.map((item) => (
-          <Link
-            key={item.to}
-            to={item.to}
-            className="flex items-center gap-3 rounded-2xl border border-white/5 bg-slate-800/40 p-4 no-underline hover:bg-slate-800/70 transition"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-cyan-400">
-              <item.icon size={20} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-white text-sm">{item.title}</p>
-              <p className="text-xs text-slate-500">{item.subtitle}</p>
-            </div>
-            <ChevronRight size={18} className="text-slate-600" />
-          </Link>
-        ))}
-      </nav>
+
 
       <button
         type="button"
