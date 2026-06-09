@@ -56,7 +56,7 @@ export const AIAssistantPage: React.FC = () => {
 
   useEffect(() => {
     scrollDown();
-  }, [messages]);
+  }, [messages, sending]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,6 +138,11 @@ export const AIAssistantPage: React.FC = () => {
             </div>
           );
         })}
+        {sending && (
+          <div className="ai-chat-bubble ai thinking">
+            AI o&apos;ylamoqda...
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
 

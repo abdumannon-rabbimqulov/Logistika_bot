@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ChevronRight,
   Megaphone,
@@ -8,6 +8,7 @@ import {
   Star,
   Truck,
   Wallet,
+  LogOut,
 } from "lucide-react";
 import {
   fetchDriverMe,
@@ -18,6 +19,7 @@ import { useToast } from "../../components/ui/Toast";
 import { Skeleton } from "../../components/ui/Skeleton";
 import type { DriverProfile } from "../../types/driver";
 import type { TruckType } from "../../types/auth";
+import { useAuth } from "../../context/AuthContext";
 
 const menuLinks = [
   {
@@ -36,6 +38,8 @@ const menuLinks = [
 
 export const DriverProfilePage: React.FC = () => {
   const { toast } = useToast();
+  const { logout } = useAuth();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<DriverProfile | null>(null);
   const [truckTypes, setTruckTypes] = useState<TruckType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +51,15 @@ export const DriverProfilePage: React.FC = () => {
   const [truckTypeId, setTruckTypeId] = useState("");
   const [currentCity, setCurrentCity] = useState("");
   const [currentRegion, setCurrentRegion] = useState("");
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate("/login", { replace: true });
+    } catch (ex: unknown) {
+      toast(ex instanceof Error ? ex.message : "Chiqishda xatolik yuz berdi", "error");
+    }
+  };
 
   useEffect(() => {
     Promise.all([fetchDriverMe(), fetchTruckTypes()])
@@ -231,6 +244,14 @@ export const DriverProfilePage: React.FC = () => {
           </button>
         </form>
       )}
+
+      <button
+        type="button"
+        className="w-full flex items-center justify-center gap-2 rounded-2xl bg-slate-800/80 hover:bg-slate-700 border border-white/5 py-3.5 text-sm font-bold text-slate-300 transition active:scale-[0.99] mt-6"
+        onClick={handleLogout}
+      >
+        <LogOut size={18} /> Chiqish
+      </button>
     </div>
   );
 };

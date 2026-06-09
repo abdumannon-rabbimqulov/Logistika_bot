@@ -26,6 +26,19 @@ export async function deleteSenderOrder(pk: number): Promise<void> {
   await senderHttp.delete(`/orders/${pk}`);
 }
 
+export async function updateSenderOrder(
+  pk: number,
+  data: {
+    cargo_name?: string;
+    weight?: number; // in tonnes
+    volume?: number | null;
+    price?: number;
+  }
+): Promise<Order> {
+  const { data: result } = await senderHttp.patch<Order>(`/orders/${pk}`, data);
+  return result;
+}
+
 export async function patchSenderOrderOffer(
   pk: number,
   body: { status?: string; counter_price?: number; counter_comment?: string }

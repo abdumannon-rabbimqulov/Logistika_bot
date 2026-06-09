@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Loader2, Trash2, Check, X } from "lucide-react";
+import { Loader2, Trash2, Check, X, Edit2 } from "lucide-react";
 import {
   deleteSenderOrder,
   fetchSenderOrder,
   fetchSenderOrderOffers,
   patchSenderOrderOffer,
+  updateSenderOrder,
 } from "../../services/senderApi";
 import type { OrderOffer } from "../../services/orderApi";
 import { OrderStatusBadge } from "../../components/sender/OrderStatusBadge";
@@ -43,6 +44,14 @@ export const OrderDetailPage: React.FC = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Edit states
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editCargoName, setEditCargoName] = useState("");
+  const [editWeightKg, setEditWeightKg] = useState("");
+  const [editVolume, setEditVolume] = useState("");
+  const [editPrice, setEditPrice] = useState("");
+  const [updating, setUpdating] = useState(false);
+
   const load = useCallback(async () => {
     if (!pk || Number.isNaN(pk)) {
       setError("Noto'g'ri buyurtma ID");
@@ -58,6 +67,13 @@ export const OrderDetailPage: React.FC = () => {
       ]);
       setOrder(orderData);
       setOffers(offersData);
+
+      // Initialize edit fields
+      setEditCargoName(orderData.cargo_name || "");
+      setEditWeightKg(String(Math.round(Number(orderData.weight) * 1000)));
+      setEditVolume(orderData.volume != null ? String(orderData.volume) : "");
+      const priceStr = new Intl.NumberFormat("fr-FR").format(Number(orderData.price));
+      setEditPrice(priceStr);
     } catch (ex: unknown) {
       const msg = ex instanceof Error ? ex.message : "Ma'lumot yuklanmadi";
       setError(msg);
@@ -66,6 +82,51 @@ export const OrderDetailPage: React.FC = () => {
       setLoading(false);
     }
   }, [pk, toast]);
+
+  const handleEditPriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/\D/g, "");
+    if (!rawValue) {
+      setEditPrice("");
+      return;
+    }
+    const formatted = new Intl.NumberFormat("fr-FR").format(Number(rawValue));
+    setEditPrice(formatted);
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editCargoName.trim()) {
+      toast("Yuk nomi majburiy", "error");
+      return;
+    }
+    const weight = Number(editWeightKg);
+    if (!weight || weight <= 0) {
+      toast("Og'irlik 0 dan katta bo'lishi kerak", "error");
+      return;
+    }
+    const parsedPrice = Number(editPrice.replace(/\s/g, ""));
+    if (!parsedPrice || parsedPrice <= 0) {
+      toast("Narx 0 dan katta bo'lishi kerak", "error");
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      await updateSenderOrder(pk, {
+        cargo_name: editCargoName.trim(),
+        weight: weight / 1000,
+        volume: editVolume ? Number(editVolume) : null,
+        price: parsedPrice,
+      });
+      toast("Buyurtma yangilandi", "success");
+      setShowEditModal(false);
+      await load();
+    } catch (ex: unknown) {
+      toast(ex instanceof Error ? ex.message : "Yangilashda xatolik", "error");
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -124,8 +185,10 @@ export const OrderDetailPage: React.FC = () => {
     );
   }
 
-  const canDelete = order.status === "PENDING";
-  const canAcceptOffers = order.status === "PENDING" && order.driver_id == null;
+  const orderStatusUpper = order?.status?.toUpperCase() ?? "";
+  const canDelete = orderStatusUpper === "PENDING";
+  const canEdit = orderStatusUpper === "PENDING";
+  const canAcceptOffers = orderStatusUpper === "PENDING" && order.driver_id == null;
 
   return (
     <div className="space-y-4 pb-6 px-4 mt-4">
@@ -159,12 +222,23 @@ export const OrderDetailPage: React.FC = () => {
           </div>
         </dl>
 
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => setShowEditModal(true)}
+            className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-cyan-400 bg-cyan-500/10 ring-1 ring-cyan-500/20 mb-2 transition active:scale-[0.99]"
+          >
+            <Edit2 size={16} />
+            Buyurtmani tahrirlash
+          </button>
+        )}
+
         {canDelete && (
           <button
             type="button"
             onClick={() => setShowDeleteConfirm(true)}
             disabled={deleting}
-            className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium text-rose-400 bg-rose-500/10 ring-1 ring-rose-500/20"
+            className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium text-rose-400 bg-rose-500/10 ring-1 ring-rose-500/20 transition active:scale-[0.99]"
           >
             {deleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
             Buyurtmani o&apos;chirish
@@ -257,6 +331,87 @@ export const OrderDetailPage: React.FC = () => {
           </ul>
         )}
       </section>
+
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl space-y-4">
+            <h3 className="text-lg font-bold text-white">Buyurtmani tahrirlash</h3>
+            <form onSubmit={handleUpdate} className="space-y-4">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Yuk nomi *</label>
+                <input
+                  type="text"
+                  className="glass-input w-full text-slate-100"
+                  value={editCargoName}
+                  onChange={(e) => setEditCargoName(e.target.value)}
+                  maxLength={200}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Og&apos;irlik (kg) *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    className="glass-input w-full text-slate-100"
+                    value={editWeightKg}
+                    onChange={(e) => setEditWeightKg(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Hajm (m³)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    className="glass-input w-full text-slate-100"
+                    value={editVolume}
+                    onChange={(e) => setEditVolume(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Narx (so&apos;m) *</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className="glass-input w-full text-slate-100"
+                  value={editPrice}
+                  onChange={handleEditPriceChange}
+                  required
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  disabled={updating}
+                  className="flex-1 rounded-xl border border-white/10 bg-slate-800 text-slate-300 py-2.5 text-sm font-semibold hover:bg-slate-700"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  disabled={updating}
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white py-2.5 text-sm font-semibold hover:opacity-90 disabled:opacity-50"
+                >
+                  {updating ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    "Saqlash"
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <ConfirmModal
         open={showDeleteConfirm}

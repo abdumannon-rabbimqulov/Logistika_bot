@@ -16,12 +16,12 @@ const TABS: { key: SenderOrderTab; label: string }[] = [
 
 function filterByTab(orders: Order[], tab: SenderOrderTab): Order[] {
   if (tab === "PENDING") {
-    return orders.filter((o) => o.status === "PENDING");
+    return orders.filter((o) => o.status?.toUpperCase() === "PENDING");
   }
   if (tab === "ACTIVE") {
-    return orders.filter((o) => SENDER_ACTIVE_STATUSES.includes(o.status as OrderStatus));
+    return orders.filter((o) => SENDER_ACTIVE_STATUSES.includes(o.status?.toUpperCase() as OrderStatus));
   }
-  return orders.filter((o) => o.status === "COMPLETED" || o.status === "CANCELLED");
+  return orders.filter((o) => o.status?.toUpperCase() === "COMPLETED" || o.status?.toUpperCase() === "CANCELLED");
 }
 
 function formatPrice(price: number, currency: string): string {
