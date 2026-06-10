@@ -51,8 +51,8 @@ export interface MapSearchLocation {
   regionName: string;
   districtId: number;
   districtName: string;
-  latitude: number;
-  longitude: number;
+  latitude?: number | null;
+  longitude?: number | null;
   address: string;
 }
 
@@ -60,8 +60,8 @@ export interface OrderMapSearchProps {
   pointLabel?: string;
   latitude?: number | null;
   longitude?: number | null;
-  address?: string;
   onLocationPick: (location: MapSearchLocation) => void;
+  index?: number;
 }
 
 export type MapFlyMode = "idle" | "fitRegion" | "flyDistrict" | "flyPoint";

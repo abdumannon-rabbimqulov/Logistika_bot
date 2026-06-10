@@ -6,10 +6,12 @@ import {
   TileLayer,
   useMap,
   useMapEvents,
+  Marker,
 } from "react-leaflet";
 import type { LatLngTuple, PathOptions } from "leaflet";
+import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { CheckCircle2, MapPin, Search } from "lucide-react";
+import { CheckCircle2, MapPin, Search, Navigation } from "lucide-react";
 import { fetchDistrict, fetchDistricts, fetchRegion, fetchRegions } from "../services/geoApi";
 import type {
   District,
@@ -21,6 +23,23 @@ import type {
   RegionDetail,
 } from "../types/geo";
 import { boundsToLeaflet } from "../types/geo";
+
+const normalizeGeoName = (name: string): string => {
+  if (!name) return "";
+  return name
+    .toLowerCase()
+    .replace(/['’‘ʻ`"]/g, "")
+    .replace(/\b(viloyati|viloyat|shahar|shahri|tumani|tuman|respublikasi|respublika|province|region|district|city|state|area|county)\b/gi, "")
+    .replace(/[^a-z0-9а-яёўқғҳ]/gi, "")
+    .trim();
+};
+
+const isNameMatch = (dbName: string | null | undefined, inputName: string): boolean => {
+  if (!dbName || !inputName) return false;
+  const n1 = normalizeGeoName(dbName);
+  const n2 = normalizeGeoName(inputName);
+  return n1 === n2 || n1.includes(n2) || n2.includes(n1);
+};
 
 const UZ_CENTER: LatLngTuple = [41.311081, 69.279737];
 const DEFAULT_ZOOM = 6;
@@ -115,40 +134,148 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
   pointLabel = "nuqta",
   latitude = null,
   longitude = null,
-  address = "",
   onLocationPick,
+  index,
 }) => {
   const [step, setStep] = useState<MapSearchStep>(1);
   const [regionQuery, setRegionQuery] = useState("");
   const [districtQuery, setDistrictQuery] = useState("");
-  const [regions, setRegions] = useState<Region[]>([]);
   const [districts, setDistricts] = useState<District[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<RegionDetail | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<DistrictDetail | null>(null);
   const [pickedLat, setPickedLat] = useState<number | null>(latitude);
   const [pickedLng, setPickedLng] = useState<number | null>(longitude);
-  const [loadingRegions, setLoadingRegions] = useState(false);
-  const [loadingDistricts, setLoadingDistricts] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [myLocation, setMyLocation] = useState<[number, number] | null>(null);
+  const [manualFly, setManualFly] = useState<{ center: [number, number]; zoom: number } | null>(null);
+  const [allRegions, setAllRegions] = useState<Region[]>([]);
+  const [showRegionDropdown, setShowRegionDropdown] = useState(false);
+  const [showDistrictDropdown, setShowDistrictDropdown] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    const timer = window.setTimeout(async () => {
-      setLoadingRegions(true);
-      try {
-        const data = await fetchRegions(regionQuery || undefined);
-        if (!cancelled) setRegions(data);
-      } catch (ex: unknown) {
-        if (!cancelled) setError(ex instanceof Error ? ex.message : "Viloyatlar yuklanmadi");
-      } finally {
-        if (!cancelled) setLoadingRegions(false);
-      }
-    }, 280);
+    let active = true;
+    fetchRegions()
+      .then((data) => {
+        if (active) setAllRegions(data);
+      })
+      .catch((err) => console.error("Viloyatlarni yuklashda xatolik:", err));
     return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
+      active = false;
     };
-  }, [regionQuery]);
+  }, []);
+
+  const handleLocateMe = () => {
+    if (!navigator.geolocation) {
+      alert("Geolokatsiya qurilmangiz tomonidan qo'llab-quvvatlanmaydi");
+      return;
+    }
+    setError(null);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        setMyLocation([lat, lon]);
+        setManualFly({ center: [lat, lon], zoom: POINT_ZOOM });
+        setPickedLat(lat);
+        setPickedLng(lon);
+
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=uz,ru,en`
+          );
+          if (!res.ok) throw new Error();
+          const data = await res.json();
+          const addr = data.address || {};
+
+          const stateCandidate = addr.state || addr.region || addr.city || "";
+          if (!stateCandidate) return;
+
+          const matchedRegion = allRegions.find((r) => {
+            return (
+              isNameMatch(r.name_uz, stateCandidate) ||
+              isNameMatch(r.name_ru, stateCandidate) ||
+              isNameMatch(r.name_en, stateCandidate)
+            );
+          });
+
+          if (!matchedRegion) return;
+
+          const regionDetail = await fetchRegion(matchedRegion.id);
+          setSelectedRegion(regionDetail);
+          setRegionQuery(matchedRegion.name_uz);
+
+          const districtsList = await fetchDistricts(matchedRegion.id);
+          setDistricts(districtsList);
+
+          const districtCandidate =
+            addr.county ||
+            addr.city_district ||
+            addr.suburb ||
+            addr.district ||
+            addr.city ||
+            addr.town ||
+            addr.village ||
+            addr.hamlet ||
+            "";
+
+          let matchedDistrict = districtsList.find((d) => {
+            return (
+              isNameMatch(d.name_uz, districtCandidate) ||
+              isNameMatch(d.name_ru, districtCandidate) ||
+              isNameMatch(d.name_en, districtCandidate)
+            );
+          });
+
+          if (!matchedDistrict && districtCandidate) {
+            matchedDistrict = districtsList.find((d) => {
+              const normD = normalizeGeoName(d.name_uz);
+              const normCand = normalizeGeoName(districtCandidate);
+              return normD.includes(normCand) || normCand.includes(normD);
+            });
+          }
+
+          if (matchedDistrict) {
+            const districtDetail = await fetchDistrict(matchedDistrict.id);
+            setSelectedDistrict(districtDetail);
+            setDistrictQuery(matchedDistrict.name_uz);
+            setStep(3);
+
+            onLocationPick({
+              regionId: matchedRegion.id,
+              regionName: matchedRegion.name_uz,
+              districtId: matchedDistrict.id,
+              districtName: matchedDistrict.name_uz,
+              latitude: lat,
+              longitude: lon,
+              address: `${matchedDistrict.name_uz}, ${matchedRegion.name_uz}`,
+            });
+          } else {
+            setStep(2);
+            setSelectedDistrict(null);
+            setDistrictQuery("");
+            
+            onLocationPick({
+              regionId: matchedRegion.id,
+              regionName: matchedRegion.name_uz,
+              districtId: 0,
+              districtName: "",
+              latitude: lat,
+              longitude: lon,
+              address: matchedRegion.name_uz,
+            });
+          }
+        } catch (err) {
+          console.error("Nominatim reverse geocoding failed:", err);
+          setError("Joylashuv manzilini aniqlab bo'lmadi.");
+        }
+      },
+      (err) => {
+        console.error(err);
+        alert("Joylashuvni aniqlashda xatolik yuz berdi");
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   useEffect(() => {
     if (!selectedRegion?.id) {
@@ -156,28 +283,49 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
       return;
     }
     let cancelled = false;
-    const timer = window.setTimeout(async () => {
-      setLoadingDistricts(true);
+    const loadDistricts = async () => {
       try {
-        const data = await fetchDistricts(selectedRegion.id, districtQuery || undefined);
+        const data = await fetchDistricts(selectedRegion.id);
         if (!cancelled) setDistricts(data);
       } catch (ex: unknown) {
         if (!cancelled) setError(ex instanceof Error ? ex.message : "Tumanlar yuklanmadi");
-      } finally {
-        if (!cancelled) setLoadingDistricts(false);
       }
-    }, 280);
+    };
+    loadDistricts();
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
     };
-  }, [selectedRegion?.id, districtQuery]);
+  }, [selectedRegion?.id]);
 
   const resetDistrict = useCallback(() => {
     setSelectedDistrict(null);
     setPickedLat(null);
     setPickedLng(null);
   }, []);
+
+  const filteredRegions = useMemo(() => {
+    if (!regionQuery.trim()) return allRegions;
+    const q = regionQuery.toLowerCase();
+    return allRegions.filter((r) => {
+      return (
+        r.name_uz.toLowerCase().includes(q) ||
+        (r.name_ru && r.name_ru.toLowerCase().includes(q)) ||
+        (r.name_en && r.name_en.toLowerCase().includes(q))
+      );
+    });
+  }, [allRegions, regionQuery]);
+
+  const filteredDistricts = useMemo(() => {
+    if (!districtQuery.trim()) return districts;
+    const q = districtQuery.toLowerCase();
+    return districts.filter((d) => {
+      return (
+        d.name_uz.toLowerCase().includes(q) ||
+        (d.name_ru && d.name_ru.toLowerCase().includes(q)) ||
+        (d.name_en && d.name_en.toLowerCase().includes(q))
+      );
+    });
+  }, [districts, districtQuery]);
 
   const handleSelectRegion = useCallback(async (region: Region) => {
     setError(null);
@@ -203,10 +351,20 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
       const detail = await fetchDistrict(district.id);
       setSelectedDistrict(detail);
       setStep(3);
+
+      onLocationPick({
+        regionId: selectedRegion.id,
+        regionName: selectedRegion.name_uz,
+        districtId: detail.id,
+        districtName: detail.name_uz,
+        latitude: null,
+        longitude: null,
+        address: `${detail.name_uz}, ${selectedRegion.name_uz}`,
+      });
     } catch (ex: unknown) {
       setError(ex instanceof Error ? ex.message : "Tuman yuklanmadi");
     }
-  }, [selectedRegion]);
+  }, [selectedRegion, onLocationPick]);
 
   const handleMapPick = useCallback(
     (lat: number, lng: number) => {
@@ -215,11 +373,7 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
       setPickedLat(lat);
       setPickedLng(lng);
 
-      const builtAddress = [
-        selectedDistrict.name_uz,
-        selectedRegion.name_uz,
-        `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
-      ].join(", ");
+      const builtAddress = `${selectedDistrict.name_uz}, ${selectedRegion.name_uz}`;
 
       onLocationPick({
         regionId: selectedRegion.id,
@@ -228,13 +382,16 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
         districtName: selectedDistrict.name_uz,
         latitude: lat,
         longitude: lng,
-        address: address.trim() || builtAddress,
+        address: builtAddress,
       });
     },
-    [step, selectedRegion, selectedDistrict, onLocationPick, address]
+    [step, selectedRegion, selectedDistrict, onLocationPick]
   );
 
   const flyCommand = useMemo((): MapFlyCommand => {
+    if (manualFly) {
+      return { mode: "flyPoint", center: manualFly.center, zoom: manualFly.zoom };
+    }
     if (pickedLat != null && pickedLng != null) {
       return { mode: "flyPoint", center: [pickedLat, pickedLng], zoom: POINT_ZOOM };
     }
@@ -265,7 +422,7 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
       }
     }
     return { mode: "idle" };
-  }, [step, selectedRegion, selectedDistrict, pickedLat, pickedLng]);
+  }, [step, selectedRegion, selectedDistrict, pickedLat, pickedLng, manualFly]);
 
   const regionGeo = toGeoJsonLayer(selectedRegion);
   const districtGeo = toGeoJsonLayer(selectedDistrict);
@@ -287,7 +444,7 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
       </div>
 
       <div className="grid grid-cols-1 gap-3">
-        <div>
+        <div className="relative">
           <label className="block text-xs text-slate-500 mb-1 flex items-center gap-1">
             <Search size={12} />
             Viloyat
@@ -297,6 +454,10 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
             className="glass-input w-full"
             placeholder="Masalan: Toshkent, Samarqand..."
             value={regionQuery}
+            onFocus={() => setShowRegionDropdown(true)}
+            onBlur={() => {
+              setTimeout(() => setShowRegionDropdown(false), 200);
+            }}
             onChange={(e) => {
               setRegionQuery(e.target.value);
               if (step > 1) {
@@ -304,22 +465,20 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
                 setSelectedRegion(null);
                 resetDistrict();
               }
+              setShowRegionDropdown(true);
             }}
-            list="region-suggestions"
           />
-          <datalist id="region-suggestions">
-            {regions.map((r) => (
-              <option key={r.id} value={r.name_uz} />
-            ))}
-          </datalist>
-          {regionQuery && !loadingRegions && regions.length > 0 && step === 1 && (
-            <ul className="mt-1 max-h-36 overflow-y-auto rounded-xl bg-slate-900 ring-1 ring-white/10">
-              {regions.slice(0, 8).map((r) => (
+          {showRegionDropdown && filteredRegions.length > 0 && (
+            <ul className="absolute z-30 w-full mt-1 max-h-60 overflow-y-auto rounded-xl bg-slate-900 border border-white/10 shadow-xl divide-y divide-white/5">
+              {filteredRegions.map((r) => (
                 <li key={r.id}>
                   <button
                     type="button"
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-cyan-500/10 text-slate-200"
-                    onClick={() => handleSelectRegion(r)}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-cyan-500/10 text-slate-200 transition-colors"
+                    onClick={() => {
+                      handleSelectRegion(r);
+                      setShowRegionDropdown(false);
+                    }}
                   >
                     {r.name_uz}
                   </button>
@@ -330,7 +489,7 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
         </div>
 
         {selectedRegion && (
-          <div>
+          <div className="relative">
             <label className="block text-xs text-slate-500 mb-1 flex items-center gap-1">
               <Search size={12} />
               Tuman
@@ -340,28 +499,30 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
               className="glass-input w-full"
               placeholder="Tumanni tanlang yoki yozing..."
               value={districtQuery}
+              onFocus={() => setShowDistrictDropdown(true)}
+              onBlur={() => {
+                setTimeout(() => setShowDistrictDropdown(false), 200);
+              }}
               onChange={(e) => {
                 setDistrictQuery(e.target.value);
                 if (step > 2) {
                   setStep(2);
                   resetDistrict();
                 }
+                setShowDistrictDropdown(true);
               }}
-              list="district-suggestions"
             />
-            <datalist id="district-suggestions">
-              {districts.map((d) => (
-                <option key={d.id} value={d.name_uz} />
-              ))}
-            </datalist>
-            {districtQuery && !loadingDistricts && districts.length > 0 && step === 2 && (
-              <ul className="mt-1 max-h-36 overflow-y-auto rounded-xl bg-slate-900 ring-1 ring-white/10">
-                {districts.slice(0, 10).map((d) => (
+            {showDistrictDropdown && filteredDistricts.length > 0 && (
+              <ul className="absolute z-30 w-full mt-1 max-h-60 overflow-y-auto rounded-xl bg-slate-900 border border-white/10 shadow-xl divide-y divide-white/5">
+                {filteredDistricts.map((d) => (
                   <li key={d.id}>
                     <button
                       type="button"
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-violet-500/10 text-slate-200"
-                      onClick={() => handleSelectDistrict(d)}
+                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-violet-500/10 text-slate-200 transition-colors"
+                      onClick={() => {
+                        handleSelectDistrict(d);
+                        setShowDistrictDropdown(false);
+                      }}
                     >
                       {d.name_uz}
                       {!d.has_geometry && (
@@ -380,23 +541,32 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
         <p className="text-xs text-rose-400 bg-rose-500/10 rounded-lg px-3 py-2">{error}</p>
       )}
 
-      <div className="rounded-xl overflow-hidden ring-1 ring-white/10">
+      <div className="relative rounded-xl overflow-hidden ring-1 ring-white/10">
         <div className="flex items-center gap-2 px-3 py-2 bg-slate-900/60 text-xs text-slate-400">
           <MapPin size={14} className="text-cyan-400" />
           {step < 3
             ? "Viloyat chegarasiga fitBounds · tuman tanlanganda flyTo"
             : `${pointLabel} nuqtasini xaritadan bosing`}
         </div>
+        <button
+          type="button"
+          onClick={handleLocateMe}
+          className="absolute top-10 right-4 z-20 flex h-9 w-9 items-center justify-center rounded-xl bg-slate-950/85 backdrop-blur-md border border-white/10 text-cyan-400 hover:text-cyan-300 transition shadow-lg"
+          title="Mening joylashuvim"
+        >
+          <Navigation size={18} />
+        </button>
         <MapContainer
           center={UZ_CENTER}
           zoom={DEFAULT_ZOOM}
           className="w-full z-0"
           style={{ height: 300 }}
           scrollWheelZoom
+          crs={L.CRS.EPSG3395}
         >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution="© Yandex.Maps"
+            url="https://core-renderer-tiles.maps.yandex.net/tiles?l=map&x={x}&y={y}&z={z}&scale=1&lang=uz_UZ"
           />
           <MapFlyController command={flyCommand} />
           <MapClickHandler enabled={step === 3} onPick={handleMapPick} />
@@ -415,11 +585,31 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
               style={() => DISTRICT_STYLE}
             />
           )}
-          {pickedLat != null && pickedLng != null && (
+          {myLocation && (
             <CircleMarker
-              center={[pickedLat, pickedLng]}
-              radius={9}
-              pathOptions={{ color: "#22d3ee", weight: 2, fillColor: "#06b6d4", fillOpacity: 0.9 }}
+              center={myLocation}
+              radius={7}
+              pathOptions={{ color: "#06b6d4", weight: 2, fillColor: "#22d3ee", fillOpacity: 0.9 }}
+            />
+          )}
+          {pickedLat != null && pickedLng != null && (
+            <Marker
+              position={[pickedLat, pickedLng]}
+              icon={L.divIcon({
+                html: `
+                  <div class="relative flex items-center justify-center">
+                    <span class="absolute inline-flex h-8 w-8 animate-ping rounded-full bg-white opacity-20"></span>
+                    <span class="relative flex h-8 w-8 items-center justify-center rounded-full border border-white/20 text-xs font-bold text-white shadow-lg" style="background-color: ${
+                      index === 0 ? "#10b981" : "#f43f5e"
+                    }">
+                      ${index != null ? index + 1 : ""}
+                    </span>
+                  </div>
+                `,
+                className: "custom-map-marker",
+                iconSize: [32, 32],
+                iconAnchor: [16, 16]
+              })}
             />
           )}
         </MapContainer>
@@ -438,6 +628,18 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
                 {selectedDistrict.name_uz}, {selectedRegion.name_uz}
               </p>
             )}
+          </div>
+        </div>
+      )}
+
+      {selectedDistrict && selectedRegion && !pointConfirmed && (
+        <div className="flex items-start gap-2 rounded-xl bg-violet-500/10 ring-1 ring-violet-500/25 px-3 py-2 text-xs text-violet-300">
+          <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold">Manzil tanlandi (xaritadan belgilash ixtiyoriy)</p>
+            <p className="text-slate-400 mt-1">
+              {selectedDistrict.name_uz}, {selectedRegion.name_uz}
+            </p>
           </div>
         </div>
       )}

@@ -8,7 +8,7 @@ export const LiveTracking: React.FC = () => {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Record<number, L.Marker>>({});
-  
+
   const [drivers, setDrivers] = useState<DriverLocation[]>([]);
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
   const [wsStatus, setWsStatus] = useState<"connecting" | "online" | "offline">("connecting");
@@ -34,9 +34,8 @@ export const LiveTracking: React.FC = () => {
     const map = L.map(mapContainerRef.current, {
       crs: L.CRS.EPSG3395
     }).setView([41.2995, 69.2401], 12);
-    
-    L.tileLayer("https://vec{s}.maps.yandex.net/tiles?l=map&v=4.55.2&z={z}&x={x}&y={y}&scale=1&lang=ru_RU", {
-      subdomains: ["01", "02", "03", "04"],
+
+    L.tileLayer("https://core-renderer-tiles.maps.yandex.net/tiles?l=map&x={x}&y={y}&z={z}&scale=1&lang=uz_UZ", {
       attribution: "© Yandex.Maps",
     }).addTo(map);
 
@@ -247,7 +246,7 @@ export const LiveTracking: React.FC = () => {
         <div className="map-view-card glass-card">
           {errorMsg && <div className="map-error-banner">{errorMsg}</div>}
           <div ref={mapContainerRef} className="leaflet-map-element"></div>
-          
+
           <div className="map-overlay-info">
             <Info size={14} />
             <span>Xaritada haydovchilar joylashuvi real-vaqtda (WebSocket orqali) yangilanadi.</span>

@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { ChevronDown, ChevronUp, GripVertical, Trash2 } from "lucide-react";
+import React from "react";
+import { GripVertical, Trash2 } from "lucide-react";
 import type { WaypointType } from "../types/order";
 import type { MapSearchLocation } from "../types/geo";
 import { OrderMapSearch } from "./OrderMapSearch";
@@ -42,8 +42,6 @@ export const WaypointFormRow: React.FC<WaypointFormRowProps> = ({
   onChange,
   onRemove,
 }) => {
-  const [mapOpen, setMapOpen] = useState(false);
-
   const patch = (partial: Partial<WaypointFormValues>) => {
     onChange({ ...value, ...partial });
   };
@@ -92,22 +90,13 @@ export const WaypointFormRow: React.FC<WaypointFormRowProps> = ({
         </select>
       </div>
 
-      <div>
-        <label className="block text-xs text-slate-500 mb-1">Manzil *</label>
-        <input
-          type="text"
-          className="glass-input w-full"
-          placeholder="Viloyat → tuman → xaritadan nuqta tanlang"
-          value={value.address}
-          onChange={(e) => patch({ address: e.target.value })}
-          maxLength={300}
-        />
-        {value.latitude != null && value.longitude != null && (
-          <p className="text-[10px] text-slate-600 mt-1">
-            GPS: {value.latitude.toFixed(6)}, {value.longitude.toFixed(6)}
-          </p>
-        )}
-      </div>
+      <OrderMapSearch
+        pointLabel={pointLabel(value.waypoint_type)}
+        latitude={value.latitude}
+        longitude={value.longitude}
+        onLocationPick={handleLocationPick}
+        index={index}
+      />
 
       <div>
         <label className="block text-xs text-slate-500 mb-1">Izoh</label>
@@ -119,25 +108,6 @@ export const WaypointFormRow: React.FC<WaypointFormRowProps> = ({
           rows={2}
         />
       </div>
-
-      <button
-        type="button"
-        onClick={() => setMapOpen((v) => !v)}
-        className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-medium text-cyan-400 bg-cyan-500/10 hover:bg-cyan-500/15"
-      >
-        <span>Viloyat / tuman / xarita orqali joy tanlash</span>
-        {mapOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-      </button>
-
-      {mapOpen && (
-        <OrderMapSearch
-          pointLabel={pointLabel(value.waypoint_type)}
-          latitude={value.latitude}
-          longitude={value.longitude}
-          address={value.address}
-          onLocationPick={handleLocationPick}
-        />
-      )}
     </div>
   );
 };

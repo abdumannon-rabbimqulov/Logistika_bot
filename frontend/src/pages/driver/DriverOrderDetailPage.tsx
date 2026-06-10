@@ -194,8 +194,7 @@ export const DriverOrderDetailPage: React.FC = () => {
         crs: L.CRS.EPSG3395
       }).setView([41.2995, 69.2401], 8);
 
-      L.tileLayer("https://vec{s}.maps.yandex.net/tiles?l=map&v=4.55.2&z={z}&x={x}&y={y}&scale=1&lang=ru_RU", {
-        subdomains: ["01", "02", "03", "04"],
+      L.tileLayer("https://core-renderer-tiles.maps.yandex.net/tiles?l=map&x={x}&y={y}&z={z}&scale=1&lang=uz_UZ", {
         attribution: "© Yandex.Maps"
       }).addTo(mapRef.current);
     }
@@ -349,7 +348,26 @@ export const DriverOrderDetailPage: React.FC = () => {
       }
 
       // Adjust map view
-      if (activeLatLngs.length > 0) {
+      if (coords?.latitude != null && coords?.longitude != null) {
+        const myLatlng: L.LatLngExpression = [coords.latitude, coords.longitude];
+        const myIcon = L.divIcon({
+          html: `
+            <div class="relative flex items-center justify-center">
+              <span class="absolute inline-flex h-6 w-6 animate-ping rounded-full bg-cyan-400 opacity-75"></span>
+              <span class="relative flex h-4 w-4 items-center justify-center rounded-full bg-cyan-500 border border-white shadow-lg"></span>
+            </div>
+          `,
+          className: "my-location-marker",
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+        const myMarker = L.marker(myLatlng, { icon: myIcon }).addTo(map);
+        myMarker.bindPopup('<span class="text-xs font-semibold text-slate-900">Sizning joylashuvingiz</span>');
+        mapLayersRef.current.push(myMarker);
+        fitBoundsGroup.extend(myLatlng);
+      }
+
+      if (activeLatLngs.length > 0 || (coords?.latitude != null && coords?.longitude != null)) {
         map.fitBounds(fitBoundsGroup, {
           padding: [50, 50],
           maxZoom: 14
@@ -358,7 +376,7 @@ export const DriverOrderDetailPage: React.FC = () => {
     };
 
     drawMap();
-  }, [loading, order]);
+  }, [loading, order, coords]);
 
   // Clean map on unmount
   useEffect(() => {
@@ -369,6 +387,12 @@ export const DriverOrderDetailPage: React.FC = () => {
       }
     };
   }, []);
+
+  const handleLocateMe = () => {
+    if (mapRef.current && coords?.latitude != null && coords?.longitude != null) {
+      mapRef.current.flyTo([coords.latitude, coords.longitude], 15, { duration: 1 });
+    }
+  };
 
   // Accept directly handler
   const handleAcceptDirectly = async () => {
@@ -456,6 +480,16 @@ export const DriverOrderDetailPage: React.FC = () => {
       {/* MAP VIEWER CONTAINER */}
       <div className="relative rounded-2xl border border-white/5 bg-slate-800/60 overflow-hidden shadow-lg p-1.5 h-[300px]">
         <div ref={mapContainerRef} className="w-full h-full rounded-xl z-10"></div>
+        {coords?.latitude != null && coords?.longitude != null && (
+          <button
+            type="button"
+            onClick={handleLocateMe}
+            className="absolute top-4 right-4 z-20 flex h-9 w-9 items-center justify-center rounded-xl bg-slate-950/85 backdrop-blur-md border border-white/10 text-cyan-400 hover:text-cyan-300 transition shadow-lg"
+            title="Mening joylashuvim"
+          >
+            <Navigation size={18} />
+          </button>
+        )}
         <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 rounded-full bg-slate-950/85 backdrop-blur-md border border-white/10 px-3 py-1.5 text-[10px] text-slate-400">
           <Info size={12} className="text-cyan-400" />
           Marshrut nuqtalari tartib bilan bog'langan.
