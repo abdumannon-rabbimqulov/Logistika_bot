@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  ArrowLeft,
   MapPin,
   Flag,
   Route,
@@ -191,11 +190,13 @@ export const DriverOrderDetailPage: React.FC = () => {
     if (!mapRef.current) {
       mapRef.current = L.map(mapContainerRef.current, {
         zoomControl: true,
-        scrollWheelZoom: true
+        scrollWheelZoom: true,
+        crs: L.CRS.EPSG3395
       }).setView([41.2995, 69.2401], 8);
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "© OpenStreetMap contributors"
+      L.tileLayer("https://vec{s}.maps.yandex.net/tiles?l=map&v=4.55.2&z={z}&x={x}&y={y}&scale=1&lang=ru_RU", {
+        subdomains: ["01", "02", "03", "04"],
+        attribution: "© Yandex.Maps"
       }).addTo(mapRef.current);
     }
 
@@ -447,19 +448,9 @@ export const DriverOrderDetailPage: React.FC = () => {
   return (
     <div className="space-y-4 pb-12">
       {/* HEADER SECTION */}
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/5 hover:bg-white/10 transition"
-          aria-label="Orqaga"
-        >
-          <ArrowLeft size={20} />
-        </button>
-        <div className="min-w-0">
-          <h2 className="text-base font-bold text-white truncate">{order.cargo_name}</h2>
-          <p className="text-xs text-slate-500">Buyurtma #{order.id}</p>
-        </div>
+      <div className="min-w-0 px-1 pt-1">
+        <h2 className="text-base font-bold text-white truncate">{order.cargo_name}</h2>
+        <p className="text-xs text-slate-500">Buyurtma #{order.id}</p>
       </div>
 
       {/* MAP VIEWER CONTAINER */}
@@ -564,31 +555,31 @@ export const DriverOrderDetailPage: React.FC = () => {
 
       {/* DRIVER ACTIONS */}
       {isAvailable && (
-        <section className="px-1 pt-4 space-y-3">
+        <section className="px-1 pt-4 grid grid-cols-2 gap-3">
           <button
             type="button"
             disabled={actionBusy !== null}
             onClick={handleAcceptDirectly}
-            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 py-3.5 text-sm font-bold text-white shadow-lg shadow-emerald-950/20 transition active:scale-[0.99] disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 py-3.5 text-xs font-bold text-white shadow-lg shadow-emerald-950/20 transition active:scale-[0.99] disabled:opacity-50"
           >
             {actionBusy === "accept" ? (
-              <Loader2 size={18} className="animate-spin" />
+              <Loader2 size={16} className="animate-spin" />
             ) : (
-              <Check size={18} />
+              <Check size={16} />
             )}
-            Roziman, buyurtmani qabul qilaman
+            Qabul qilish
           </button>
 
           <button
             type="button"
             disabled={actionBusy !== null}
             onClick={handleOfferClick}
-            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-slate-800/80 hover:bg-slate-700 border border-white/10 py-3.5 text-sm font-semibold text-slate-300 transition active:scale-[0.99] disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-slate-800/80 hover:bg-slate-700 border border-white/10 py-3.5 text-xs font-semibold text-slate-300 transition active:scale-[0.99] disabled:opacity-50"
           >
             {actionBusy === "offer" ? (
-              <Loader2 size={18} className="animate-spin" />
+              <Loader2 size={16} className="animate-spin" />
             ) : (
-              <Send size={16} />
+              <Send size={14} />
             )}
             Narx taklif qilish
           </button>

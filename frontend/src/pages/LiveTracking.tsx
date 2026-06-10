@@ -31,10 +31,13 @@ export const LiveTracking: React.FC = () => {
     if (!mapContainerRef.current || mapRef.current) return;
 
     // Tashkent coordinates default
-    const map = L.map(mapContainerRef.current).setView([41.2995, 69.2401], 12);
+    const map = L.map(mapContainerRef.current, {
+      crs: L.CRS.EPSG3395
+    }).setView([41.2995, 69.2401], 12);
     
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '© OpenStreetMap contributors',
+    L.tileLayer("https://vec{s}.maps.yandex.net/tiles?l=map&v=4.55.2&z={z}&x={x}&y={y}&scale=1&lang=ru_RU", {
+      subdomains: ["01", "02", "03", "04"],
+      attribution: "© Yandex.Maps",
     }).addTo(map);
 
     mapRef.current = map;

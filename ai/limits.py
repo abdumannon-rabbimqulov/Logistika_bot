@@ -1,11 +1,3 @@
-"""AI request quota va token tracking.
-
-- Tarifga asoslangan limit: `free`/`pro`.
-- `AppSettings` ichida:
-  - `user_tariff:{user_id}` -> free/pro
-  - `user_limit:{user_id}` -> per-user limit override
-"""
-
 from __future__ import annotations
 
 import logging

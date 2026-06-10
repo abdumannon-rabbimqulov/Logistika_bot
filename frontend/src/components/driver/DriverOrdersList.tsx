@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Loader2, PackageOpen, RefreshCw, Truck } from "lucide-react";
-import { createOrderOffer, fetchPendingOrders } from "../../services/orderApi";
+import { acceptOrderDirectApi, createOrderOffer, fetchPendingOrders } from "../../services/orderApi";
+import { fetchTruckTypes } from "../../services/driverApi";
 import { useLocation } from "../../context/LocationContext";
 import { useToast } from "../ui/Toast";
 import { Skeleton } from "../ui/Skeleton";
@@ -22,10 +24,12 @@ const EMPTY_MESSAGES: Record<DriverOrdersFilterMode, string> = {
 export const DriverOrdersList: React.FC<DriverOrdersListProps> = ({
   title = "Yangi buyurtmalar",
 }) => {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const { coords } = useLocation();
   const [filterMode, setFilterMode] = useState<DriverOrdersFilterMode>("all");
   const [orders, setOrders] = useState<Order[]>([]);
+  const [truckTypesMap, setTruckTypesMap] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -59,6 +63,40 @@ export const DriverOrdersList: React.FC<DriverOrdersListProps> = ({
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const loadTruckTypes = async () => {
+      try {
+        const types = await fetchTruckTypes();
+        const map: Record<number, string> = {};
+        types.forEach((t) => {
+          map[t.id] = t.name;
+        });
+        setTruckTypesMap(map);
+      } catch (err) {
+        console.error("Failed to fetch truck types", err);
+      }
+    };
+    loadTruckTypes();
+  }, []);
+
+  const handleAcceptClick = async (order: Order) => {
+    const confirm = window.confirm(
+      `Siz ushbu buyurtmani ${Number(order.price).toLocaleString()} ${order.currency} narxi va ko'rsatilgan shartlari bilan qabul qilishga rozimisiz?`
+    );
+    if (!confirm) return;
+
+    setBusyId(order.id);
+    try {
+      await acceptOrderDirectApi(order.id);
+      toast("Buyurtma muvaffaqiyatli qabul qilindi!", "success");
+      navigate("/driver/trips");
+    } catch (ex: unknown) {
+      toast(ex instanceof Error ? ex.message : "Xatolik yuz berdi", "error");
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const handleOfferClick = (order: Order) => {
     setSelectedOrder(order);
@@ -174,6 +212,8 @@ export const DriverOrdersList: React.FC<DriverOrdersListProps> = ({
                 order={order}
                 busy={busyId === order.id}
                 onOffer={handleOfferClick}
+                onAccept={handleAcceptClick}
+                truckTypeName={truckTypesMap[order.required_truck_type_id]}
               />
             </li>
           ))}

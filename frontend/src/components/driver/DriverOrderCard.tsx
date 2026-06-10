@@ -1,13 +1,14 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import {
+  Check,
   Flag,
   MapPin,
   Package,
-  Route,
   Scale,
   Send,
   Tag,
+  Truck,
 } from "lucide-react";
 import type { Order, OrderWaypoint } from "../../types/order";
 
@@ -67,6 +68,8 @@ interface DriverOrderCardProps {
   busy?: boolean;
   showOfferButton?: boolean;
   onOffer?: (order: Order) => void;
+  onAccept?: (order: Order) => void;
+  truckTypeName?: string;
 }
 
 export const DriverOrderCard: React.FC<DriverOrderCardProps> = ({
@@ -74,13 +77,11 @@ export const DriverOrderCard: React.FC<DriverOrderCardProps> = ({
   busy,
   showOfferButton = true,
   onOffer,
+  onAccept,
+  truckTypeName,
 }) => {
   const sorted = [...(order.waypoints ?? [])].sort((a, b) => a.sequence - b.sequence);
   const initial = String.fromCharCode(65 + (order.customer_id % 26));
-  const distance =
-    order.total_distance_km != null
-      ? `${Number(order.total_distance_km).toLocaleString()} km`
-      : "— km";
   const statusClass =
     STATUS_STYLES[order.status] ?? STATUS_STYLES.PENDING;
 
@@ -148,8 +149,8 @@ export const DriverOrderCard: React.FC<DriverOrderCardProps> = ({
             {order.weight} Tonna
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <Route size={14} className="text-cyan-400/90" />
-            {distance}
+            <Truck size={14} className="text-cyan-400/90" />
+            {truckTypeName || "Yuk mashinasi"}
           </span>
           <span className="inline-flex items-center gap-1.5 ml-auto">
             <Tag size={14} className="text-emerald-400/90" />
@@ -161,15 +162,25 @@ export const DriverOrderCard: React.FC<DriverOrderCardProps> = ({
       </Link>
 
       {showOfferButton && onOffer && (
-        <div className="px-4 pb-4">
+        <div className="px-4 pb-4 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onAccept?.(order)}
+            className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 py-2.5 text-xs font-bold text-white disabled:opacity-50 active:scale-[0.99] transition"
+          >
+            <Check size={14} />
+            Qabul qilish
+          </button>
+
           <button
             type="button"
             disabled={busy}
             onClick={() => onOffer(order)}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 py-2.5 text-sm font-semibold text-white disabled:opacity-50 active:scale-[0.99] transition"
+            className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-slate-800/85 hover:bg-slate-700 border border-white/10 py-2.5 text-xs font-semibold text-slate-300 disabled:opacity-50 active:scale-[0.99] transition"
           >
-            <Send size={16} />
-            {busy ? "Yuborilmoqda…" : "Taklif berish"}
+            <Send size={14} />
+            Taklif berish
           </button>
         </div>
       )}
