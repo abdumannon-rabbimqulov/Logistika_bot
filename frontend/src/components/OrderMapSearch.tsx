@@ -11,7 +11,7 @@ import {
 import type { LatLngTuple, PathOptions } from "leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { CheckCircle2, MapPin, Search, Navigation } from "lucide-react";
+import { CheckCircle2, MapPin, Navigation } from "lucide-react";
 import { fetchDistrict, fetchDistricts, fetchRegion, fetchRegions } from "../services/geoApi";
 import type {
   District,
@@ -138,8 +138,6 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
   index,
 }) => {
   const [step, setStep] = useState<MapSearchStep>(1);
-  const [regionQuery, setRegionQuery] = useState("");
-  const [districtQuery, setDistrictQuery] = useState("");
   const [districts, setDistricts] = useState<District[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<RegionDetail | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<DistrictDetail | null>(null);
@@ -149,8 +147,6 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
   const [myLocation, setMyLocation] = useState<[number, number] | null>(null);
   const [manualFly, setManualFly] = useState<{ center: [number, number]; zoom: number } | null>(null);
   const [allRegions, setAllRegions] = useState<Region[]>([]);
-  const [showRegionDropdown, setShowRegionDropdown] = useState(false);
-  const [showDistrictDropdown, setShowDistrictDropdown] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -202,7 +198,6 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
 
           const regionDetail = await fetchRegion(matchedRegion.id);
           setSelectedRegion(regionDetail);
-          setRegionQuery(matchedRegion.name_uz);
 
           const districtsList = await fetchDistricts(matchedRegion.id);
           setDistricts(districtsList);
@@ -237,7 +232,6 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
           if (matchedDistrict) {
             const districtDetail = await fetchDistrict(matchedDistrict.id);
             setSelectedDistrict(districtDetail);
-            setDistrictQuery(matchedDistrict.name_uz);
             setStep(3);
 
             onLocationPick({
@@ -252,8 +246,7 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
           } else {
             setStep(2);
             setSelectedDistrict(null);
-            setDistrictQuery("");
-            
+
             onLocationPick({
               regionId: matchedRegion.id,
               regionName: matchedRegion.name_uz,
@@ -303,35 +296,11 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
     setPickedLng(null);
   }, []);
 
-  const filteredRegions = useMemo(() => {
-    if (!regionQuery.trim()) return allRegions;
-    const q = regionQuery.toLowerCase();
-    return allRegions.filter((r) => {
-      return (
-        r.name_uz.toLowerCase().includes(q) ||
-        (r.name_ru && r.name_ru.toLowerCase().includes(q)) ||
-        (r.name_en && r.name_en.toLowerCase().includes(q))
-      );
-    });
-  }, [allRegions, regionQuery]);
 
-  const filteredDistricts = useMemo(() => {
-    if (!districtQuery.trim()) return districts;
-    const q = districtQuery.toLowerCase();
-    return districts.filter((d) => {
-      return (
-        d.name_uz.toLowerCase().includes(q) ||
-        (d.name_ru && d.name_ru.toLowerCase().includes(q)) ||
-        (d.name_en && d.name_en.toLowerCase().includes(q))
-      );
-    });
-  }, [districts, districtQuery]);
 
   const handleSelectRegion = useCallback(async (region: Region) => {
     setError(null);
     resetDistrict();
-    setDistrictQuery("");
-    setRegionQuery(region.name_uz);
     try {
       const detail = await fetchRegion(region.id);
       setSelectedRegion(detail);
@@ -346,7 +315,6 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
     setError(null);
     setPickedLat(null);
     setPickedLng(null);
-    setDistrictQuery(district.name_uz);
     try {
       const detail = await fetchDistrict(district.id);
       setSelectedDistrict(detail);
@@ -431,108 +399,74 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
   return (
     <div className="space-y-3">
       <div
-        className={`rounded-xl px-3 py-2.5 text-sm font-medium ring-1 ${
-          step === 3
-            ? "bg-violet-500/15 text-violet-200 ring-violet-500/30"
-            : step === 2
-              ? "bg-cyan-500/15 text-cyan-200 ring-cyan-500/30"
-              : "bg-slate-800/80 text-slate-400 ring-white/10"
-        }`}
+        className={`rounded-xl px-3 py-2.5 text-sm font-medium ring-1 ${step === 3
+          ? "bg-violet-500/15 text-violet-200 ring-violet-500/30"
+          : step === 2
+            ? "bg-cyan-500/15 text-cyan-200 ring-cyan-500/30"
+            : "bg-slate-800/80 text-slate-400 ring-white/10"
+          }`}
       >
         <span className="text-xs opacity-60 block mb-0.5">Bosqich {step}/3</span>
         {STEP_HINTS[step]}
       </div>
 
       <div className="grid grid-cols-1 gap-3">
-        <div className="relative">
+        <div>
           <label className="block text-xs text-slate-500 mb-1 flex items-center gap-1">
-            <Search size={12} />
             Viloyat
           </label>
-          <input
-            type="text"
+          <select
             className="glass-input w-full"
-            placeholder="Masalan: Toshkent, Samarqand..."
-            value={regionQuery}
-            onFocus={() => setShowRegionDropdown(true)}
-            onBlur={() => {
-              setTimeout(() => setShowRegionDropdown(false), 200);
-            }}
+            value={selectedRegion?.id || ""}
             onChange={(e) => {
-              setRegionQuery(e.target.value);
-              if (step > 1) {
-                setStep(1);
+              const rId = Number(e.target.value);
+              const r = allRegions.find((reg) => reg.id === rId);
+              if (r) {
+                handleSelectRegion(r);
+              } else {
                 setSelectedRegion(null);
+                setStep(1);
                 resetDistrict();
               }
-              setShowRegionDropdown(true);
             }}
-          />
-          {showRegionDropdown && filteredRegions.length > 0 && (
-            <ul className="absolute z-30 w-full mt-1 max-h-60 overflow-y-auto rounded-xl bg-slate-900 border border-white/10 shadow-xl divide-y divide-white/5">
-              {filteredRegions.map((r) => (
-                <li key={r.id}>
-                  <button
-                    type="button"
-                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-cyan-500/10 text-slate-200 transition-colors"
-                    onClick={() => {
-                      handleSelectRegion(r);
-                      setShowRegionDropdown(false);
-                    }}
-                  >
-                    {r.name_uz}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+          >
+            <option value="" style={{ backgroundColor: "#0f172a" }}>Viloyatni tanlang...</option>
+            {allRegions.map((r) => (
+              <option key={r.id} value={r.id} style={{ backgroundColor: "#0f172a" }}>
+                {r.name_uz}
+              </option>
+            ))}
+          </select>
         </div>
 
         {selectedRegion && (
-          <div className="relative">
+          <div>
             <label className="block text-xs text-slate-500 mb-1 flex items-center gap-1">
-              <Search size={12} />
               Tuman
             </label>
-            <input
-              type="text"
+            <select
               className="glass-input w-full"
-              placeholder="Tumanni tanlang yoki yozing..."
-              value={districtQuery}
-              onFocus={() => setShowDistrictDropdown(true)}
-              onBlur={() => {
-                setTimeout(() => setShowDistrictDropdown(false), 200);
-              }}
+              value={selectedDistrict?.id || ""}
               onChange={(e) => {
-                setDistrictQuery(e.target.value);
-                if (step > 2) {
+                const dId = Number(e.target.value);
+                const d = districts.find((dist) => dist.id === dId);
+                if (d) {
+                  handleSelectDistrict(d);
+                } else {
+                  setSelectedDistrict(null);
                   setStep(2);
-                  resetDistrict();
+                  setPickedLat(null);
+                  setPickedLng(null);
                 }
-                setShowDistrictDropdown(true);
               }}
-            />
-            {showDistrictDropdown && filteredDistricts.length > 0 && (
-              <ul className="absolute z-30 w-full mt-1 max-h-60 overflow-y-auto rounded-xl bg-slate-900 border border-white/10 shadow-xl divide-y divide-white/5">
-                {filteredDistricts.map((d) => (
-                  <li key={d.id}>
-                    <button
-                      type="button"
-                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-violet-500/10 text-slate-200 transition-colors"
-                      onClick={() => {
-                        handleSelectDistrict(d);
-                        setShowDistrictDropdown(false);
-                      }}
-                    >
-                      {d.name_uz}
-                      {!d.has_geometry && (
-                        <span className="ml-2 text-[10px] text-slate-500">(faqat nom)</span>
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            >
+              <option value="" style={{ backgroundColor: "#0f172a" }}>Tumanni tanlang...</option>
+              {districts.map((d) => (
+                <option key={d.id} value={d.id} style={{ backgroundColor: "#0f172a" }}>
+                  {d.name_uz}
+                </option>
+              ))}
+            </select>
           </div>
         )}
       </div>
@@ -599,9 +533,8 @@ export const OrderMapSearch: React.FC<OrderMapSearchProps> = ({
                 html: `
                   <div class="relative flex items-center justify-center">
                     <span class="absolute inline-flex h-8 w-8 animate-ping rounded-full bg-white opacity-20"></span>
-                    <span class="relative flex h-8 w-8 items-center justify-center rounded-full border border-white/20 text-xs font-bold text-white shadow-lg" style="background-color: ${
-                      index === 0 ? "#10b981" : "#f43f5e"
-                    }">
+                    <span class="relative flex h-8 w-8 items-center justify-center rounded-full border border-white/20 text-xs font-bold text-white shadow-lg" style="background-color: ${index === 0 ? "#10b981" : "#f43f5e"
+                  }">
                       ${index != null ? index + 1 : ""}
                     </span>
                   </div>
