@@ -180,6 +180,21 @@ class OrderUpdate(BaseModel):
             return str(v.value).upper()
         return v
 
+class UserMinResponse(BaseModel):
+    id: int
+    full_name: str
+    username: Optional[str] = None
+    phone_number: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DriverMinResponse(BaseModel):
+    id: int
+    user: UserMinResponse
+    truck_number: str
+    model_config = ConfigDict(from_attributes=True)
+
+
 class OrderResponse(OrderBase):
     id: int
     customer_id: int
@@ -189,6 +204,9 @@ class OrderResponse(OrderBase):
     created_at: datetime
     updated_at: datetime
     waypoints: List[OrderWaypointResponse]
+    customer: Optional[UserMinResponse] = None
+    driver: Optional[DriverMinResponse] = None
+    chat_id: Optional[int] = None
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("waypoints", mode="before")

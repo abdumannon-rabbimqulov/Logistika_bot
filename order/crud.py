@@ -74,9 +74,15 @@ async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int)
     return sort_order_waypoints(result.scalar_one())
 
 async def get_order(db: AsyncSession, pk: int) -> Optional[Order]:
+    from driver.models import Driver
     result = await db.execute(
         select(Order)
-        .options(selectinload(Order.waypoints))
+        .options(
+            selectinload(Order.waypoints),
+            selectinload(Order.customer),
+            selectinload(Order.driver).selectinload(Driver.user),
+            selectinload(Order.chat)
+        )
         .where(Order.id == pk)
     )
     order = result.scalar_one_or_none()

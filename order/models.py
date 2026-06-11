@@ -189,6 +189,14 @@ class Order(Base):
                 return wp
         return None
 
+    @property
+    def chat_id(self) -> int | None:
+        try:
+            return self.chat.id if self.chat else None
+        except Exception:
+            return None
+
+
     def __repr__(self) -> str:
         stops = len(self.waypoints) if self.waypoints else 0
         return f"<Order(id={self.id}, cargo='{self.cargo_name}', stops={stops}, status={self.status})>"

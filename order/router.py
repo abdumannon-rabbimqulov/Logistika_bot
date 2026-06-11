@@ -254,6 +254,24 @@ async def accept_order_directly(
         .where(OrderOffer.order_id == order.id)
         .values(status=OfferStatus.OUTBID)
     )
+
+    # Chat yaratish
+    from ai.models import Chat, ChatCategory, ChatStatus
+    from sqlalchemy import select
+    chat_stmt = select(Chat).where(Chat.order_id == order.id)
+    chat_result = await db.execute(chat_stmt)
+    existing_chat = chat_result.scalar_one_or_none()
+    if not existing_chat:
+        new_chat = Chat(
+            user_id=order.customer_id,
+            driver_id=driver.id,
+            order_id=order.id,
+            category=ChatCategory.CONVERSATION,
+            status=ChatStatus.OPEN,
+            title=f"Buyurtma #{order.id} bo'yicha chat"
+        )
+        db.add(new_chat)
+
     await db.commit()
     await db.refresh(order)
     return order
@@ -317,7 +335,65 @@ async def update_offer(
     current_user: User = Depends(get_current_user),
 ):
     """Taklifni qabul qilish yoki rad etish."""
+    from order.models import Order, OrderOffer, OrderStatus, OfferStatus
+    from ai.models import Chat, ChatCategory, ChatStatus
+    from sqlalchemy import select, update
+    from datetime import datetime, timezone
+
     offer = await crud.get_order_offer(db, pk)
     if not offer:
         raise HTTPException(status_code=404, detail="Taklif topilmadi")
-    return await crud.update_order_offer(db, pk, data)
+
+    # If the user is accepting the offer
+    is_accepting = False
+    if data.status:
+        status_val = data.status.value.lower() if hasattr(data.status, "value") else str(data.status).lower()
+        if status_val == "accepted":
+            is_accepting = True
+
+    if is_accepting:
+        order = await _get_order_or_404(db, offer.order_id)
+        if order.driver_id is not None or order.status != OrderStatus.PENDING:
+            raise HTTPException(
+                status_code=400,
+                detail="Buyurtmaga allaqachon haydovchi tayinlangan yoki buyurtma faol emas.",
+            )
+        
+        # Accept the offer
+        offer.status = OfferStatus.ACCEPTED
+        offer.accepted_at = datetime.now(timezone.utc)
+
+        # Update order
+        order.driver_id = offer.driver_id
+        order.status = OrderStatus.ACCEPTED
+
+        # Outbid all other offers for this order
+        await db.execute(
+            update(OrderOffer)
+            .where(OrderOffer.order_id == order.id)
+            .where(OrderOffer.id != offer.id)
+            .where(OrderOffer.status.in_([OfferStatus.PENDING, OfferStatus.SEEN]))
+            .values(status=OfferStatus.OUTBID)
+        )
+
+        # Create/Get chat session
+        chat_stmt = select(Chat).where(Chat.order_id == order.id)
+        chat_result = await db.execute(chat_stmt)
+        existing_chat = chat_result.scalar_one_or_none()
+        if not existing_chat:
+            new_chat = Chat(
+                user_id=order.customer_id,
+                driver_id=offer.driver_id,
+                order_id=order.id,
+                category=ChatCategory.CONVERSATION,
+                status=ChatStatus.OPEN,
+                title=f"Buyurtma #{order.id} bo'yicha chat"
+            )
+            db.add(new_chat)
+
+        await db.commit()
+        await db.refresh(offer)
+        return offer
+    else:
+        # Standard update
+        return await crud.update_order_offer(db, pk, data)

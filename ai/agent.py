@@ -795,6 +795,22 @@ class LogistikaToolkit:
         for other in result.scalars().all():
             other.status = OfferStatus.OUTBID
 
+        # Chat yaratish
+        from ai.models import Chat, ChatCategory, ChatStatus
+        chat_stmt = select(Chat).where(Chat.order_id == order.id)
+        chat_result = await self.db.execute(chat_stmt)
+        existing_chat = chat_result.scalar_one_or_none()
+        if not existing_chat:
+            new_chat = Chat(
+                user_id=order.customer_id,
+                driver_id=offer.driver_id,
+                order_id=order.id,
+                category=ChatCategory.CONVERSATION,
+                status=ChatStatus.OPEN,
+                title=f"Buyurtma #{order.id} bo'yicha chat"
+            )
+            self.db.add(new_chat)
+
         await self.db.commit()
         return f"Taklif #{offer_id} qabul qilindi, buyurtma #{order.id} haydovchi #{offer.driver_id} ga berildi."
 

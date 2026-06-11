@@ -76,7 +76,7 @@ REGION_DISTRICT_FILE: dict[str, str | None] = {
     "jizzax": "jizzakh_region_districts.geojson",
     "qashqadaryo": "qarshi_region_districts.geojson",
     "navoiy": "navoiy_region_districts.geojson",
-    "namangan": None,
+    "namangan": "namangan_region_districts.geojson",
     "samarqand": "samarqand_region_districts.geojson",
     "sirdaryo": "sirdaryo_region_districts.geojson",
     "toshkent-shahri": "tashkent_districts.geojson",
@@ -155,6 +155,9 @@ def district_name_from_feature(props: dict) -> str | None:
         props.get("ADM2_UZ")
         or props.get("ADM2_EN")
         or props.get("ADM2_RU")
+        or props.get("ADM1_UZ")
+        or props.get("ADM1_EN")
+        or props.get("ADM1_RU")
         or props.get("name")
     )
 

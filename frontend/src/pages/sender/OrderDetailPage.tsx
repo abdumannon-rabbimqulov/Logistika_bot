@@ -246,6 +246,59 @@ export const OrderDetailPage: React.FC = () => {
         )}
       </section>
 
+      {order.driver && (
+        <section className="rounded-2xl border border-white/5 bg-slate-800/60 backdrop-blur-md p-5 shadow-lg space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <h3 className="text-sm font-semibold text-slate-300">Haydovchi ma&apos;lumotlari</h3>
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-cyan-500/10 text-cyan-400 font-bold border border-cyan-500/20 text-lg">
+              {order.driver.user.full_name?.charAt(0).toUpperCase() || "H"}
+            </div>
+            <div>
+              <p className="font-semibold text-slate-200">{order.driver.user.full_name}</p>
+              <p className="text-xs text-slate-400">Mashina raqami: {order.driver.truck_number}</p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 pt-2 border-t border-white/5">
+            {order.driver.user.phone_number && (
+              <a
+                href={`tel:${order.driver.user.phone_number}`}
+                className="flex items-center justify-center gap-2 rounded-xl bg-slate-700/30 border border-white/10 py-2.5 text-sm font-semibold text-slate-300 hover:bg-slate-700/50 transition duration-150"
+              >
+                Telefon: {order.driver.user.phone_number}
+              </a>
+            )}
+            
+            {order.chat_id && (
+              <button
+                type="button"
+                onClick={() => navigate(`/sender/chats/${order.chat_id}`)}
+                className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 py-2.5 text-sm font-bold text-white shadow-lg shadow-cyan-900/20 transition active:scale-[0.99]"
+              >
+                Haydovchi bilan chat
+              </button>
+            )}
+
+            {order.driver.user.username ? (
+              <a
+                href={`https://t.me/${order.driver.user.username}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 rounded-xl bg-sky-500/10 border border-sky-500/20 py-2.5 text-sm font-semibold text-sky-400 hover:bg-sky-500/20 transition duration-150"
+              >
+                Telegram: @{order.driver.user.username}
+              </a>
+            ) : order.driver.user.id ? (
+              <a
+                href={`tg://user?id=${order.driver.user.id}`}
+                className="flex items-center justify-center gap-2 rounded-xl bg-sky-500/10 border border-sky-500/20 py-2.5 text-sm font-semibold text-sky-400 hover:bg-sky-500/20 transition duration-150"
+              >
+                Telegram profiliga o&apos;tish
+              </a>
+            ) : null}
+          </div>
+        </section>
+      )}
+
       <section className="rounded-2xl border border-white/5 bg-slate-800/60 backdrop-blur-md p-5 shadow-lg">
         <h3 className="text-sm font-semibold text-slate-300 mb-4">Marshrut</h3>
         <SenderWaypointTimeline waypoints={order.waypoints} />

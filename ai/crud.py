@@ -55,9 +55,21 @@ async def get_chat(db: AsyncSession, pk: int) -> Optional[Chat]:
 
 async def list_user_chats(db: AsyncSession, user_id: int) -> List[Chat]:
     """Foydalanuvchining barcha chat sessiyalarini qaytaradi."""
-    result = await db.execute(
-        select(Chat).where(Chat.user_id == user_id).order_by(Chat.created_at.desc())
-    )
+    from driver.models import Driver
+    driver_stmt = select(Driver.id).where(Driver.user_id == user_id)
+    driver_result = await db.execute(driver_stmt)
+    driver_id = driver_result.scalar_one_or_none()
+
+    if driver_id is not None:
+        stmt = (
+            select(Chat)
+            .where((Chat.user_id == user_id) | (Chat.driver_id == driver_id))
+            .order_by(Chat.created_at.desc())
+        )
+    else:
+        stmt = select(Chat).where(Chat.user_id == user_id).order_by(Chat.created_at.desc())
+
+    result = await db.execute(stmt)
     return list(result.scalars().all())
 
 

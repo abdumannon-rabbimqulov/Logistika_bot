@@ -162,6 +162,38 @@ async def list_my_chats(
     return await crud.list_user_chats(db, current_user.id)
 
 
+@router.get("/chats/by-order/{order_id}", response_model=schemas.ChatResponse, summary="Buyurtma ID bo'yicha chatni olish")
+async def get_chat_by_order(
+    order_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Buyurtma ID bo'yicha tegishli chatni topadi."""
+    from order.crud import get_order
+    from driver.crud import get_driver_by_user_id
+    from ai.models import Chat
+    from sqlalchemy import select
+
+    order = await get_order(db, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Buyurtma topilmadi")
+
+    driver = await get_driver_by_user_id(db, current_user.id)
+    
+    is_customer = order.customer_id == current_user.id
+    is_driver = driver and order.driver_id == driver.id
+    
+    if not (is_customer or is_driver or current_user.role == "admin"):
+        raise HTTPException(status_code=403, detail="Ushbu buyurtma chatiga kirishga ruxsat yo'q")
+
+    stmt = select(Chat).where(Chat.order_id == order_id)
+    result = await db.execute(stmt)
+    chat = result.scalar_one_or_none()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Ushbu buyurtma uchun chat hali yaratilmagan")
+    return chat
+
+
 @router.post(
     "/chats",
     response_model=schemas.ChatResponse,
