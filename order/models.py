@@ -198,8 +198,9 @@ class Order(Base):
 
 
     def __repr__(self) -> str:
-        stops = len(self.waypoints) if self.waypoints else 0
-        return f"<Order(id={self.id}, cargo='{self.cargo_name}', stops={stops}, status={self.status})>"
+        _id = self.__dict__.get("id", "Unknown")
+        _status = self.__dict__.get("status", "Unknown")
+        return f"<Order(id={_id}, status={_status})>"
 
 
 

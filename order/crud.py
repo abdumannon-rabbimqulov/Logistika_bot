@@ -68,8 +68,13 @@ async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int)
     await db.commit()
     await db.refresh(obj)
 
+    from driver.models import Driver
     result = await db.execute(
-        select(Order).options(selectinload(Order.waypoints)).where(Order.id == obj.id)
+        select(Order).options(
+            selectinload(Order.waypoints),
+            selectinload(Order.customer),
+            selectinload(Order.driver).selectinload(Driver.user)
+        ).where(Order.id == obj.id)
     )
     return sort_order_waypoints(result.scalar_one())
 
@@ -98,7 +103,12 @@ async def get_all_orders(
     unassigned_only: bool = False,
     limit: Optional[int] = None,
 ) -> List[Order]:
-    stmt = select(Order).options(selectinload(Order.waypoints))
+    from driver.models import Driver
+    stmt = select(Order).options(
+        selectinload(Order.waypoints),
+        selectinload(Order.customer),
+        selectinload(Order.driver).selectinload(Driver.user)
+    )
     if customer_id is not None:
         stmt = stmt.where(Order.customer_id == customer_id)
     if driver_id is not None:
@@ -131,9 +141,14 @@ async def list_driver_marketplace_orders(
     tayinlanmagan (driver_id IS NULL) va berilgan status (odatda pending).
     truck_type_id berilsa — required_truck_type_id filtri (filter_by_truck).
     """
+    from driver.models import Driver
     stmt = (
         select(Order)
-        .options(selectinload(Order.waypoints))
+        .options(
+            selectinload(Order.waypoints),
+            selectinload(Order.customer),
+            selectinload(Order.driver).selectinload(Driver.user)
+        )
         .where(Order.status == status)
         .where(Order.driver_id.is_(None))
     )

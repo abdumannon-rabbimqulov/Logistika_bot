@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
@@ -21,7 +22,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Upgrade schema."""
     # 1. Create Enum type safely
-    messagestatus = postgresql.ENUM('sending', 'sent', 'delivered', 'read', name='messagestatus')
+    messagestatus = postgresql.ENUM('SENDING', 'SENT', 'DELIVERED', 'READ', name='messagestatus')
     messagestatus.create(op.get_bind(), checkfirst=True)
 
     # 2. Add column as nullable=True first
@@ -35,7 +36,7 @@ def upgrade() -> None:
     op.create_foreign_key(None, 'messages', 'messages', ['reply_to_id'], ['id'], ondelete='SET NULL')
 
     # 3. Populate existing data with default value
-    op.execute("UPDATE messages SET status = 'sent' WHERE status IS NULL")
+    op.execute("UPDATE messages SET status = 'SENT' WHERE status IS NULL")
 
     # 4. Alter column to nullable=False
     op.alter_column('messages', 'status', nullable=False)
@@ -52,5 +53,5 @@ def downgrade() -> None:
     op.drop_column('messages', 'status')
     
     # Drop enum type safely
-    messagestatus = postgresql.ENUM('sending', 'sent', 'delivered', 'read', name='messagestatus')
+    messagestatus = postgresql.ENUM('SENDING', 'SENT', 'DELIVERED', 'READ', name='messagestatus')
     messagestatus.drop(op.get_bind(), checkfirst=True)

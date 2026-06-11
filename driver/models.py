@@ -151,7 +151,9 @@ class Driver(Base):
         )
 
     def __repr__(self) -> str:
-        return f"<Driver(id={self.id}, truck='{self.truck_number}', city='{self.current_city}')>"
+        _id = self.__dict__.get("id", "Unknown")
+        _truck = self.__dict__.get("truck_number", "Unknown")
+        return f"<Driver(id={_id}, truck='{_truck}')>"
 
 
 
