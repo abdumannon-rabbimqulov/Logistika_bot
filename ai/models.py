@@ -116,7 +116,6 @@ class Chat(Base):
 
     user_id   : Mapped[Optional[str]]  = mapped_column(BigInteger, ForeignKey("users.id"),   nullable=True)
     driver_id : Mapped[Optional[str]]  = mapped_column(Integer, ForeignKey("drivers.id"), nullable=True)
-    order_id  : Mapped[Optional[str]]  = mapped_column(Integer, ForeignKey("orders.id"),  nullable=True, unique=True)
 
     # Chat meta
     category  : Mapped[ChatCategory]   = mapped_column(SAEnum(ChatCategory), default=ChatCategory.CONVERSATION, nullable=False)
@@ -135,7 +134,7 @@ class Chat(Base):
         lazy="selectin"
     )
     driver      : Mapped[Optional["Driver"]]     = relationship(back_populates="chats")
-    order       : Mapped[Optional["Order"]]      = relationship(back_populates="chat")
+    orders      : Mapped[list["Order"]]          = relationship(back_populates="chat")
     messages    : Mapped[list["Message"]]        = relationship(
                         back_populates="chat",
                         cascade="all, delete-orphan",

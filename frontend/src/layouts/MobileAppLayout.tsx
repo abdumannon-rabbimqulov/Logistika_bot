@@ -69,6 +69,7 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({ role, title })
   return (
     <div className="mobile-app-root">
       <div className="mobile-phone">
+        {!isChatDetail && (
         <header className="mobile-header">
           {showBack ? (
             <button type="button" className="back-btn" onClick={goBack} aria-label="Orqaga">
@@ -82,6 +83,7 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({ role, title })
             {user?.full_name?.split(" ")[0] || "—"}
           </span>
         </header>
+        )}
 
         <main className={`mobile-content${isAi ? " no-nav" : ""}`}>
           <Outlet />

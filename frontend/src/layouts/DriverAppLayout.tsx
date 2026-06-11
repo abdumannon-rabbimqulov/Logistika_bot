@@ -31,7 +31,7 @@ export const DriverAppLayout: React.FC = () => {
   return (
     <div className="min-h-[100dvh] bg-slate-900 text-slate-100 flex justify-center">
       <div className="w-full max-w-md flex flex-col min-h-[100dvh] shadow-2xl shadow-black/60 border-x border-white/5 bg-slate-900">
-        {!isHome && (
+        {!isHome && !isChatDetail && (
           <header className="sticky top-0 z-50 flex items-center gap-3 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] bg-slate-900/95 backdrop-blur-md border-b border-white/5">
             {showBack ? (
               <button

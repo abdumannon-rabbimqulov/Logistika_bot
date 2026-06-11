@@ -154,6 +154,24 @@ async def assistant_list_messages(
 # ════════════════════════════════════════════════
 
 
+async def resolve_chat_title(db: AsyncSession, chat, current_user_id: int) -> Optional[str]:
+    from users.crud import get_user_by_id
+    from driver.crud import get_driver
+    if chat.user_id is not None and int(chat.user_id) == current_user_id:
+        if chat.driver_id:
+            driver = await get_driver(db, int(chat.driver_id))
+            if driver and driver.user_id:
+                peer_user = await get_user_by_id(db, driver.user_id)
+                if peer_user:
+                    return peer_user.full_name
+    else:
+        if chat.user_id:
+            peer_user = await get_user_by_id(db, int(chat.user_id))
+            if peer_user:
+                return peer_user.full_name
+    return chat.title
+
+
 @router.get(
     "/chats",
     response_model=List[schemas.ChatListItem],
@@ -164,9 +182,7 @@ async def list_my_chats(
     current_user: User = Depends(get_current_user),
 ):
     """Chat ro'yxati — so'nggi xabar, o'qilmagan badge va peer online holati."""
-    from driver.crud import get_driver_by_user_id
-    from driver.models import Driver
-    from sqlalchemy import select as sa_select
+    from ai.websocket import manager
 
     chats = await crud.list_user_chats(db, current_user.id)
     items: List[schemas.ChatListItem] = []
@@ -179,19 +195,17 @@ async def list_my_chats(
         # O'qilmagan xabarlar soni
         unread = await crud.count_unread(db, chat.id, current_user.id)
 
-        # Peer online holati (in-memory ConnectionManager dan)
-        peer_online = any(
-            uid != current_user.id
-            for uid in manager.online_users(chat.id)
-        )
+        # Online presence
+        online_peers = manager.online_users(chat.id)
+        peer_online = any(u != current_user.id for u in online_peers)
 
-        # Peer oxirgi ko'rinish vaqti
-        peer_last_seen = await crud.get_peer_last_seen(db, chat.id, exclude_user_id=current_user.id)
+        peer_last_seen = await crud.get_peer_last_seen(db, chat.id, current_user.id)
+
+        dynamic_title = await resolve_chat_title(db, chat, current_user.id)
 
         items.append(schemas.ChatListItem(
             id=chat.id,
-            title=chat.title,
-            order_id=chat.order_id,
+            title=dynamic_title,
             category=chat.category,
             last_message=schemas.MessageResponse.model_validate(last_msg) if last_msg else None,
             unread_count=unread,
@@ -227,7 +241,10 @@ async def get_chat_by_order(
     if not (is_customer or is_driver or current_user.role == "admin"):
         raise HTTPException(status_code=403, detail="Ushbu buyurtma chatiga kirishga ruxsat yo'q")
 
-    stmt = select(Chat).where(Chat.order_id == order_id)
+    if not order.chat_id:
+        raise HTTPException(status_code=404, detail="Ushbu buyurtma uchun chat hali yaratilmagan")
+        
+    stmt = select(Chat).where(Chat.id == order.chat_id)
     result = await db.execute(stmt)
     chat = result.scalar_one_or_none()
     if not chat:
@@ -249,7 +266,6 @@ async def create_new_chat(
     chat_data = schemas.ChatCreate(
         user_id=current_user.id,
         driver_id=data.driver_id,
-        order_id=data.order_id,
         category=data.category,
         status=data.status,
         title=data.title,
@@ -266,6 +282,7 @@ async def get_chat_details(
     chat = await crud.get_chat(db, chat_id)
     if not chat or not await user_can_access_chat(db, chat, current_user.id):
         raise HTTPException(status_code=404, detail="Chat topilmadi yoki sizga tegishli emas")
+    chat.title = await resolve_chat_title(db, chat, current_user.id)
     return chat
 
 

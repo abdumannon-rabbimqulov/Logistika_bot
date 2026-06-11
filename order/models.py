@@ -150,10 +150,12 @@ class Order(Base):
         back_populates="order",
     )
 
+    chat_id  : Mapped[int | None] = mapped_column(Integer, ForeignKey("chats.id"), nullable=True)
+
     chat       : Mapped["Chat"] = relationship(
         "Chat",
-        back_populates="order",
-        uselist=False,
+        foreign_keys=[chat_id],
+        back_populates="orders"
     )
 
     rating     : Mapped["Rating"] = relationship(
@@ -189,12 +191,7 @@ class Order(Base):
                 return wp
         return None
 
-    @property
-    def chat_id(self) -> int | None:
-        try:
-            return self.chat.id if self.chat else None
-        except Exception:
-            return None
+
 
 
     def __repr__(self) -> str:

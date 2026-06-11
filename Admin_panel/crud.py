@@ -1,4 +1,3 @@
-"""Admin paneli uchun maxsus CRUD funktsiyalari (users, orders, stats, ai_commands)."""
 
 from __future__ import annotations
 
@@ -14,7 +13,6 @@ from driver.models import Driver
 from order.models import Order, OrderOffer, OrderStatus
 from order.crud import parse_order_status
 from users.models import User, UserRole
-
 from Admin_panel.schemas import (
     AdminDashboardStats,
     AdminUserUpdate,
@@ -79,8 +77,14 @@ async def list_users(
     total_stmt = select(func.count()).select_from(base.subquery())
     total = (await db.execute(total_stmt)).scalar_one()
 
-    stmt = base.order_by(desc(User.created_at)).offset(max(skip, 0)).limit(min(max(limit, 1), 200))
-    rows = (await db.execute(stmt)).scalars().all()
+    stmt = (
+        base.order_by(desc(User.created_at))
+        .offset(max(skip, 0))
+        .limit(min(max(limit, 1), 200))
+    )
+
+    result = await db.execute(stmt)
+    rows = result.scalars().unique().all()
     return list(rows), int(total)
 
 
@@ -126,12 +130,16 @@ async def list_orders_admin(
     total = (await db.execute(total_stmt)).scalar_one()
 
     stmt = (
-        base.options(selectinload(Order.waypoints))
+        base.options(
+            selectinload(Order.waypoints),
+            selectinload(Order.customer),
+            selectinload(Order.driver).selectinload(Driver.user)
+        )
         .order_by(desc(Order.created_at))
         .offset(max(skip, 0))
         .limit(min(max(limit, 1), 200))
     )
-    rows = (await db.execute(stmt)).scalars().all()
+    rows = (await db.execute(stmt)).scalars().unique().all()
     from order.crud import sort_order_waypoints
 
     return [sort_order_waypoints(o) for o in rows], int(total)

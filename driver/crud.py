@@ -100,9 +100,14 @@ async def get_driver_trips(
     """Haydovchiga biriktirilgan safarlar (buyurtmalar)."""
     statuses = _TRIP_SCOPE_STATUSES.get(scope, _TRIP_SCOPE_STATUSES["all"])
 
+    from driver.models import Driver
     base = (
         select(Order)
-        .options(selectinload(Order.waypoints))
+        .options(
+            selectinload(Order.waypoints),
+            selectinload(Order.customer),
+            selectinload(Order.driver).selectinload(Driver.user)
+        )
         .where(Order.driver_id == driver_id, Order.status.in_(statuses))
     )
 

@@ -255,26 +255,57 @@ async def accept_order_directly(
         .values(status=OfferStatus.OUTBID)
     )
 
-    # Chat yaratish
-    from ai.models import Chat, ChatCategory, ChatStatus
+    # Yagona chat topish yoki yaratish
+    from ai.models import Chat, ChatCategory, ChatStatus, Message, MessageType, SenderType, MessageStatus
     from sqlalchemy import select
-    chat_stmt = select(Chat).where(Chat.order_id == order.id)
+    chat_stmt = select(Chat).where(
+        Chat.user_id == order.customer_id,
+        Chat.driver_id == driver.id,
+        Chat.category == ChatCategory.CONVERSATION
+    )
     chat_result = await db.execute(chat_stmt)
     existing_chat = chat_result.scalar_one_or_none()
+    
     if not existing_chat:
-        new_chat = Chat(
+        existing_chat = Chat(
             user_id=order.customer_id,
             driver_id=driver.id,
-            order_id=order.id,
             category=ChatCategory.CONVERSATION,
             status=ChatStatus.OPEN,
-            title=f"Buyurtma #{order.id} bo'yicha chat"
+            title="Mijoz va Haydovchi sirlari"
         )
-        db.add(new_chat)
+        db.add(existing_chat)
+        await db.flush()
+        
+    order.chat_id = existing_chat.id
+
+    # Avtomat xabar yuborish
+    system_msg_text = (
+        f"📦 Yangi buyurtma kelishildi: {order.cargo_name}\n"
+        f"💰 Narxi: {order.price} {order.currency}\n\n"
+        f"Tafsilotlar: /sender/orders/{order.id}"
+    )
+    
+    sys_msg = Message(
+        chat_id=existing_chat.id,
+        sender_type=SenderType.SYSTEM,
+        message_type=MessageType.SYSTEM,
+        content=system_msg_text,
+        status=MessageStatus.SENT
+    )
+    db.add(sys_msg)
 
     await db.commit()
-    await db.refresh(order)
-    return order
+    full_order = await crud.get_order(db, order.id)
+    
+    # Telegram botga xabar
+    from services.notifications import send_telegram_message
+    if full_order.customer and full_order.customer.id:
+        await send_telegram_message(full_order.customer.id, system_msg_text)
+    if full_order.driver and full_order.driver.user and full_order.driver.user.id:
+        await send_telegram_message(full_order.driver.user.id, system_msg_text)
+        
+    return full_order
 
 
 # --- OrderOffer Endpoints ---
@@ -376,22 +407,54 @@ async def update_offer(
             .values(status=OfferStatus.OUTBID)
         )
 
-        # Create/Get chat session
-        chat_stmt = select(Chat).where(Chat.order_id == order.id)
+        # Yagona chat topish yoki yaratish
+        from ai.models import Chat, ChatCategory, ChatStatus, Message, MessageType, SenderType, MessageStatus
+        chat_stmt = select(Chat).where(
+            Chat.user_id == order.customer_id,
+            Chat.driver_id == offer.driver_id,
+            Chat.category == ChatCategory.CONVERSATION
+        )
         chat_result = await db.execute(chat_stmt)
         existing_chat = chat_result.scalar_one_or_none()
+        
         if not existing_chat:
-            new_chat = Chat(
+            existing_chat = Chat(
                 user_id=order.customer_id,
                 driver_id=offer.driver_id,
-                order_id=order.id,
                 category=ChatCategory.CONVERSATION,
                 status=ChatStatus.OPEN,
-                title=f"Buyurtma #{order.id} bo'yicha chat"
+                title="Mijoz va Haydovchi sirlari"
             )
-            db.add(new_chat)
+            db.add(existing_chat)
+            await db.flush()
+            
+        order.chat_id = existing_chat.id
+
+        # Avtomat xabar yuborish
+        system_msg_text = (
+            f"📦 Yangi taklif qabul qilindi: {order.cargo_name}\n"
+            f"💰 Narxi: {offer.offered_price} {offer.currency}\n\n"
+            f"Tafsilotlar: /driver/orders/{order.id}"
+        )
+        
+        sys_msg = Message(
+            chat_id=existing_chat.id,
+            sender_type=SenderType.SYSTEM,
+            message_type=MessageType.SYSTEM,
+            content=system_msg_text,
+            status=MessageStatus.SENT
+        )
+        db.add(sys_msg)
 
         await db.commit()
+        
+        # Telegram botga xabar
+        full_order = await crud.get_order(db, order.id)
+        from services.notifications import send_telegram_message
+        if full_order.customer and full_order.customer.id:
+            await send_telegram_message(full_order.customer.id, system_msg_text)
+        if full_order.driver and full_order.driver.user and full_order.driver.user.id:
+            await send_telegram_message(full_order.driver.user.id, system_msg_text)
         await db.refresh(offer)
         return offer
     else:

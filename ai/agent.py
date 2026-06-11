@@ -795,23 +795,53 @@ class LogistikaToolkit:
         for other in result.scalars().all():
             other.status = OfferStatus.OUTBID
 
-        # Chat yaratish
-        from ai.models import Chat, ChatCategory, ChatStatus
-        chat_stmt = select(Chat).where(Chat.order_id == order.id)
+        # Chat yaratish yoki topish
+        from ai.models import Chat, ChatCategory, ChatStatus, Message, MessageType, SenderType, MessageStatus
+        chat_stmt = select(Chat).where(
+            Chat.user_id == order.customer_id,
+            Chat.driver_id == offer.driver_id,
+            Chat.category == ChatCategory.CONVERSATION
+        )
         chat_result = await self.db.execute(chat_stmt)
         existing_chat = chat_result.scalar_one_or_none()
         if not existing_chat:
-            new_chat = Chat(
+            existing_chat = Chat(
                 user_id=order.customer_id,
                 driver_id=offer.driver_id,
-                order_id=order.id,
                 category=ChatCategory.CONVERSATION,
                 status=ChatStatus.OPEN,
-                title=f"Buyurtma #{order.id} bo'yicha chat"
+                title="Mijoz va Haydovchi sirlari"
             )
-            self.db.add(new_chat)
+            self.db.add(existing_chat)
+            await self.db.flush()
+            
+        order.chat_id = existing_chat.id
+        
+        # Avtomat xabar yuborish
+        system_msg_text = (
+            f"📦 Yangi taklif qabul qilindi: {order.cargo_name}\n"
+            f"💰 Narxi: {offer.offered_price} {offer.currency}\n\n"
+            f"Tafsilotlar: /driver/orders/{order.id}"
+        )
+        
+        sys_msg = Message(
+            chat_id=existing_chat.id,
+            sender_type=SenderType.SYSTEM,
+            message_type=MessageType.SYSTEM,
+            content=system_msg_text,
+            status=MessageStatus.SENT
+        )
+        self.db.add(sys_msg)
 
         await self.db.commit()
+        
+        # Telegram botga xabar
+        full_order = await order_crud.get_order(self.db, order.id)
+        from services.notifications import send_telegram_message
+        if full_order.customer and full_order.customer.id:
+            await send_telegram_message(full_order.customer.id, system_msg_text)
+        if full_order.driver and full_order.driver.user and full_order.driver.user.id:
+            await send_telegram_message(full_order.driver.user.id, system_msg_text)
         return f"Taklif #{offer_id} qabul qilindi, buyurtma #{order.id} haydovchi #{offer.driver_id} ga berildi."
 
     async def accept_offer(self, offer_id: int) -> str:

@@ -41,11 +41,11 @@ def serialize_message(msg) -> dict:
 
 
 async def user_can_access_chat(db: AsyncSession, chat, user_id: int) -> bool:
-    if chat.user_id == user_id:
+    if chat.user_id is not None and int(chat.user_id) == int(user_id):
         return True
     if chat.driver_id:
-        driver = await driver_crud.get_driver(db, chat.driver_id)
-        return bool(driver and driver.user_id == user_id)
+        driver = await driver_crud.get_driver(db, int(chat.driver_id))
+        return bool(driver and driver.user_id is not None and int(driver.user_id) == int(user_id))
     return False
 
 
