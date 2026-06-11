@@ -34,6 +34,14 @@ class SenderType(CaseInsensitiveSchemaEnum):
     AI     = "ai"
     SYSTEM = "system"
 
+
+class MessageStatus(CaseInsensitiveSchemaEnum):
+    """Xabar yetkazilish holati — Telegram single/double tick."""
+    SENDING   = "sending"    # Faqat client tomonda (clock icon)
+    SENT      = "sent"       # DB ga saqlandi (✓ single)
+    DELIVERED = "delivered"  # Qabul qiluvchi WS ga yetdi (✓✓ grey)
+    READ      = "read"       # O'qildi (✓✓ blue)
+
 class AttachmentType(CaseInsensitiveSchemaEnum):
     IMAGE = "image"
     VIDEO = "video"
@@ -97,6 +105,15 @@ class AttachmentResponse(AttachmentBase):
 
 # --- Message Schemas ---
 
+# Reply preview (nested inside MessageResponse)
+class ReplyPreview(BaseModel):
+    id           : int
+    content      : Optional[str] = None
+    sender_type  : SenderType
+    message_type : MessageType
+    model_config = ConfigDict(from_attributes=True)
+
+
 class MessageBase(BaseModel):
     sender_id: Optional[int] = Field(None,)
     sender_type: SenderType = Field(...,)
@@ -109,6 +126,10 @@ class MessageBase(BaseModel):
 class MessageCreate(MessageBase):
     chat_id: int = Field(..., )
     attachments: Optional[List[AttachmentCreate]] = None
+    # Telegram-like qo'shimcha maydonlar
+    status: MessageStatus = MessageStatus.SENT
+    reply_to_id: Optional[int] = None
+    client_uuid: Optional[str] = Field(None, max_length=36)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -129,6 +150,12 @@ class MessageUpdate(BaseModel):
 class MessageResponse(MessageBase):
     id: int
     chat_id: int
+    # Telegram-like delivery status
+    status: MessageStatus = MessageStatus.SENT
+    is_deleted: bool = False
+    reply_to: Optional[ReplyPreview] = None
+    client_uuid: Optional[str] = None
+    # AI meta
     ai_sentiment: Optional[float] = Field(None, )
     ai_flagged: bool = False
     ai_flag_reason: Optional[str] = None
@@ -182,6 +209,20 @@ class ChatResponse(ChatBase):
     created_at: datetime
     updated_at: Optional[datetime]
     closed_at: Optional[datetime]
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ChatListItem(BaseModel):
+    """Chat ro'yxati — sidebar uchun: so'nggi xabar, unread badge, presence."""
+    id            : int
+    title         : Optional[str] = None
+    order_id      : Optional[int] = None
+    category      : ChatCategory
+    last_message  : Optional[MessageResponse] = None
+    unread_count  : int = 0
+    peer_online   : bool = False
+    peer_last_seen: Optional[datetime] = None
+    updated_at    : Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
 # --- AIAnalysis Schemas ---

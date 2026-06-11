@@ -1,12 +1,15 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete
+from sqlalchemy import select, update, delete, func, insert
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from ai.models import (
     Chat,
     ChatCategory,
+    ChatPresence,
     ChatStatus,
     Message,
+    MessageRead,
+    MessageStatus,
     Attachment,
     Rating,
     AIAnalysis,
@@ -188,6 +191,100 @@ async def update_message(db: AsyncSession, pk: int, data: MessageUpdate) -> Opti
     await db.execute(update(Message).where(Message.id == pk).values(**update_data))
     await db.commit()
     return await get_message(db, pk)
+
+async def update_message_status(db: AsyncSession, pk: int, status: str) -> None:
+    """Xabar yetkazilish holatini yangilaydi (sent → delivered → read)."""
+    await db.execute(
+        update(Message).where(Message.id == pk).values(status=status)
+    )
+    await db.commit()
+
+
+async def handle_message_reads(
+    db: AsyncSession, chat_id: int, reader_id: int, message_ids: List[int]
+) -> None:
+    """O'qilganlik belgilari qo'yadi va xabar holatini READ ga ko'taradi."""
+    for mid in message_ids:
+        # Dublikatlarni e'tiborsiz qoldiradi
+        await db.execute(
+            insert(MessageRead)
+            .values(message_id=mid, reader_id=reader_id)
+            .on_conflict_do_nothing()
+        )
+    # Faqat boshqa sender xabarlarini READ qilish
+    await db.execute(
+        update(Message)
+        .where(
+            Message.id.in_(message_ids),
+            Message.sender_id != reader_id,
+            Message.chat_id == chat_id,
+        )
+        .values(status=MessageStatus.READ, is_read=True)
+    )
+    await db.commit()
+
+
+async def soft_delete_message(db: AsyncSession, pk: int) -> None:
+    """Xabarni DB dan o'chirmaydi, faqat is_deleted=True qiladi (GDPR safe)."""
+    await db.execute(
+        update(Message)
+        .where(Message.id == pk)
+        .values(
+            is_deleted=True,
+            deleted_at=datetime.now(timezone.utc),
+            content=None,  # Matnni tozalaymiz
+        )
+    )
+    await db.commit()
+
+
+async def upsert_presence(
+    db: AsyncSession, user_id: int, chat_id: int, online: bool
+) -> None:
+    """ChatPresence jadvalida online holatini yangilaydi yoki yaratadi."""
+    await db.execute(
+        insert(ChatPresence)
+        .values(user_id=user_id, chat_id=chat_id, is_online=online, last_seen=datetime.now(timezone.utc))
+        .on_conflict_do_update(
+            index_elements=["user_id", "chat_id"],
+            set_={"is_online": online, "last_seen": datetime.now(timezone.utc)},
+        )
+    )
+    await db.commit()
+
+
+async def get_peer_last_seen(
+    db: AsyncSession, chat_id: int, exclude_user_id: int
+) -> Optional[datetime]:
+    """Chat'dagi boshqa foydalanuvchining oxirgi ko'rinish vaqti."""
+    result = await db.execute(
+        select(ChatPresence.last_seen)
+        .where(
+            ChatPresence.chat_id == chat_id,
+            ChatPresence.user_id != exclude_user_id,
+        )
+        .order_by(ChatPresence.last_seen.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def count_unread(
+    db: AsyncSession, chat_id: int, user_id: int
+) -> int:
+    """Foydalanuvchi uchun chat'dagi o'qilmagan xabarlar soni."""
+    result = await db.execute(
+        select(func.count())
+        .select_from(Message)
+        .where(
+            Message.chat_id == chat_id,
+            Message.sender_id != user_id,
+            Message.is_deleted == False,
+            Message.is_read == False,
+        )
+    )
+    return result.scalar_one() or 0
+
 
 async def delete_message(db: AsyncSession, pk: int) -> bool:
     await db.execute(delete(Message).where(Message.id == pk))

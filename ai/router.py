@@ -82,7 +82,7 @@ async def websocket_info():
 
 @router.websocket("/ws/{chat_id}")
 async def websocket_endpoint(websocket: WebSocket, chat_id: int):
-    """Foydalanuvchilar o'rtasida real-vaqt matnli chat."""
+    """Foydalanuvchilar o'rtasida real-vaqt matnli chat (Telegram-like events)."""
     await websocket_peer_chat(websocket, chat_id)
 
 
@@ -154,12 +154,53 @@ async def assistant_list_messages(
 # ════════════════════════════════════════════════
 
 
-@router.get("/chats", response_model=List[schemas.ChatResponse], summary="Mening chatlarim")
+@router.get(
+    "/chats",
+    response_model=List[schemas.ChatListItem],
+    summary="Mening chatlarim (unread badge + presence)",
+)
 async def list_my_chats(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return await crud.list_user_chats(db, current_user.id)
+    """Chat ro'yxati — so'nggi xabar, o'qilmagan badge va peer online holati."""
+    from driver.crud import get_driver_by_user_id
+    from driver.models import Driver
+    from sqlalchemy import select as sa_select
+
+    chats = await crud.list_user_chats(db, current_user.id)
+    items: List[schemas.ChatListItem] = []
+
+    for chat in chats:
+        # So'nggi xabar
+        recent = await crud.list_chat_messages(db, chat.id, limit=1)
+        last_msg = recent[0] if recent else None
+
+        # O'qilmagan xabarlar soni
+        unread = await crud.count_unread(db, chat.id, current_user.id)
+
+        # Peer online holati (in-memory ConnectionManager dan)
+        peer_online = any(
+            uid != current_user.id
+            for uid in manager.online_users(chat.id)
+        )
+
+        # Peer oxirgi ko'rinish vaqti
+        peer_last_seen = await crud.get_peer_last_seen(db, chat.id, exclude_user_id=current_user.id)
+
+        items.append(schemas.ChatListItem(
+            id=chat.id,
+            title=chat.title,
+            order_id=chat.order_id,
+            category=chat.category,
+            last_message=schemas.MessageResponse.model_validate(last_msg) if last_msg else None,
+            unread_count=unread,
+            peer_online=peer_online,
+            peer_last_seen=peer_last_seen,
+            updated_at=chat.updated_at,
+        ))
+
+    return items
 
 
 @router.get("/chats/by-order/{order_id}", response_model=schemas.ChatResponse, summary="Buyurtma ID bo'yicha chatni olish")
@@ -274,7 +315,7 @@ async def edit_message(
 @router.delete(
     "/messages/{message_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Xabarni o'chirish",
+    summary="Xabarni o'chirish (soft-delete)",
 )
 async def delete_message(
     message_id: int,
@@ -285,22 +326,109 @@ async def delete_message(
     if not msg or msg.sender_id != current_user.id:
         raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
     chat_id = msg.chat_id
-    await crud.delete_message(db, message_id)
-    await manager.broadcast({"event": "message_deleted", "message_id": message_id}, chat_id)
+    # Soft-delete: matn o'chiriladi, DB qator saqlanadi
+    await crud.soft_delete_message(db, message_id)
+    await manager.broadcast(
+        {"event": "message_deleted", "data": {"message_id": message_id}},
+        chat_id,
+    )
     return None
 
 
-@router.post("/upload", response_model=dict, summary="Media yuklash")
-async def upload_file(
+@router.post(
+    "/chats/{chat_id}/upload",
+    response_model=dict,
+    summary="Chat uchun media / fayl yuklash (progress bilan)",
+)
+async def upload_chat_file(
+    chat_id: int,
     file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    file_ext = os.path.splitext(file.filename)[1]
-    unique_filename = f"{uuid.uuid4()}{file_ext}"
-    file_path = os.path.join(UPLOAD_DIR, unique_filename)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    return {"url": f"{STATIC_PATH}/{unique_filename}", "filename": file.filename}
+    """Faylni yuklaydi, message + attachment yaratadi va WS orqali broadcast qiladi."""
+    import aiofiles  # noqa: F401 — optional dep
+
+    ALLOWED_MIME = {
+        "image/jpeg", "image/png", "image/webp", "image/gif",
+        "application/pdf",
+        "video/mp4", "video/quicktime",
+        "audio/mpeg", "audio/ogg", "audio/webm", "audio/mp4", "audio/x-m4a",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }
+    MAX_BYTES = 50 * 1024 * 1024  # 50 MB
+
+    # Kirish tekshiruvi
+    chat = await crud.get_chat(db, chat_id)
+    if not chat or not await user_can_access_chat(db, chat, current_user.id):
+        raise HTTPException(404, "Chat topilmadi")
+    if file.content_type not in ALLOWED_MIME:
+        raise HTTPException(400, f"Ruxsatsiz fayl turi: {file.content_type}")
+
+    # Fayl turini aniqlash
+    ct = file.content_type or ""
+    if ct.startswith("image"):
+        ftype = "image"
+    elif ct.startswith("video"):
+        ftype = "video"
+    elif ct.startswith("audio"):
+        ftype = "voice"
+    else:
+        ftype = "file"
+
+    # Fayl nomini tuzish
+    ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "bin"
+    unique_name = f"{uuid.uuid4().hex}.{ext}"
+    dest_dir = os.path.join(UPLOAD_DIR, "chat")
+    os.makedirs(dest_dir, exist_ok=True)
+    dest_path = os.path.join(dest_dir, unique_name)
+
+    # Faylni diskka yozish (chunked)
+    size = 0
+    with open(dest_path, "wb") as out_f:
+        while True:
+            chunk = await file.read(64 * 1024)  # 64 KB chunks
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > MAX_BYTES:
+                os.unlink(dest_path)
+                raise HTTPException(413, "Fayl hajmi 50MB dan oshib ketdi")
+            out_f.write(chunk)
+
+    file_url = f"{STATIC_PATH}/chat/{unique_name}"
+
+    # Message + Attachment yaratish
+    from ai.chat_ws import resolve_sender_type
+    async with async_session() as sess:
+        sender_type = await resolve_sender_type(sess, current_user.id)
+        msg = await crud.create_message(sess, schemas.MessageCreate(
+            chat_id=chat_id,
+            sender_id=current_user.id,
+            sender_type=sender_type,
+            message_type=ftype,
+            content=None,
+            status=schemas.MessageStatus.SENT,
+        ))
+        from ai.models import Attachment, AttachmentType
+        att = Attachment(
+            message_id=msg.id,
+            file_type=AttachmentType(ftype) if ftype in ("image", "video", "voice", "file") else AttachmentType.FILE,
+            file_url=file_url,
+            original_name=file.filename,
+            mime_type=file.content_type,
+            file_size=size,
+        )
+        sess.add(att)
+        await sess.commit()
+        await sess.refresh(msg)
+
+    # WS broadcast
+    msg_payload = schemas.MessageResponse.model_validate(msg).model_dump(mode="json")
+    await manager.broadcast({"event": "new_message", "data": msg_payload}, chat_id)
+
+    return {"url": file_url, "filename": file.filename, "size": size, "message_id": msg.id}
 
 
 @router.post("/ratings", response_model=schemas.RatingResponse, summary="Baho berish")

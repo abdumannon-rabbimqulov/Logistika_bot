@@ -3,6 +3,7 @@ import type {
   AssistantMessageResponse,
   AiUsageResponse,
   Chat,
+  ChatListItem,
   ChatMessage,
   CreateChatPayload,
 } from "../types/ai";
@@ -21,9 +22,9 @@ export async function createChat(data: CreateChatPayload = {}): Promise<Chat> {
   });
 }
 
-/** GET /ai/chats — mening chatlarim */
-export async function fetchMyChats(): Promise<Chat[]> {
-  return apiRequest<Chat[]>("/ai/chats");
+/** GET /ai/chats — mening chatlarim (unread badge + presence) */
+export async function fetchMyChats(): Promise<ChatListItem[]> {
+  return apiRequest<ChatListItem[]>("/ai/chats");
 }
 
 /** GET /ai/chats/{chat_id} — chat tafsilotlari */

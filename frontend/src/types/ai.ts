@@ -1,4 +1,4 @@
-/** ai/schemas.py — Chat & Message */
+/** ai/schemas.py — Chat & Message (Telegram-like extended) */
 
 export type ChatCategory =
   | "complaint"
@@ -10,6 +10,9 @@ export type ChatCategory =
 export type ChatStatus = "open" | "resolved" | "pending" | "escalated";
 
 export type SenderType = "user" | "driver" | "ai" | "system";
+
+/** Delivery status — matches MessageStatus enum in backend */
+export type MessageStatus = "sending" | "sent" | "delivered" | "read";
 
 export interface Chat {
   id: number;
@@ -24,6 +27,19 @@ export interface Chat {
   closed_at?: string | null;
 }
 
+/** GET /ai/chats — ChatListItem (with presence + unread) */
+export interface ChatListItem {
+  id: number;
+  title?: string | null;
+  order_id?: number | null;
+  category: ChatCategory;
+  last_message?: ChatMessage | null;
+  unread_count: number;
+  peer_online: boolean;
+  peer_last_seen?: string | null;
+  updated_at?: string | null;
+}
+
 /** POST /ai/chats — ChatBase */
 export interface CreateChatPayload {
   category?: ChatCategory;
@@ -31,6 +47,25 @@ export interface CreateChatPayload {
   title?: string | null;
   driver_id?: number | null;
   order_id?: number | null;
+}
+
+/** Nested reply preview inside a message */
+export interface ReplyPreview {
+  id: number;
+  content?: string | null;
+  sender_type: SenderType;
+  message_type: string;
+}
+
+export interface ChatAttachment {
+  id: number;
+  message_id: number;
+  file_type: "image" | "video" | "voice" | "file";
+  file_url: string;
+  original_name?: string | null;
+  mime_type?: string | null;
+  file_size?: number | null;
+  created_at: string;
 }
 
 export interface ChatMessage {
@@ -43,6 +78,12 @@ export interface ChatMessage {
   is_read: boolean;
   is_ai_response: boolean;
   is_ai_command: boolean;
+  /** Delivery status (Telegram-like ticks) */
+  status: MessageStatus;
+  is_deleted: boolean;
+  reply_to?: ReplyPreview | null;
+  client_uuid?: string | null;
+  attachments: ChatAttachment[];
   created_at: string;
   edited_at?: string | null;
 }

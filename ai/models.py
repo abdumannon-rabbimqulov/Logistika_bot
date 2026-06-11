@@ -1,11 +1,11 @@
 from __future__ import annotations
 import enum
 from datetime import date, datetime
-from typing import Optional
+from typing import Optional, List
 
 from sqlalchemy import (
     String, Text, Integer, Float, Boolean,
-    DateTime, Date, ForeignKey, Enum as SAEnum, JSON, BigInteger, UniqueConstraint,
+    DateTime, Date, ForeignKey, Enum as SAEnum, JSON, BigInteger, UniqueConstraint, insert,
 )
 from sqlalchemy.orm import (
      Mapped, mapped_column, relationship
@@ -53,6 +53,14 @@ class SenderType(str, enum.Enum):
     DRIVER = "driver"
     AI     = "ai"
     SYSTEM = "system"
+
+
+class MessageStatus(str, enum.Enum):
+    """Xabar yetkazilish holati (Telegram-style single/double tick)."""
+    SENDING   = "sending"    # Optimistic — faqat client tomonda
+    SENT      = "sent"       # DB ga saqlandi (single tick ✓)
+    DELIVERED = "delivered"  # Qabul qiluvchi WS ga yuborildi (double tick ✓✓ grey)
+    READ      = "read"       # Qabul qiluvchi o'qidi (double tick ✓✓ blue)
 
 
 class AttachmentType(str, enum.Enum):
@@ -143,17 +151,29 @@ class Chat(Base):
 class Message(Base):
     __tablename__ = "messages"
 
-    id           : Mapped[str]           = mapped_column(Integer, primary_key=True, )
-    chat_id      : Mapped[str]           = mapped_column(Integer, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False)
+    id           : Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
+    chat_id      : Mapped[int]           = mapped_column(Integer, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False)
 
-    sender_id    : Mapped[Optional[str]] = mapped_column(BigInteger, nullable=True)
+    sender_id    : Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     sender_type  : Mapped[SenderType]    = mapped_column(SAEnum(SenderType),  nullable=False)
     message_type : Mapped[MessageType]   = mapped_column(SAEnum(MessageType), default=MessageType.TEXT, nullable=False)
 
-    content        : Mapped[Optional[str]] = mapped_column(Text,    nullable=True)
-    is_read        : Mapped[bool]          = mapped_column(Boolean, default=False)
-    is_ai_response : Mapped[bool]          = mapped_column(Boolean, default=False)
-    is_ai_command  : Mapped[bool]          = mapped_column(Boolean, default=False)
+    content        : Mapped[Optional[str]]  = mapped_column(Text,    nullable=True)
+    is_read        : Mapped[bool]           = mapped_column(Boolean, default=False)
+    is_ai_response : Mapped[bool]           = mapped_column(Boolean, default=False)
+    is_ai_command  : Mapped[bool]           = mapped_column(Boolean, default=False)
+
+    # ── Telegram-style yetkazilish holati ──────────────────────────
+    status          : Mapped[MessageStatus]    = mapped_column(
+                          SAEnum(MessageStatus), default=MessageStatus.SENT, nullable=False
+                      )
+    reply_to_id     : Mapped[Optional[int]]    = mapped_column(
+                          Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True
+                      )
+    is_deleted      : Mapped[bool]             = mapped_column(Boolean, default=False)
+    deleted_at      : Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    client_uuid     : Mapped[Optional[str]]    = mapped_column(String(36), nullable=True, index=True)
+    # ───────────────────────────────────────────────────────────────
 
     # AI tahlil (xabar darajasida)
     ai_sentiment   : Mapped[Optional[float]] = mapped_column(Float,      nullable=True)
@@ -168,8 +188,49 @@ class Message(Base):
     attachments : Mapped[list["Attachment"]]    = relationship(
                         back_populates="message",
                         cascade="all, delete-orphan",
-                        lazy="select")
+                        lazy="selectin")
     ai_command  : Mapped[Optional["AICommand"]] = relationship(back_populates="message", uselist=False)
+    reply_to    : Mapped[Optional["Message"]]   = relationship(
+                        foreign_keys=[reply_to_id],
+                        remote_side="Message.id",
+                        lazy="selectin"
+                  )
+    reads       : Mapped[list["MessageRead"]]   = relationship(
+                        back_populates="message",
+                        cascade="all, delete-orphan"
+                  )
+
+
+# ═════════════════════════════════════════════
+# MESSAGE READ — O'qilganlik belgisi (double tick)
+# ═════════════════════════════════════════════
+
+class MessageRead(Base):
+    """Qaysi foydalanuvchi qaysi xabarni o'qiganligi."""
+    __tablename__ = "message_reads"
+
+    id         : Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    message_id : Mapped[int]      = mapped_column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), index=True)
+    reader_id  : Mapped[int]      = mapped_column(BigInteger, nullable=False, index=True)
+    read_at    : Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("message_id", "reader_id", name="uq_message_read"),)
+
+    message : Mapped["Message"] = relationship(back_populates="reads")
+
+
+# ═════════════════════════════════════════════
+# CHAT PRESENCE — Online/Offline holat
+# ═════════════════════════════════════════════
+
+class ChatPresence(Base):
+    """Foydalanuvchining chatdagi oxirgi online vaqti."""
+    __tablename__ = "chat_presence"
+
+    user_id   : Mapped[int]            = mapped_column(BigInteger, primary_key=True)
+    chat_id   : Mapped[int]            = mapped_column(Integer, ForeignKey("chats.id", ondelete="CASCADE"), primary_key=True)
+    is_online : Mapped[bool]           = mapped_column(Boolean, default=False)
+    last_seen : Mapped[datetime]       = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 # ═════════════════════════════════════════════
