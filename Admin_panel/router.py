@@ -36,9 +36,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/system", tags=["Admin paneli"])
 
 
-# ════════════════════════════════════════════════════════════
-# DASHBOARD STATS
-# ════════════════════════════════════════════════════════════
+
 
 
 @router.get("/dashboard/stats", response_model=admin_schemas.AdminDashboardStats)

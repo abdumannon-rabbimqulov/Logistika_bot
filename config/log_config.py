@@ -1,4 +1,3 @@
-"""Uvicorn uchun development uslubidagi log format (vaqt + token yashirish)."""
 
 from __future__ import annotations
 
