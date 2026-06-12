@@ -1,11 +1,4 @@
-"""Admin paneli REST + WebSocket endpointlari.
 
-Hammasi `/system` prefiksi ostida (SPA `/admin/*` bilan aralashmasin); foydalanuvchi
-`role == ADMIN` yoki `id in ADMIN_IDS` bo'lishi kerak (Admin_panel.validation.is_admin).
-
-WebSocket (`/system/drivers/locations/stream`) Bearer JWT'ni query string
-`?token=...` orqali qabul qiladi.
-"""
 
 from __future__ import annotations
 
