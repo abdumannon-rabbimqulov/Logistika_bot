@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 import uuid
+import aiofiles
 from datetime import date
 from typing import List, Optional
 
@@ -403,7 +404,7 @@ async def upload_chat_file(
 
     # Faylni diskka yozish (chunked)
     size = 0
-    with open(dest_path, "wb") as out_f:
+    async with aiofiles.open(dest_path, "wb") as out_f:
         while True:
             chunk = await file.read(64 * 1024)  # 64 KB chunks
             if not chunk:
@@ -412,34 +413,33 @@ async def upload_chat_file(
             if size > MAX_BYTES:
                 os.unlink(dest_path)
                 raise HTTPException(413, "Fayl hajmi 50MB dan oshib ketdi")
-            out_f.write(chunk)
+            await out_f.write(chunk)
 
     file_url = f"{STATIC_PATH}/chat/{unique_name}"
 
     # Message + Attachment yaratish
     from ai.chat_ws import resolve_sender_type
-    async with async_session() as sess:
-        sender_type = await resolve_sender_type(sess, current_user.id)
-        msg = await crud.create_message(sess, schemas.MessageCreate(
-            chat_id=chat_id,
-            sender_id=current_user.id,
-            sender_type=sender_type,
-            message_type=ftype,
-            content=None,
-            status=schemas.MessageStatus.SENT,
-        ))
-        from ai.models import Attachment, AttachmentType
-        att = Attachment(
-            message_id=msg.id,
-            file_type=AttachmentType(ftype) if ftype in ("image", "video", "voice", "file") else AttachmentType.FILE,
-            file_url=file_url,
-            original_name=file.filename,
-            mime_type=file.content_type,
-            file_size=size,
-        )
-        sess.add(att)
-        await sess.commit()
-        await sess.refresh(msg)
+    sender_type = await resolve_sender_type(db, current_user.id)
+    msg = await crud.create_message(db, schemas.MessageCreate(
+        chat_id=chat_id,
+        sender_id=current_user.id,
+        sender_type=sender_type,
+        message_type=ftype,
+        content=None,
+        status=schemas.MessageStatus.SENT,
+    ))
+    from ai.models import Attachment, AttachmentType
+    att = Attachment(
+        message_id=msg.id,
+        file_type=AttachmentType(ftype) if ftype in ("image", "video", "voice", "file") else AttachmentType.FILE,
+        file_url=file_url,
+        original_name=file.filename,
+        mime_type=file.content_type,
+        file_size=size,
+    )
+    db.add(att)
+    await db.commit()
+    await db.refresh(msg)
 
     # WS broadcast
     msg_payload = schemas.MessageResponse.model_validate(msg).model_dump(mode="json")

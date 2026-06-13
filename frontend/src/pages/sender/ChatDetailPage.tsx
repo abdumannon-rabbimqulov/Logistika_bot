@@ -85,6 +85,13 @@ export const ChatDetailPage: React.FC = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
 
+  // Hold-to-record gesture state
+  const [holdMode, setHoldMode]         = useState(false);
+  const [slideOffset, setSlideOffset]   = useState(0);
+  const holdTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pointerStartX  = useRef(0);
+  const isHoldingRef   = useRef(false);
+
   const bottomRef   = useRef<HTMLDivElement>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
@@ -346,6 +353,52 @@ export const ChatDetailPage: React.FC = () => {
     ws.send(JSON.stringify({ type: "message_read", message_ids: [msgId] }));
   };
 
+  // ── Hold-to-record gesture handlers ────────────────────────────
+
+  const HOLD_DELAY = 500; // ms before hold-mode activates
+
+  const handleMicPointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    pointerStartX.current = e.clientX;
+    isHoldingRef.current = true;
+    setSlideOffset(0);
+
+    // Start a timer — if held for HOLD_DELAY, enter hold-mode
+    holdTimerRef.current = setTimeout(() => {
+      if (isHoldingRef.current) {
+        setHoldMode(true);
+        setIsRecordingVoice(true);
+      }
+    }, HOLD_DELAY);
+  };
+
+  const handleMicPointerMove = (e: React.PointerEvent) => {
+    if (!isHoldingRef.current || !holdMode) return;
+    const dx = e.clientX - pointerStartX.current;
+    setSlideOffset(Math.min(0, dx)); // only allow leftward drag
+  };
+
+  const handleMicPointerUp = async () => {
+    isHoldingRef.current = false;
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+
+    if (holdMode && isRecordingVoice) {
+      // Hold-mode release — VoiceRecorder's parent tells it to stop+send
+      // We dispatch a custom event that VoiceRecorder listens to
+      window.dispatchEvent(new CustomEvent("voice:hold-release"));
+      setHoldMode(false);
+      setSlideOffset(0);
+    } else if (!isRecordingVoice) {
+      // Short tap — toggle into tap-mode recording
+      setHoldMode(false);
+      setIsRecordingVoice(true);
+    }
+  };
+
   // ─────────────────────────────────────────────────────────────────
 
   const presenceLabel = peerOnline
@@ -538,7 +591,9 @@ export const ChatDetailPage: React.FC = () => {
           <VoiceRecorder 
             chatId={id} 
             onSend={handleVoiceSend} 
-            onCancel={() => setIsRecordingVoice(false)} 
+            onCancel={() => { setIsRecordingVoice(false); setHoldMode(false); setSlideOffset(0); }} 
+            holdMode={holdMode}
+            slideOffset={slideOffset}
           />
         ) : (
           <>
@@ -588,9 +643,15 @@ export const ChatDetailPage: React.FC = () => {
             ) : (
               <button
                 type="button"
-                className="tg-send-btn mic-btn"
+                className={`tg-send-btn mic-btn${isHoldingRef.current ? ' mic-holding' : ''}`}
                 disabled={!wsConnected}
-                onClick={() => setIsRecordingVoice(true)}
+                onPointerDown={handleMicPointerDown}
+                onPointerMove={handleMicPointerMove}
+                onPointerUp={handleMicPointerUp}
+                onPointerCancel={() => {
+                  isHoldingRef.current = false;
+                  if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+                }}
                 aria-label="Ovoz yozish"
               >
                 <Mic size={20} />

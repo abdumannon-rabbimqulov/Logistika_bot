@@ -5,7 +5,7 @@ from typing import Optional, List
 
 from sqlalchemy import (
     String, Text, Integer, Float, Boolean,
-    DateTime, Date, ForeignKey, Enum as SAEnum, JSON, BigInteger, UniqueConstraint, insert,
+    DateTime, Date, ForeignKey, Enum as SAEnum, JSON, BigInteger, UniqueConstraint, Index, insert,
 )
 from sqlalchemy.orm import (
      Mapped, mapped_column, relationship
@@ -181,6 +181,17 @@ class Message(Base):
 
     created_at : Mapped[datetime]           = mapped_column(DateTime(timezone=True), server_default=func.now())
     edited_at  : Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # ── Composite indexes — chat query performance ────────────────
+    __table_args__ = (
+        # Xabarlarni vaqt bo'yicha saralash (list_chat_messages)
+        Index("ix_messages_chat_created", "chat_id", "created_at"),
+        # Cursor-based pagination by ID (tezkor scroll)
+        Index("ix_messages_chat_id_desc", "chat_id", id.desc()),
+        # O'qilmagan xabarlar soni (count_unread)
+        Index("ix_messages_unread", "chat_id", "sender_id", "is_deleted", "is_read"),
+    )
+    # ──────────────────────────────────────────────────────────────
 
     # Relationships
     chat        : Mapped["Chat"]                = relationship(back_populates="messages")

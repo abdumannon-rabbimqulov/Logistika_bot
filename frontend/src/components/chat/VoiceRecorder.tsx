@@ -1,168 +1,229 @@
-import React, { useState, useRef, useEffect } from "react";
-import { Mic, Square, Trash2, Send } from "lucide-react";
+/**
+ * VoiceRecorder — Telegram-style inline recording UI
+ *
+ * Features:
+ *  • Animated waveform bars (canvas + CSS fallback)
+ *  • Slide-to-cancel indicator
+ *  • Duration display with pulse dot
+ *  • Proper lifecycle tied to useVoiceRecorder hook
+ */
+import React, { useRef, useEffect, useCallback } from "react";
+import { Trash2, Send, ChevronLeft } from "lucide-react";
+import { useVoiceRecorder } from "../../hooks/useVoiceRecorder";
 
 interface VoiceRecorderProps {
   chatId: number;
   onSend: (file: File) => void;
   onCancel: () => void;
+  /** If true, the component is in hold-to-record mode (auto-send on release) */
+  holdMode?: boolean;
+  /** Horizontal drag distance (px) from the mic button — for slide-to-cancel */
+  slideOffset?: number;
 }
 
-export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ chatId, onSend, onCancel }) => {
-  const [isRecording, setIsRecording] = useState(false);
-  const [duration, setDuration] = useState(0);
-  const [audioURL, setAudioURL] = useState<string | null>(null);
-  
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+/** How far left the user must drag (px) to trigger cancel */
+const CANCEL_THRESHOLD = 100;
+
+export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
+  chatId,
+  onSend,
+  onCancel,
+  holdMode = false,
+  slideOffset = 0,
+}) => {
+  const {
+    state,
+    duration,
+    error,
+    analyserNode,
+    startRecording,
+    stopRecording,
+    cancelRecording,
+  } = useVoiceRecorder();
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const animFrameRef = useRef<number | null>(null);
+  const didStartRef = useRef(false);
 
-  // Stop recording properly
-  const stopRecordingState = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-      mediaRecorderRef.current.stop();
+  /* ── Auto-start on mount ──────────────────────────────────── */
+  useEffect(() => {
+    if (!didStartRef.current) {
+      didStartRef.current = true;
+      startRecording().then((ok) => {
+        if (!ok) onCancel();
+      });
     }
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    
-    // Stop tracks to release microphone light
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-    }
-    setIsRecording(false);
-  };
+    return () => {
+      cancelRecording();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
+  /* ── Hold-release event (from parent gesture handler) ──── */
+  useEffect(() => {
+    if (!holdMode) return;
+    const onRelease = async () => {
+      const file = await stopRecording();
+      if (file) {
+        onSend(file);
+      } else {
+        onCancel();
+      }
+    };
+    window.addEventListener("voice:hold-release", onRelease);
+    return () => window.removeEventListener("voice:hold-release", onRelease);
+  }, [holdMode, stopRecording, onSend, onCancel]);
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const url = URL.createObjectURL(audioBlob);
-        setAudioURL(url);
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
-      setDuration(0);
-
-      timerRef.current = setInterval(() => {
-        setDuration(prev => prev + 1);
-      }, 1000);
-
-      // Setup Visualizer
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      audioContextRef.current = audioCtx;
-      const analyser = audioCtx.createAnalyser();
-      analyserRef.current = analyser;
-      analyser.fftSize = 256;
-      
-      const source = audioCtx.createMediaStreamSource(stream);
-      source.connect(analyser);
-
-      drawVisualizer();
-
-    } catch (err) {
-      console.error("Microphone access denied:", err);
-      alert("Mikrofonga ruxsat berilmadi.");
+  /* ── Error → cancel ───────────────────────────────────────── */
+  useEffect(() => {
+    if (error) {
+      alert(error);
       onCancel();
     }
-  };
+  }, [error, onCancel]);
 
-  const drawVisualizer = () => {
-    if (!canvasRef.current || !analyserRef.current) return;
+  /* ── Waveform visualizer ──────────────────────────────────── */
+  useEffect(() => {
+    if (!analyserNode || !canvasRef.current) return;
+
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const bufferLength = analyserRef.current.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
+    const bufLen = analyserNode.frequencyBinCount;
+    const dataArr = new Uint8Array(bufLen);
 
     const draw = () => {
-      if (!isRecording && !analyserRef.current) return;
-      animationFrameRef.current = requestAnimationFrame(draw);
-      
-      analyserRef.current!.getByteFrequencyData(dataArray);
+      animFrameRef.current = requestAnimationFrame(draw);
+      analyserNode.getByteFrequencyData(dataArr);
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "rgba(0, 0, 0, 0)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const barWidth = (canvas.width / bufferLength) * 2.5;
-      let barHeight;
-      let x = 0;
+      // Draw bar-style waveform
+      const barCount = 32;
+      const step = Math.floor(bufLen / barCount);
+      const barW = canvas.width / barCount - 1;
+      const midY = canvas.height / 2;
 
-      for (let i = 0; i < bufferLength; i++) {
-        barHeight = dataArray[i] / 2;
-        ctx.fillStyle = `rgb(14, 165, 233)`; // tg blue
-        ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
-        x += barWidth + 1;
+      for (let i = 0; i < barCount; i++) {
+        const v = dataArr[i * step] / 255;
+        const barH = Math.max(2, v * midY);
+
+        // Neon gradient: cyan → blue
+        const hue = 190 + (i / barCount) * 30;
+        ctx.fillStyle = `hsla(${hue}, 100%, 60%, 0.9)`;
+        ctx.fillRect(
+          i * (barW + 1),
+          midY - barH,
+          barW,
+          barH * 2
+        );
       }
     };
     draw();
-  };
 
-  const handleStopAndSend = () => {
-    stopRecordingState();
-    
-    // Allow a tiny delay for mediaRecorder.onstop to generate the blob
-    setTimeout(() => {
-      if (audioChunksRef.current.length > 0) {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const file = new File([audioBlob], `voice_${Date.now()}.webm`, { type: "audio/webm" });
-        onSend(file);
-      }
-    }, 100);
-  };
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    };
+  }, [analyserNode]);
 
-  const handleCancel = () => {
-    stopRecordingState();
-    onCancel();
-  };
+  /* ── Slide-to-cancel detection ────────────────────────────── */
+  const isCancelling = slideOffset < -CANCEL_THRESHOLD;
 
   useEffect(() => {
-    // Start recording automatically when component mounts
-    startRecording();
-    return () => stopRecordingState();
-  }, []);
+    if (isCancelling && state === "recording") {
+      cancelRecording();
+      onCancel();
+    }
+  }, [isCancelling, state, cancelRecording, onCancel]);
 
+  /* ── Actions ──────────────────────────────────────────────── */
+  const handleStopAndSend = useCallback(async () => {
+    const file = await stopRecording();
+    if (file) {
+      onSend(file);
+    } else {
+      onCancel();
+    }
+  }, [stopRecording, onSend, onCancel]);
+
+  const handleCancel = useCallback(() => {
+    cancelRecording();
+    onCancel();
+  }, [cancelRecording, onCancel]);
+
+  /* ── Format ───────────────────────────────────────────────── */
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60).toString().padStart(2, "0");
     const s = (secs % 60).toString().padStart(2, "0");
     return `${m}:${s}`;
   };
 
+  /* ── Render ───────────────────────────────────────────────── */
+  if (state === "requesting") {
+    return (
+      <div className="tg-voice-recorder">
+        <div className="tg-voice-recorder-inner tg-voice-requesting">
+          <div className="tg-voice-spinner" />
+          <span className="tg-voice-time">Mikrofon...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="tg-voice-recorder">
       <div className="tg-voice-recorder-inner">
+        {/* Pulse dot */}
         <div className="tg-voice-pulse-dot" />
+
+        {/* Duration */}
         <span className="tg-voice-time">{formatTime(duration)}</span>
-        
-        <canvas ref={canvasRef} className="tg-voice-canvas" width={100} height={30} />
-        
-        <button type="button" className="tg-voice-cancel-btn" onClick={handleCancel}>
-          <Trash2 size={18} />
-        </button>
-        
-        <button type="button" className="tg-voice-send-btn" onClick={handleStopAndSend}>
-          <Send size={18} />
-        </button>
+
+        {/* Waveform canvas */}
+        <canvas
+          ref={canvasRef}
+          className="tg-voice-canvas"
+          width={128}
+          height={32}
+        />
+
+        {/* Slide hint (only in hold mode) */}
+        {holdMode && (
+          <div
+            className="tg-voice-slide-hint"
+            style={{
+              opacity: Math.max(0, 1 - Math.abs(slideOffset) / CANCEL_THRESHOLD),
+            }}
+          >
+            <ChevronLeft size={14} />
+            <span>Bekor qilish</span>
+          </div>
+        )}
+
+        {/* Cancel button (tap mode only) */}
+        {!holdMode && (
+          <button
+            type="button"
+            className="tg-voice-cancel-btn"
+            onClick={handleCancel}
+            aria-label="Bekor qilish"
+          >
+            <Trash2 size={18} />
+          </button>
+        )}
+
+        {/* Send button (tap mode only) */}
+        {!holdMode && (
+          <button
+            type="button"
+            className="tg-voice-send-btn"
+            onClick={handleStopAndSend}
+            aria-label="Yuborish"
+          >
+            <Send size={18} />
+          </button>
+        )}
       </div>
     </div>
   );

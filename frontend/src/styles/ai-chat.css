@@ -940,44 +940,187 @@
   cursor: pointer; flex-shrink: 0;
 }
 
-/* Voice Recorder (in Input Bar) */
+/* ── Voice Recorder (in Input Bar) ─────────────────────────────── */
 .tg-voice-recorder {
-  flex: 1; display: flex; align-items: center;
+  flex: 1;
+  display: flex;
+  align-items: center;
 }
+
 .tg-voice-recorder-inner {
-  display: flex; align-items: center; gap: 12px;
-  background: rgba(255, 255, 255, 0.05); border-radius: 20px;
-  padding: 6px 12px; width: 100%; height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(14, 165, 233, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(14, 165, 233, 0.15);
+  border-radius: 20px;
+  padding: 6px 12px;
+  width: 100%;
+  height: 40px;
+  box-shadow:
+    0 0 20px rgba(14, 165, 233, 0.08),
+    inset 0 0 20px rgba(14, 165, 233, 0.03);
+  animation: tg-recorder-appear 0.2s ease-out;
 }
+
+@keyframes tg-recorder-appear {
+  from {
+    opacity: 0;
+    transform: scaleX(0.8);
+    transform-origin: right center;
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+.tg-voice-recorder-inner.tg-voice-requesting {
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-muted);
+}
+
+/* Pulse recording dot */
 .tg-voice-pulse-dot {
-  width: 8px; height: 8px; border-radius: 50%; background: #ef4444;
-  animation: tg-pulse 1.5s infinite; flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  flex-shrink: 0;
+  animation: tg-pulse 1.5s infinite;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
 }
+
 @keyframes tg-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-  70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7), 0 0 8px rgba(239, 68, 68, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(239, 68, 68, 0), 0 0 8px rgba(239, 68, 68, 0.3);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0), 0 0 8px rgba(239, 68, 68, 0.6);
+  }
 }
-.tg-voice-time { font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; }
+
+/* Duration text */
+.tg-voice-time {
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  min-width: 40px;
+}
+
+/* Waveform canvas */
 .tg-voice-canvas {
-  flex: 1; height: 24px; min-width: 60px;
+  flex: 1;
+  height: 28px;
+  min-width: 60px;
+  border-radius: 4px;
 }
+
+/* Slide-to-cancel hint */
+.tg-voice-slide-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  animation: tg-slide-hint-pulse 2s ease-in-out infinite;
+  user-select: none;
+  pointer-events: none;
+}
+
+.tg-voice-slide-hint svg {
+  animation: tg-slide-arrow 1.5s ease-in-out infinite;
+}
+
+@keyframes tg-slide-hint-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes tg-slide-arrow {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-4px); }
+}
+
+/* Cancel button */
 .tg-voice-cancel-btn {
-  background: none; border: none; color: #f87171;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer; padding: 4px; border-radius: 50%;
-}
-.tg-voice-cancel-btn:hover { background: rgba(239, 68, 68, 0.15); }
-.tg-voice-send-btn {
-  background: #0ea5e9; border: none; color: #fff;
-  width: 32px; height: 32px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
+  background: none;
+  border: none;
+  color: #f87171;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  transition: background 0.15s, transform 0.1s;
 }
+.tg-voice-cancel-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  transform: scale(1.1);
+}
+.tg-voice-cancel-btn:active {
+  transform: scale(0.95);
+}
+
+/* Send button (inside recorder) */
+.tg-voice-send-btn {
+  background: linear-gradient(135deg, #0e7fd0, #0ea5e9);
+  border: none;
+  color: #fff;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.15s;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+}
+.tg-voice-send-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.5);
+}
+.tg-voice-send-btn:active {
+  transform: scale(0.95);
+}
+
+/* Spinner for mic permission request */
+.tg-voice-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--text-muted);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: ai-spin 0.8s linear infinite;
+}
+
+/* Mic button states */
 .tg-send-btn.mic-btn {
   background: transparent;
   color: #0ea5e9;
+  transition: transform 0.1s, background 0.15s, box-shadow 0.2s;
+  touch-action: none; /* prevent scroll during hold */
+  user-select: none;
 }
+
 .tg-send-btn.mic-btn:hover {
   background: rgba(14, 165, 233, 0.1);
+}
+
+/* Holding animation — neon glow on mic button */
+.tg-send-btn.mic-btn:active,
+.tg-send-btn.mic-btn.mic-holding {
+  background: rgba(14, 165, 233, 0.15);
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.2), 0 0 16px rgba(14, 165, 233, 0.3);
+  transform: scale(1.15);
 }

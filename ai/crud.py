@@ -47,7 +47,17 @@ async def create_chat(db: AsyncSession, data: ChatCreate) -> Chat:
 
 async def get_chat(db: AsyncSession, pk: int) -> Optional[Chat]:
     """
+    ID bo'yicha chatni topadi (yengil — xabarlarsiz).
+    Kirish tekshiruvi va metadata uchun ishlatiladi.
+    """
+    result = await db.execute(select(Chat).where(Chat.id == pk))
+    return result.scalar_one_or_none()
+
+
+async def get_chat_with_messages(db: AsyncSession, pk: int) -> Optional[Chat]:
+    """
     ID bo'yicha chatni topadi va unga tegishli barcha xabarlar va biriktirilgan fayllarni yuklaydi.
+    Faqat haqiqatdan xabarlar kerak bo'lganda chaqiring.
     """
     result = await db.execute(
         select(Chat)
@@ -203,15 +213,17 @@ async def update_message_status(db: AsyncSession, pk: int, status: str) -> None:
 async def handle_message_reads(
     db: AsyncSession, chat_id: int, reader_id: int, message_ids: List[int]
 ) -> None:
-    """O'qilganlik belgilari qo'yadi va xabar holatini READ ga ko'taradi."""
-    for mid in message_ids:
-        # Dublikatlarni e'tiborsiz qoldiradi
-        await db.execute(
-            insert(MessageRead)
-            .values(message_id=mid, reader_id=reader_id)
-            .on_conflict_do_nothing()
-        )
-    # Faqat boshqa sender xabarlarini READ qilish
+    """O'qilganlik belgilari qo'yadi va xabar holatini READ ga ko'taradi (bulk)."""
+    if not message_ids:
+        return
+
+    # Bir martada barcha read belgilarni qo'yish (dublikatlar e'tiborsiz)
+    values = [{"message_id": mid, "reader_id": reader_id} for mid in message_ids]
+    await db.execute(
+        insert(MessageRead).values(values).on_conflict_do_nothing()
+    )
+
+    # Faqat boshqa sender xabarlarini READ qilish (bitta UPDATE)
     await db.execute(
         update(Message)
         .where(
