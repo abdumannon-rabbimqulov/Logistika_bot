@@ -86,10 +86,9 @@ class WaypointType(enum.Enum):
 
 class WaypointStatus(enum.Enum):
     PENDING   = "PENDING"
-    ARRIVED   = "ARRIVED"    # Haydovchi yetib keldi
-    COMPLETED = "COMPLETED"  # Ish tugadi (yuk olindi yoki tushirildi)
-    SKIPPED   = "SKIPPED"    # O'tkazib yuborildi
-
+    ARRIVED   = "ARRIVED"
+    COMPLETED = "COMPLETED"
+    SKIPPED   = "SKIPPED"
 
 
 
