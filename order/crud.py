@@ -37,7 +37,6 @@ def sort_order_waypoints(order: Order) -> Order:
 
 
 def _naive_datetime_fields(data: dict) -> dict:
-    """TIMESTAMP WITHOUT TIME ZONE ustunlariga faqat naive datetime yuborish."""
     result = {}
     for key, value in data.items():
         if key in ("created_at", "updated_at"):

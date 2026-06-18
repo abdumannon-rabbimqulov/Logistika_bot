@@ -121,7 +121,7 @@ async def list_chat_messages(
     """Chat xabarlarini vaqt bo'yicha (eskidan yangiga) qaytaradi."""
     stmt = (
         select(Message)
-        .options(selectinload(Message.attachments))
+        .options(selectinload(Message.attachments), selectinload(Message.reply_to))
         .where(Message.chat_id == chat_id)
         .order_by(Message.created_at.desc())
         .limit(min(limit, 100))
@@ -183,7 +183,9 @@ async def create_message(db: AsyncSession, data: MessageCreate) -> Message:
 
 async def get_message(db: AsyncSession, pk: int) -> Optional[Message]:
     result = await db.execute(
-        select(Message).options(selectinload(Message.attachments)).where(Message.id == pk)
+        select(Message)
+        .options(selectinload(Message.attachments), selectinload(Message.reply_to))
+        .where(Message.id == pk)
     )
     return result.scalar_one_or_none()
 
