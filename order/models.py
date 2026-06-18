@@ -80,12 +80,12 @@ class OrderStatus(str, enum.Enum):
 
 class WaypointType(enum.Enum):
     PICKUP   = "PICKUP"
-    DELIVERY = "DELIVERY"  # Yuk tushiriladigan joy
-    TRANSIT  = "TRANSIT"   # Oraliq to'xtash (dam olish, tekshiruv va h.k.)
+    DELIVERY = "DELIVERY"
+    TRANSIT  = "TRANSIT"
 
 
 class WaypointStatus(enum.Enum):
-    PENDING   = "PENDING"    # Kutilmoqda
+    PENDING   = "PENDING"
     ARRIVED   = "ARRIVED"    # Haydovchi yetib keldi
     COMPLETED = "COMPLETED"  # Ish tugadi (yuk olindi yoki tushirildi)
     SKIPPED   = "SKIPPED"    # O'tkazib yuborildi
