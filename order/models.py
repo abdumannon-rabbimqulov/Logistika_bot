@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 
 
 class Region(Base):
-    """O'zbekiston viloyati / shahar (MIMAXUZ + dirixtt GeoJSON)."""
 
     __tablename__ = "regions"
 
@@ -46,7 +45,6 @@ class Region(Base):
 
 
 class District(Base):
-    """Viloyat ichidagi tuman / shahar (region_id FK)."""
 
     __tablename__ = "districts"
 
@@ -71,7 +69,6 @@ class District(Base):
 
 
 class OrderStatus(str, enum.Enum):
-    """PostgreSQL orderstatus enum — qiymatlar katta harfda saqlanadi."""
 
     PENDING = "PENDING"
     ACCEPTED = "ACCEPTED"
@@ -82,7 +79,7 @@ class OrderStatus(str, enum.Enum):
 
 
 class WaypointType(enum.Enum):
-    PICKUP   = "PICKUP"    # Yuk olinadigan joy
+    PICKUP   = "PICKUP"
     DELIVERY = "DELIVERY"  # Yuk tushiriladigan joy
     TRANSIT  = "TRANSIT"   # Oraliq to'xtash (dam olish, tekshiruv va h.k.)
 
