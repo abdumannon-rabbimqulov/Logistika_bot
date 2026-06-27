@@ -49,6 +49,8 @@ def _naive_datetime_fields(data: dict) -> dict:
 
 
 async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int) -> Order:
+    from utils.geo import calculate_distance_km
+    
     waypoints_data = data.waypoints
     order_dict = _naive_datetime_fields(data.model_dump())
     del order_dict["waypoints"]
@@ -57,12 +59,39 @@ async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int)
     db.add(obj)
     await db.flush()
 
-    for wp_data in waypoints_data:
+    total_dist = 0.0
+    prev_lat = None
+    prev_lon = None
+
+    # Sort waypoints by sequence to ensure correct distance calculation
+    sorted_waypoints = sorted(waypoints_data, key=lambda x: x.sequence)
+
+    for wp_data in sorted_waypoints:
+        wp_dict = _naive_datetime_fields(wp_data.model_dump())
+        
+        # calculate distance from prev
+        lat = wp_dict.get("latitude")
+        lon = wp_dict.get("longitude")
+        
+        if prev_lat is not None and prev_lon is not None and lat is not None and lon is not None:
+            dist = calculate_distance_km(prev_lat, prev_lon, lat, lon)
+            if dist is not None:
+                wp_dict["distance_from_prev_km"] = round(dist, 2)
+                total_dist += dist
+
         wp = OrderWaypoint(
             order_id=obj.id,
-            **_naive_datetime_fields(wp_data.model_dump()),
+            **wp_dict,
         )
         db.add(wp)
+        
+        if lat is not None and lon is not None:
+            prev_lat = lat
+            prev_lon = lon
+
+    # Update total_distance_km
+    if total_dist > 0:
+        obj.total_distance_km = round(total_dist, 2)
 
     await db.commit()
     await db.refresh(obj)
