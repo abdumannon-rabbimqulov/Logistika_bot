@@ -196,23 +196,29 @@ class Order(Base):
         return f"<Order(id={_id}, status={_status})>"
 
 
+from sqlalchemy import Integer, ForeignKey, DateTime, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from geoalchemy2 import Geometry
+from datetime import datetime
 
 
+class OrderRoutePostGIS(Base):
+    __tablename__ = "order_route_postgis"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    order_id: Mapped[int] = mapped_column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False,
+                                          unique=True)
 
 
-class OrderTrack(Base):
-    __tablename__ = "order_tracks"
-
-    id          : Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
-    order_id    : Mapped[int]      = mapped_column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
-    latitude    : Mapped[float]    = mapped_column(Numeric(9, 6), nullable=False)
-    longitude   : Mapped[float]    = mapped_column(Numeric(9, 6), nullable=False)
-    recorded_at : Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), nullable=False
+    geom_route: Mapped[Geometry] = mapped_column(
+        Geometry(geometry_type="LINESTRING", srid=4326), nullable=False
     )
 
-    # Order bilan teskari aloqa
-    order       = relationship("Order", back_populates="tracks")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+
+
 
 class OrderWaypoint(Base):
     __tablename__ = "order_waypoints"
