@@ -214,161 +214,26 @@ class OrderTrack(Base):
     # Order bilan teskari aloqa
     order       = relationship("Order", back_populates="tracks")
 
-
 class OrderWaypoint(Base):
     __tablename__ = "order_waypoints"
 
-    id       : Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    order_id : Mapped[int] = mapped_column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    order_id: Mapped[int] = mapped_column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
 
-    sequence : Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    # Nuqtaning tartibi: 1 - yukni olish joyi, 2 - topshirish joyi (agar 3-4 bo'lsa, yo'l-yo'lakay tashlab o'tiladigan joylar)
+    sequence: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
 
-    waypoint_type : Mapped[WaypointType] = mapped_column(
-        CaseInsensitiveEnum(WaypointType), nullable=False
-    )
+    # Manzil matni va Yandex xaritasidan keladigan koordinatalar
+    address: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    latitude: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
 
-    address     : Mapped[str | None] = mapped_column(String(300), nullable=True)
-    landmark    : Mapped[str | None] = mapped_column(String(200), nullable=True)  # Mo'ljal
+    # O'sha nuqtada yukni kim kutib oladi / kim topshiradi? (Kuryer/Haydovchi telefon qilishi uchun)
+    contact_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    contact_phone: Mapped[str | None] = mapped_column(String(20),  nullable=True)
 
-    latitude    : Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
-    longitude   : Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
-    distance_from_prev_km : Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
-
-
-    scheduled_arrival   : Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # Rejalashtirilgan
-    actual_arrival      : Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # Haqiqiy
-    scheduled_departure : Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    actual_departure    : Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-    stop_duration_min : Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
-
-    contact_name  : Mapped[str | None] = mapped_column(String(150), nullable=True)
-    contact_phone : Mapped[str | None] = mapped_column(String(20),  nullable=True)
-
-    note   : Mapped[str | None] = mapped_column(Text, nullable=True)
-    status : Mapped[WaypointStatus] = mapped_column(
-        CaseInsensitiveEnum(WaypointStatus), default=WaypointStatus.PENDING, nullable=False
-    )
-
-    created_at : Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), nullable=False
-    )
-    updated_at : Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
-    )
-
-    order : Mapped["Order"] = relationship("Order", back_populates="waypoints")
+    order: Mapped["Order"] = relationship("Order", back_populates="waypoints")
 
 
-    @property
-    def is_first(self) -> bool:
-        return self.sequence == 1
-
-    @property
-    def delay_minutes(self) -> int | None:
-        """Kechikish daqiqalarda (musbat = kech, manfiy = erta)"""
-        if self.scheduled_arrival and self.actual_arrival:
-            delta = self.actual_arrival - self.scheduled_arrival
-            return int(delta.total_seconds() / 60)
-        return None
-
-    def __repr__(self) -> str:
-        return (
-            f"<Waypoint(order={self.order_id}, seq={self.sequence}, "
-            f"address={self.address} type={self.waypoint_type.value}, status={self.status.value})>"
-        )
-
-
-
-
-
-
-
-class OfferStatus(enum.Enum):
-    PENDING   = "pending"    # Haydovchi taklif berdi, mijoz ko'rmagan
-    SEEN      = "seen"       # Mijoz ko'rdi, hali qaror qilmagan
-    ACCEPTED  = "accepted"   # Mijoz qabul qildi → order shu haydovchiga beriladi
-    REJECTED  = "rejected"   # Mijoz rad etdi
-    CANCELLED = "cancelled"  # Haydovchi o'zi qaytarib oldi
-    EXPIRED   = "expired"    # Muddati o'tib ketdi (cron job belgilaydi)
-    OUTBID    = "outbid"     # Boshqa taklif qabul qilindi (avtomatik)
-
-
-class OrderOffer(Base):
-    __tablename__ = "order_offers"
-
-    id        : Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    order_id  : Mapped[int] = mapped_column(Integer, ForeignKey("orders.id"),   nullable=False, index=True)
-    driver_id : Mapped[int] = mapped_column(Integer, ForeignKey("drivers.id"),  nullable=False, index=True)
-
-    offered_price    : Mapped[float]          = mapped_column(Numeric(12, 2), nullable=False)
-    currency         : Mapped[str]            = mapped_column(String(10),     default="UZS")
-
-    estimated_pickup_time    : Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-    estimated_delivery_time  : Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-    expires_at : Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-
-    distance_to_pickup_km : Mapped[float | None] = mapped_column(Numeric(7, 2), nullable=True)
-
-    comment : Mapped[str | None] = mapped_column(String(500), nullable=True)
-
-
-    is_seen       : Mapped[bool]          = mapped_column(Boolean, default=False)
-    seen_at       : Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
-
-    status : Mapped[OfferStatus] = mapped_column(
-        CaseInsensitiveEnum(OfferStatus), default=OfferStatus.PENDING, nullable=False, index=True
-    )
-
-    status_reason : Mapped[str | None] = mapped_column(String(300), nullable=True)
-
-    created_at  : Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), nullable=False
-    )
-    updated_at  : Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
-    )
-    accepted_at : Mapped[datetime | None]   = mapped_column(DateTime, nullable=True)
-    cancelled_at: Mapped[datetime | None]   = mapped_column(DateTime, nullable=True)
-
-    order  : Mapped["Order"]  = relationship("Order",  back_populates="offers")
-    driver : Mapped["Driver"] = relationship("Driver", back_populates="offers")
-
-
-    @property
-    def is_active(self) -> bool:
-        if self.expires_at and datetime.now(timezone.utc) > self.expires_at:
-            return False
-        return True
-
-
-
-    def mark_seen(self) -> None:
-        self.is_seen = True
-        self.seen_at = datetime.now(timezone.utc)
-        if self.status == OfferStatus.PENDING:
-            self.status = OfferStatus.SEEN
-
-    def accept(self) -> None:
-        self.status = OfferStatus.ACCEPTED
-        self.accepted_at = datetime.now(timezone.utc)
-
-    def reject(self, reason: str | None = None) -> None:
-        self.status = OfferStatus.REJECTED
-        self.status_reason = reason
-
-    def cancel(self, reason: str | None = None) -> None:
-        self.status = OfferStatus.CANCELLED
-        self.cancelled_at = datetime.now(timezone.utc)
-        self.status_reason = reason
-
-    def __repr__(self) -> str:
-        return (
-            f"<OrderOffer(id={self.id}, order={self.order_id}, "
-            f"driver={self.driver_id}, price={self.offered_price}, "
-            f"status={self.status.value})>"
-        )
