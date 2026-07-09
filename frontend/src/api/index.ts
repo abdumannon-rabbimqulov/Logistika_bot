@@ -12,7 +12,7 @@ const getBaseUrl = (): string => {
   if (savedUrl) return normalizeApiBaseUrl(savedUrl);
 
   if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-    return "http://logistic.org.uz:8000/api";
+    return "http://localhost:8000/api";
   }
   return `${window.location.origin}/api`;
 };
