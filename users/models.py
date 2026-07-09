@@ -20,7 +20,7 @@ from sqlalchemy import text
 
 from sqlalchemy import func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from ai.models import Chat,Rating,AICommand
@@ -44,6 +44,7 @@ class User(Base):
     is_active:  Mapped[bool] = mapped_column(default=True)
     language:   Mapped[str]  = mapped_column(String(10), default="uz")
     is_banned:  Mapped[bool] = mapped_column(default=False)
+    banned_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), default=None)
     role: Mapped[UserRole] = mapped_column(
         Enum(
             UserRole,
