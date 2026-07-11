@@ -22,8 +22,6 @@ from sqlalchemy import func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING, Optional
 
-if TYPE_CHECKING:
-    from ai.models import Chat,Rating,AICommand
 
 class UserRole(str, enum.Enum):
     ADMIN  = "admin"
@@ -67,14 +65,7 @@ class User(Base):
     )
 
     driver = relationship("Driver", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    chats            : Mapped[list["Chat"]]      = relationship(back_populates="user" )
-    ratings_given: Mapped[list["Rating"]] = relationship(
-        foreign_keys="[Rating.rated_by_user]",
-        back_populates="rater_user")
-    ratings_received: Mapped[list["Rating"]] = relationship(
-        foreign_keys="[Rating.target_user]",
-        back_populates="target_user_obj")
-    ai_commands: Mapped[list["AICommand"]] = relationship(back_populates="user")
+
     tariff_payments: Mapped[list["UserTariffPayment"]] = relationship(
         back_populates="user",
         foreign_keys="UserTariffPayment.user_id",
