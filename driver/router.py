@@ -1,7 +1,6 @@
 import logging
 import os
 import shutil
-import time
 import uuid
 from typing import List, Optional
 
@@ -17,7 +16,6 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from Admin_panel.validation import is_admin
@@ -27,7 +25,6 @@ from driver.models import Driver
 from driver.profile import build_driver_profile
 from order import crud as order_crud
 from order import schemas as order_schemas
-from order.models import Order, OrderStatus, OrderTrack
 from services import live_location
 from users import crud as users_crud
 from users.auth import get_current_user, verify_token
@@ -222,35 +219,6 @@ async def list_available_orders_for_driver(
     )
 
 
-async def _save_order_track_if_needed(
-    db: AsyncSession, driver_id: int, lat: float, lon: float
-) -> None:
-    """IN_PROGRESS buyurtma bo'lsa har 10 daqiqada OrderTrack."""
-    now = time.time()
-    last = LAST_DB_WRITE.get(driver_id, 0)
-    if now - last < ORDER_TRACK_INTERVAL_SEC:
-        return
-
-    result = await db.execute(
-        select(Order).where(
-            Order.driver_id == driver_id,
-            Order.status == OrderStatus.IN_PROGRESS,
-        )
-    )
-    active_order = result.scalar_one_or_none()
-    if not active_order:
-        return
-
-    db.add(
-        OrderTrack(
-            order_id=active_order.id,
-            latitude=lat,
-            longitude=lon,
-        )
-    )
-    await db.commit()
-    LAST_DB_WRITE[driver_id] = now
-    logger.info("OrderTrack #%s driver=%s", active_order.id, driver_id)
 
 
 async def _resolve_driver_ws_session(
@@ -322,7 +290,6 @@ async def websocket_driver_location(
                     truck_type_id=driver.truck_type_id,
                     live_period=1800,
                 )
-                await _save_order_track_if_needed(db, driver_id, lat, lon)
                 await websocket.send_json({"status": "acknowledged"})
 
     except WebSocketDisconnect:
@@ -342,83 +309,3 @@ async def websocket_driver_location(
 
 
 
-@router.post("/announcements", response_model=schemas.DriverAnnouncementResponse, status_code=status.HTTP_201_CREATED, summary="Safar e'loni berish")
-async def create_announcement(
-    data: schemas.DriverAnnouncementCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    driver = await crud.get_driver(db, data.driver_id)
-    if not driver or driver.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    
-    return await crud.create_announcement(db, data)
-
-@router.get("/announcements", response_model=List[schemas.DriverAnnouncementResponse], summary="E'lonlar ro'yxati")
-async def list_announcements(
-    driver_id: Optional[int] = None,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    return await crud.get_all_announcements(db, driver_id)
-
-@router.get("/announcements/{pk}", response_model=schemas.DriverAnnouncementResponse, summary="E'lon tafsilotlari")
-async def get_announcement(
-    pk: int, 
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    obj = await crud.get_announcement(db, pk)
-    if not obj:
-        raise HTTPException(status_code=404, detail="Announcement not found")
-    return obj
-
-
-@router.post("/announcements/{announcement_id}/offers", response_model=schemas.AnnouncementOfferResponse, status_code=status.HTTP_201_CREATED, summary="E'longa taklif berish")
-async def make_offer_on_announcement(
-    announcement_id: int,
-    data: schemas.AnnouncementOfferBase,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    offer_data = schemas.AnnouncementOfferCreate(
-        announcement_id=announcement_id,
-        customer_id=current_user.id,
-        **data.model_dump()
-    )
-    return await crud.create_announcement_offer(db, offer_data)
-
-@router.get("/announcements/{announcement_id}/offers", response_model=List[schemas.AnnouncementOfferResponse], summary="E'longa kelgan takliflar")
-async def list_offers_on_announcement(
-    announcement_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    announcement = await crud.get_announcement(db, announcement_id)
-    if not announcement:
-        raise HTTPException(status_code=404, detail="E'lon topilmadi")
-    
-    driver = await crud.get_driver_by_user_id(db, current_user.id)
-    if not driver or announcement.driver_id != driver.id:
-        raise HTTPException(status_code=403, detail="Sizga ushbu e'lon takliflarini ko'rish ruxsat etilmagan")
-
-    return await crud.get_announcement_offers(db, announcement_id)
-
-@router.patch("/offers/{pk}", response_model=schemas.AnnouncementOfferResponse, summary="Taklifni yangilash")
-async def update_offer(
-    pk: int,
-    data: schemas.AnnouncementOfferUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    offer = await crud.get_announcement_offer(db, pk)
-    if not offer:
-        raise HTTPException(status_code=404, detail="Taklif topilmadi")
-    
-    announcement = await crud.get_announcement(db, offer.announcement_id)
-    driver = await crud.get_driver_by_user_id(db, current_user.id)
-    
-    if not driver or announcement.driver_id != driver.id:
-          raise HTTPException(status_code=403, detail="Ruxsat berilmagan")
-
-    return await crud.update_announcement_offer(db, pk, data)

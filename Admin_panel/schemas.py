@@ -85,10 +85,6 @@ class AdminDashboardStats(BaseModel):
     orders_total: int
     orders_today: int
     orders_by_status: Dict[str, int]
-    offers_today: int
-    ai_requests_today: int
-    ai_input_tokens_today: int
-    ai_output_tokens_today: int
     orders_last_7_days: List[OrdersByDay]
 
 

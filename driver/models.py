@@ -11,20 +11,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from config.config import Base
 from utils.db_types import CaseInsensitiveEnum
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from ai.models import Chat,Rating
-    from order.models import OrderOffer
-
-class AnnouncementOfferStatus(enum.Enum):
-    PENDING   = "pending"
-    SEEN      = "seen"
-    ACCEPTED  = "accepted"
-    REJECTED  = "rejected"
-    CANCELLED = "cancelled"
-    EXPIRED   = "expired"
-    OUTBID    = "outbid"
 
 
 class AnnouncementWaypointType(enum.Enum):
@@ -115,16 +101,7 @@ class Driver(Base):
     user           = relationship("User", back_populates="driver")
     truck_type_obj : Mapped["TruckType"]              = relationship("TruckType", back_populates="drivers")
     announcements  : Mapped[list["DriverAnnouncement"]] = relationship("DriverAnnouncement", back_populates="driver")
-    offers         : Mapped[list["OrderOffer"]]        = relationship("OrderOffer",      back_populates="driver")
 
-    # AI
-    chats            : Mapped[list["Chat"]]   = relationship(back_populates="driver", lazy="select")
-    ratings_given    : Mapped[list["Rating"]] = relationship(
-                            foreign_keys="[Rating.rated_by_driver]",
-                            back_populates="rater_driver",      lazy="select")
-    ratings_received : Mapped[list["Rating"]] = relationship(
-                            foreign_keys="[Rating.target_driver]",
-                            back_populates="target_driver_obj", lazy="select")
 
 
     @property
@@ -199,7 +176,6 @@ class DriverAnnouncement(Base):
                         order_by="AnnouncementWaypoint.sequence",
                         cascade="all, delete-orphan",
                     )
-    offers     : Mapped[list["AnnouncementOffer"]]     = relationship("AnnouncementOffer", back_populates="announcement")
 
 
     @property
@@ -274,85 +250,3 @@ class AnnouncementWaypoint(Base):
 
 
 
-class AnnouncementOffer(Base):
-    __tablename__ = "announcement_offers"
-
-    id              : Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    announcement_id : Mapped[int] = mapped_column(Integer, ForeignKey("driver_announcements.id"), nullable=False, index=True)
-    customer_id     : Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
-
-    cargo_name        : Mapped[str]        = mapped_column(String(200),   nullable=False)
-    cargo_description : Mapped[str|None]   = mapped_column(String(500),   nullable=True)
-    cargo_weight      : Mapped[float|None] = mapped_column(Numeric(6, 2), nullable=True)   # tonna
-    cargo_volume      : Mapped[float|None] = mapped_column(Numeric(6, 2), nullable=True)   # m³
-
-    pickup_city   : Mapped[str|None] = mapped_column(String(100), nullable=True)
-    delivery_city : Mapped[str|None] = mapped_column(String(100), nullable=True)
-
-    offered_price   : Mapped[float]       = mapped_column(Numeric(12, 2), nullable=False)
-    currency        : Mapped[str]         = mapped_column(String(10),     default="UZS")
-    counter_price   : Mapped[float|None]  = mapped_column(Numeric(12, 2), nullable=True)
-    counter_comment : Mapped[str|None]    = mapped_column(String(500),    nullable=True)
-    counter_at      : Mapped[datetime|None] = mapped_column(DateTime,     nullable=True)
-
-    comment : Mapped[str|None] = mapped_column(String(500), nullable=True)
-
-    is_seen : Mapped[bool]          = mapped_column(Boolean,  default=False)
-    seen_at : Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
-
-    expires_at : Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
-
-    status : Mapped[AnnouncementOfferStatus] = mapped_column(
-        CaseInsensitiveEnum(AnnouncementOfferStatus),
-        default=AnnouncementOfferStatus.PENDING,
-        nullable=False,
-        index=True,
-    )
-    status_reason : Mapped[str|None] = mapped_column(String(300), nullable=True)
-
-    created_at   : Mapped[datetime]        = mapped_column(DateTime, default=func.now())
-    updated_at   : Mapped[datetime]        = mapped_column(DateTime, default=func.now(), onupdate=func.now())
-    accepted_at  : Mapped[datetime|None]   = mapped_column(DateTime, nullable=True)
-    cancelled_at : Mapped[datetime|None]   = mapped_column(DateTime, nullable=True)
-
-    announcement : Mapped["DriverAnnouncement"] = relationship("DriverAnnouncement", back_populates="offers")
-    customer                                    = relationship("User")
-
-
-    @property
-    def final_price(self) -> float:
-        return float(self.counter_price or self.offered_price)
-
-    @property
-    def is_active(self) -> bool:
-        if self.status not in (AnnouncementOfferStatus.PENDING, AnnouncementOfferStatus.SEEN):
-            return False
-        if self.expires_at and datetime.now(timezone.utc) > self.expires_at:
-            return False
-        return True
-
-    def mark_seen(self) -> None:
-        self.is_seen = True
-        self.seen_at = datetime.now(timezone.utc)
-        if self.status == AnnouncementOfferStatus.PENDING:
-            self.status = AnnouncementOfferStatus.SEEN
-
-    def accept(self) -> None:
-        self.status = AnnouncementOfferStatus.ACCEPTED
-        self.accepted_at = datetime.now(timezone.utc)
-
-    def reject(self, reason: str | None = None) -> None:
-        self.status = AnnouncementOfferStatus.REJECTED
-        self.status_reason = reason
-
-    def cancel(self, reason: str | None = None) -> None:
-        self.status = AnnouncementOfferStatus.CANCELLED
-        self.cancelled_at = datetime.now(timezone.utc)
-        self.status_reason = reason
-
-    def __repr__(self) -> str:
-        return (
-            f"<AnnOffer(id={self.id}, ann={self.announcement_id}, "
-            f"customer={self.customer_id}, price={self.offered_price}, "
-            f"status={self.status.value})>"
-        )

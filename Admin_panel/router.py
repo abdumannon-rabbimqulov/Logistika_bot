@@ -23,7 +23,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from Admin_panel import crud as admin_crud
 from Admin_panel import schemas as admin_schemas
 from Admin_panel.validation import is_admin
-from ai.models import AICommandType, AICommandStatus
 from config.config import ADMIN_IDS, async_session, get_db
 from order import crud as order_crud
 from order import schemas as order_schemas
@@ -184,55 +183,7 @@ async def admin_delete_order(
     await order_crud.delete_order(db, order_id)
 
 
-# ════════════════════════════════════════════════════════════
-# AI COMMANDS LOG
-# ════════════════════════════════════════════════════════════
 
-
-@router.get("/ai/commands", response_model=admin_schemas.AICommandList)
-async def admin_list_ai_commands(
-    response: Response,
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(is_admin),
-    user_id: Optional[int] = None,
-    status_filter: Optional[AICommandStatus] = Query(None, alias="status"),
-    command_type: Optional[AICommandType] = None,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
-):
-    rows, total = await admin_crud.list_ai_commands(
-        db,
-        user_id=user_id,
-        status=status_filter,
-        command_type=command_type,
-        skip=skip,
-        limit=limit,
-    )
-    response.headers["X-Total-Count"] = str(total)
-
-    items: List[admin_schemas.AICommandRead] = []
-    for r in rows:
-        items.append(
-            admin_schemas.AICommandRead(
-                id=r.id,
-                user_id=r.user_id,
-                message_id=r.message_id,
-                command_type=(r.command_type.value if hasattr(r.command_type, "value") else str(r.command_type)),
-                raw_input=r.raw_input,
-                parameters=r.parameters,
-                status=(r.status.value if hasattr(r.status, "value") else str(r.status)),
-                result=r.result,
-                error_msg=r.error_msg,
-                created_at=r.created_at,
-                executed_at=r.executed_at,
-            )
-        )
-    return admin_schemas.AICommandList(total=total, items=items)
-
-
-# ════════════════════════════════════════════════════════════
-# DRIVER LIVE LOCATIONS
-# ════════════════════════════════════════════════════════════
 
 
 @router.get("/drivers/locations", response_model=List[admin_schemas.DriverLocationItem])

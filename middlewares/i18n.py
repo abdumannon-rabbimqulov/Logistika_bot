@@ -2,7 +2,7 @@ from typing import Any, Awaitable, Callable, Dict
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, User
 import database as db
-from locales import locales
+import locales
 
 class I18nMiddleware(BaseMiddleware):
     async def __call__(

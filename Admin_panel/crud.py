@@ -1,14 +1,13 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from typing import List, Optional, Tuple
 
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ai.models import AICommand, AIUsage
 from driver.models import Driver
 from order.models import Order
 from order.crud import parse_order_status
@@ -196,18 +195,6 @@ async def dashboard_stats(db: AsyncSession) -> AdminDashboardStats:
         (s.value if hasattr(s, "value") else str(s)): int(c) for s, c in by_status_rows
     }
 
-    ai_today_row = (
-        await db.execute(
-            select(
-                func.coalesce(func.sum(AIUsage.requests), 0),
-                func.coalesce(func.sum(AIUsage.input_tokens), 0),
-                func.coalesce(func.sum(AIUsage.output_tokens), 0),
-            ).where(AIUsage.usage_date == today)
-        )
-    ).one()
-    ai_requests_today = int(ai_today_row[0])
-    ai_input_tokens_today = int(ai_today_row[1])
-    ai_output_tokens_today = int(ai_today_row[2])
 
     by_day_rows = (
         await db.execute(
@@ -235,42 +222,5 @@ async def dashboard_stats(db: AsyncSession) -> AdminDashboardStats:
         orders_total=int(orders_total),
         orders_today=int(orders_today),
         orders_by_status=orders_by_status,
-        ai_requests_today=ai_requests_today,
-        ai_input_tokens_today=ai_input_tokens_today,
-        ai_output_tokens_today=ai_output_tokens_today,
         orders_last_7_days=last_7,
     )
-
-
-# ════════════════════════════════════════════════════════════
-# AI COMMANDS LOG
-# ════════════════════════════════════════════════════════════
-
-
-async def list_ai_commands(
-    db: AsyncSession,
-    *,
-    user_id: Optional[int] = None,
-    status: Optional[str] = None,
-    command_type: Optional[str] = None,
-    skip: int = 0,
-    limit: int = 50,
-) -> Tuple[List[AICommand], int]:
-    base = select(AICommand)
-    if user_id is not None:
-        base = base.where(AICommand.user_id == user_id)
-    if status:
-        base = base.where(AICommand.status == status)
-    if command_type:
-        base = base.where(AICommand.command_type == command_type)
-
-    total_stmt = select(func.count()).select_from(base.subquery())
-    total = (await db.execute(total_stmt)).scalar_one()
-
-    stmt = (
-        base.order_by(desc(AICommand.created_at))
-        .offset(max(skip, 0))
-        .limit(min(max(limit, 1), 200))
-    )
-    rows = (await db.execute(stmt)).scalars().all()
-    return list(rows), int(total)

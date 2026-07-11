@@ -11,7 +11,6 @@ from config.config import (
 from middlewares.error_handler import setup_error_handlers
 import driver.models
 import order.models
-import ai.models
 import users.models
 
 from sqlalchemy.orm import configure_mappers
@@ -20,14 +19,12 @@ configure_mappers()
 from driver.router import router as driver_router
 from order.router import router as order_router
 from order.geo_router import router as geo_router
-from ai.router import router as ai_router
 from users.router import router as auth_router
 from users.tariff_router import router as tariff_admin_router
 from Admin_panel.router import router as admin_router
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import os
 
 _docs_prefix = API_PUBLIC_PREFIX or ""
 app = FastAPI(
@@ -81,7 +78,6 @@ def _register_api_routers(
     target.include_router(driver_router, **kwargs)
     target.include_router(order_router, **kwargs)
     target.include_router(geo_router, **kwargs)
-    target.include_router(ai_router, **kwargs)
     auth_prefix = f"{prefix}/auth".replace("//", "/")
     target.include_router(
         auth_router,
