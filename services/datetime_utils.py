@@ -1,4 +1,3 @@
-"""UTC datetime yordamchilari — DB DateTime ustunlari naive UTC."""
 
 from datetime import datetime, timezone
 

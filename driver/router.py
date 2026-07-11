@@ -3,7 +3,6 @@ import os
 import shutil
 import uuid
 from typing import List, Optional
-
 from fastapi import (
     APIRouter,
     Depends,
@@ -23,8 +22,6 @@ from config.config import STATIC_PATH, UPLOAD_DIR, async_session, get_db
 from driver import crud, schemas
 from driver.models import Driver
 from driver.profile import build_driver_profile
-from order import crud as order_crud
-from order import schemas as order_schemas
 from services import live_location
 from users import crud as users_crud
 from users.auth import get_current_user, verify_token
@@ -164,59 +161,6 @@ async def update_my_driver_profile(
         driver = await crud.get_driver(db, driver.id)
     await db.refresh(current_user)
     return await build_driver_profile(db, current_user, driver)
-
-
-@router.get(
-    "/trips",
-    response_model=List[order_schemas.OrderResponse],
-    summary="Haydovchi safarlari (buyurtmalar)",
-)
-async def list_driver_trips(
-    response: Response,
-    scope: schemas.DriverTripScope = Query(
-        schemas.DriverTripScope.ALL,
-        description="current — joriy; completed — tugallangan; all — barchasi",
-    ),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    driver = await _require_driver(db, current_user)
-    orders, total = await crud.get_driver_trips(
-        db, driver.id, scope=scope.value, skip=skip, limit=limit
-    )
-    response.headers["X-Total-Count"] = str(total)
-    return orders
-
-
-@router.get(
-    "/available-orders",
-    response_model=List[order_schemas.OrderResponse],
-    summary="Mos keluvchi yangi buyurtmalar (pending, mashina turiga mos)",
-)
-async def list_available_orders_for_driver(
-    limit: int = Query(50, ge=1, le=100),
-    relax_truck_match: bool = Query(
-        False,
-        description="Test: mashina turini filtrlamaslik (yoki RELAX_DRIVER_ORDER_FILTERS=1)",
-    ),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    driver = await _require_driver(db, current_user)
-    if driver.is_blocked:
-        raise HTTPException(status_code=403, detail="Haydovchi bloklangan")
-    relax_env = os.getenv("RELAX_DRIVER_ORDER_FILTERS", "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
-    relax = relax_truck_match or relax_env
-    return await order_crud.get_available_orders_for_driver(
-        db, driver.truck_type_id, limit=limit, relax_truck=relax
-    )
 
 
 
