@@ -38,7 +38,7 @@ class Order(Base):
 
     id          : Mapped[int]   = mapped_column(Integer, primary_key=True, autoincrement=True)
     customer_id : Mapped[int]   = mapped_column(BigInteger, ForeignKey("users.id"),       nullable=False)
-    driver_id   : Mapped[int | None] = mapped_column(Integer, ForeignKey("drivers.id"),   nullable=True)
+    driver_id   : Mapped[int | None] = mapped_column(BigInteger, ForeignKey("drivers.id"),   nullable=True)
 
     cargo_name  : Mapped[str]   = mapped_column(String(200), nullable=False)
     weight      : Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
@@ -56,11 +56,11 @@ class Order(Base):
         nullable=True
     )
 
-    total_distance_km : Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
+    total_distance_km : Mapped[Decimal | None] = mapped_column(Numeric(8, 2), nullable=True)
 
     required_truck_type_id : Mapped[int] = mapped_column(Integer, ForeignKey("truck_types.id"), nullable=False)
 
-    price    : Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    price    : Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     currency : Mapped[str]   = mapped_column(String(10), default="UZS")
 
 
@@ -161,6 +161,22 @@ class OrderWaypoint(Base):
     # O'sha nuqtada yukni kim kutib oladi / kim topshiradi? (Kuryer/Haydovchi telefon qilishi uchun)
     contact_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
     contact_phone: Mapped[str | None] = mapped_column(String(20),  nullable=True)
+
+    status: Mapped[WaypointStatus] = mapped_column(
+        SQLEnum(
+            WaypointStatus,
+            name="waypointstatus",
+            values_callable=lambda e: [m.value for m in e],
+        ),
+        default=WaypointStatus.PENDING,
+        nullable=False,
+    )
+
+    type: Mapped[WaypointType] = mapped_column(
+        SQLEnum(WaypointType, name="waypointtype",
+                values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
