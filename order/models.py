@@ -1,7 +1,7 @@
 from __future__ import annotations
 import enum
 from config.config import Base
-from sqlalchemy import Integer, ForeignKey, DateTime, func,BigInteger,String,Numeric,Enum as SQLEnum, SmallInteger
+from sqlalchemy import Integer, ForeignKey, DateTime, func, BigInteger, String, Numeric, Enum as SQLEnum, SmallInteger
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from geoalchemy2 import Geometry
 from datetime import datetime
@@ -38,7 +38,7 @@ class Order(Base):
 
     id          : Mapped[int]   = mapped_column(Integer, primary_key=True, autoincrement=True)
     customer_id : Mapped[int]   = mapped_column(BigInteger, ForeignKey("users.id"),       nullable=False)
-    driver_id   : Mapped[int | None] = mapped_column(BigInteger, ForeignKey("drivers.id"),   nullable=True)
+    driver_id   : Mapped[int | None] = mapped_column(Integer, ForeignKey("drivers.id"),   nullable=True)
 
     cargo_name  : Mapped[str]   = mapped_column(String(200), nullable=False)
     weight      : Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
@@ -52,16 +52,16 @@ class Order(Base):
     # Haydovchi yo'lga chiqishi kerak bo'lgan vaqt (Tizim hisoblaydi, boshida bo'sh bo'ladi)
     departure_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
-        default=None,
         nullable=True
     )
 
+    # FIX: Decimal aniqroq, float bilan moliyaviy/masofa hisob-kitoblarida floating-point xatolarga yo'l qo'yilmaydi
     total_distance_km : Mapped[Decimal | None] = mapped_column(Numeric(8, 2), nullable=True)
 
     required_truck_type_id : Mapped[int] = mapped_column(Integer, ForeignKey("truck_types.id"), nullable=False)
 
     price    : Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    currency : Mapped[str]   = mapped_column(String(10), default="UZS")
+    currency : Mapped[str]     = mapped_column(String(10), default="UZS")
 
 
     status: Mapped[OrderStatus] = mapped_column(
@@ -95,6 +95,14 @@ class Order(Base):
         cascade="all, delete-orphan",
     )
 
+    # FIX: PostGIS marshrutiga buyurtmadan ham qulay kirish uchun teskari bog'lanish
+    route: Mapped["OrderRoutePostGIS | None"] = relationship(
+        "OrderRoutePostGIS",
+        back_populates="order",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
 
     @property
     def origin(self) -> "OrderWaypoint | None":
@@ -111,7 +119,7 @@ class Order(Base):
     @property
     def current_waypoint(self) -> "OrderWaypoint | None":
         for wp in self.waypoints:
-            if wp.status not in [WaypointStatus.COMPLETED, WaypointStatus.SKIPPED]:
+            if wp.status not in (WaypointStatus.COMPLETED, WaypointStatus.SKIPPED):
                 return wp
         return None
 
@@ -140,6 +148,8 @@ class OrderRoutePostGIS(Base):
 
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    # FIX: Order tomonidagi `route` relationship'iga juft (back_populates)
+    order: Mapped["Order"] = relationship("Order", back_populates="route")
 
 
 
@@ -153,33 +163,37 @@ class OrderWaypoint(Base):
     # Nuqtaning tartibi: 1 - yukni olish joyi, 2 - topshirish joyi (agar 3-4 bo'lsa, yo'l-yo'lakay tashlab o'tiladigan joylar)
     sequence: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
 
-    # Manzil matni va Yandex xaritasidan keladigan koordinatalar
-    address: Mapped[str | None] = mapped_column(String(300), nullable=True)
-    latitude: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
-    longitude: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
+    # FIX: WaypointType enum'i endi haqiqiy ustunga bog'landi.
+    # origin/destination/transit_stops endi faqat sequence'ga emas, aniq turga tayanishi mumkin bo'ladi
+    type: Mapped[WaypointType] = mapped_column(
+        SQLEnum(
+            WaypointType,
+            name="waypointtype",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=False,
+    )
 
-    # O'sha nuqtada yukni kim kutib oladi / kim topshiradi? (Kuryer/Haydovchi telefon qilishi uchun)
-    contact_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
-    contact_phone: Mapped[str | None] = mapped_column(String(20),  nullable=True)
-
+    # FIX: current_waypoint property'si ishlashi uchun zarur bo'lgan ustun qo'shildi
     status: Mapped[WaypointStatus] = mapped_column(
         SQLEnum(
             WaypointStatus,
             name="waypointstatus",
-            values_callable=lambda e: [m.value for m in e],
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
         ),
         default=WaypointStatus.PENDING,
         nullable=False,
     )
 
-    type: Mapped[WaypointType] = mapped_column(
-        SQLEnum(WaypointType, name="waypointtype",
-                values_callable=lambda e: [m.value for m in e]),
-        nullable=False,
-    )
+    # Manzil matni va Yandex xaritasidan keladigan koordinatalar
+    address: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    latitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7), nullable=True)
+    longitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7), nullable=True)
+
+    # O'sha nuqtada yukni kim kutib oladi / kim topshiradi? (Kuryer/Haydovchi telefon qilishi uchun)
+    contact_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    contact_phone: Mapped[str | None] = mapped_column(String(20),  nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     order: Mapped["Order"] = relationship("Order", back_populates="waypoints")
-
-
