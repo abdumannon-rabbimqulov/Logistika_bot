@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from ai.models import AICommand, AIUsage
 from driver.models import Driver
-from order.models import Order, OrderOffer, OrderStatus
+from order.models import Order
 from order.crud import parse_order_status
 from users.models import User, UserRole
 from Admin_panel.schemas import (
@@ -195,16 +195,6 @@ async def dashboard_stats(db: AsyncSession) -> AdminDashboardStats:
     orders_by_status = {
         (s.value if hasattr(s, "value") else str(s)): int(c) for s, c in by_status_rows
     }
-    for s in OrderStatus:
-        orders_by_status.setdefault(s.value, 0)
-
-    offers_today = (
-        await db.execute(
-            select(func.count(OrderOffer.id)).where(
-                OrderOffer.created_at.between(today_start, today_end)
-            )
-        )
-    ).scalar_one()
 
     ai_today_row = (
         await db.execute(
@@ -245,7 +235,6 @@ async def dashboard_stats(db: AsyncSession) -> AdminDashboardStats:
         orders_total=int(orders_total),
         orders_today=int(orders_today),
         orders_by_status=orders_by_status,
-        offers_today=int(offers_today),
         ai_requests_today=ai_requests_today,
         ai_input_tokens_today=ai_input_tokens_today,
         ai_output_tokens_today=ai_output_tokens_today,

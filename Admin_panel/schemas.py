@@ -1,4 +1,3 @@
-"""Admin paneli uchun pydantic schemalar."""
 
 from __future__ import annotations
 

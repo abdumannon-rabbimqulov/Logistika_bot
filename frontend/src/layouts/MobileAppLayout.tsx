@@ -1,6 +1,6 @@
 import React from "react";
 import { Outlet, useNavigate, useLocation, NavLink } from "react-router-dom";
-import { ArrowLeft, Home, User, MessagesSquare, Megaphone, Package } from "lucide-react";
+import { ArrowLeft, Home, User, Megaphone, Package } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import type { UserRole } from "../types/auth";
 
@@ -17,8 +17,7 @@ function pageTitle(pathname: string, role: "sender" | "driver", override?: strin
     if (pathname.match(/\/orders\/\d+/)) return "Buyurtma";
     if (pathname.endsWith("/orders")) return "Buyurtmalar";
     if (pathname.includes("/ai")) return "AI yordamchi";
-    if (pathname.match(/\/chats\/\d+/)) return "Chat";
-    if (pathname.endsWith("/chats")) return "Chatlar";
+
     return "Yuk beruvchi";
   }
   if (pathname.includes("/announcements/")) return "Takliflar";
@@ -40,8 +39,7 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({ role, title })
   const isOrdersList = pathname.endsWith("/orders");
   const isOrderCreate = pathname.endsWith("/orders/create");
   const isOrderDetail = /\/orders\/\d+/.test(pathname);
-  const isChatsList = pathname.endsWith("/chats");
-  const isChatDetail = /\/chats\/\d+/.test(pathname);
+
   const isAnnouncements = pathname.includes("/announcements");
   const isOfferDetail = /\/announcements\/\d+/.test(pathname);
 
@@ -54,22 +52,19 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({ role, title })
       isOrdersList ||
       isOrderCreate ||
       isOrderDetail ||
-      isChatsList ||
-      isChatDetail ||
+
       isAnnouncements);
 
   const goBack = () => {
     if (isOfferDetail) navigate(`${base}/announcements`);
     else if (isOrderDetail || isOrderCreate) navigate(`${base}/orders`);
-    else if (isChatDetail) navigate(`${base}/chats`);
-    else if (isAi || isChatsList || isOrdersList) navigate(base);
+    else if (isAi || isOrdersList) navigate(base);
     else navigate(base);
   };
 
   return (
     <div className="mobile-app-root">
       <div className="mobile-phone">
-        {!isChatDetail && (
         <header className="mobile-header">
           {showBack ? (
             <button type="button" className="back-btn" onClick={goBack} aria-label="Orqaga">
@@ -83,7 +78,6 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({ role, title })
             {user?.full_name?.split(" ")[0] || "—"}
           </span>
         </header>
-        )}
 
         <main className={`mobile-content${isAi ? " no-nav" : ""}`}>
           <Outlet />
@@ -106,15 +100,7 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({ role, title })
                 <Package size={22} />
                 <span>Buyurtma</span>
               </NavLink>
-              <NavLink
-                to={`${base}/chats`}
-                className={({ isActive }) =>
-                  `mobile-nav-item${isActive || isChatDetail ? " active" : ""}`
-                }
-              >
-                <MessagesSquare size={22} />
-                <span>Chat</span>
-              </NavLink>
+
             </>
           )}
           {role === "driver" && (

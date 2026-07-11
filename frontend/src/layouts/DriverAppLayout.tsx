@@ -10,8 +10,6 @@ function titleForPath(pathname: string): string {
   if (pathname.endsWith("/orders")) return "Buyurtmalar";
   if (pathname.includes("/announcements/")) return "Takliflar";
   if (pathname.endsWith("/announcements")) return "E'lonlar";
-  if (pathname.includes("/chats/")) return "Suhbat";
-  if (pathname.endsWith("/chats")) return "Chatlar";
   if (pathname.includes("/ai")) return "AI Yordamchi";
   return "";
 }
@@ -25,13 +23,12 @@ export const DriverAppLayout: React.FC = () => {
   const title = titleForPath(pathname);
   
   const isAi = pathname.includes("/ai");
-  const isChatDetail = pathname.includes("/chats/");
-  const hideBottomNav = isAi || isChatDetail;
+  const hideBottomNav = isAi;
 
   return (
     <div className="min-h-[100dvh] bg-slate-900 text-slate-100 flex justify-center">
       <div className="w-full max-w-md flex flex-col min-h-[100dvh] shadow-2xl shadow-black/60 border-x border-white/5 bg-slate-900">
-        {!isHome && !isChatDetail && (
+        {!isHome && (
           <header className="sticky top-0 z-50 flex items-center gap-3 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] bg-slate-900/95 backdrop-blur-md border-b border-white/5">
             {showBack ? (
               <button
