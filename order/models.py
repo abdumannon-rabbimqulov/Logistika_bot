@@ -1,96 +1,37 @@
 from __future__ import annotations
 import enum
-from datetime import datetime, timezone
-
-from sqlalchemy import (
-    BigInteger, Integer, String, Numeric, DateTime,
-    ForeignKey, Enum as SQLEnum, Text, SmallInteger, Boolean, JSON, func,
-)
-from sqlalchemy.orm import Mapped, mapped_column, relationship
 from config.config import Base
-from utils.db_types import CaseInsensitiveEnum
+from sqlalchemy import Integer, ForeignKey, DateTime, func,BigInteger,String,Numeric,Enum as SQLEnum, SmallInteger
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from geoalchemy2 import Geometry
+from datetime import datetime
+from decimal import Decimal
 
-from typing import TYPE_CHECKING
+from typing import Optional
 
-if TYPE_CHECKING:
-    from ai.models import Chat, Rating
-    from driver.models import Driver
-
-
-class Region(Base):
-
-    __tablename__ = "regions"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    soato_id: Mapped[int | None] = mapped_column(Integer, unique=True, nullable=True, index=True)
-    name_uz: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
-    name_oz: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    name_ru: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    name_en: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    slug: Mapped[str | None] = mapped_column(String(80), unique=True, nullable=True)
-
-    centroid_lat: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
-    centroid_lng: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
-    bounds: Mapped[list | None] = mapped_column(JSON, nullable=True)
-    geojson: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-
-    districts: Mapped[list["District"]] = relationship(
-        "District",
-        back_populates="region",
-        cascade="all, delete-orphan",
-    )
-
-    def __repr__(self) -> str:
-        return f"<Region(id={self.id}, name_uz='{self.name_uz}')>"
-
-
-class District(Base):
-
-    __tablename__ = "districts"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    region_id: Mapped[int] = mapped_column(Integer, ForeignKey("regions.id", ondelete="CASCADE"), nullable=False, index=True)
-    soato_id: Mapped[int | None] = mapped_column(Integer, unique=True, nullable=True, index=True)
-    name_uz: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
-    name_oz: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    name_ru: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    name_en: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    slug: Mapped[str | None] = mapped_column(String(80), nullable=True)
-
-    centroid_lat: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
-    centroid_lng: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
-    bounds: Mapped[list | None] = mapped_column(JSON, nullable=True)
-    geojson: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-
-    region: Mapped["Region"] = relationship("Region", back_populates="districts")
-
-    def __repr__(self) -> str:
-        return f"<District(id={self.id}, region_id={self.region_id}, name_uz='{self.name_uz}')>"
 
 
 class OrderStatus(str, enum.Enum):
-
-    PENDING = "PENDING"
-    ACCEPTED = "ACCEPTED"
-    IN_PROGRESS = "IN_PROGRESS"
-    COMPLETED = "COMPLETED"
-    CANCELLED = "CANCELLED"
-
-
-
-class WaypointType(enum.Enum):
-    PICKUP   = "PICKUP"
-    DELIVERY = "DELIVERY"
-    TRANSIT  = "TRANSIT"
+    SCHEDULED = "SCHEDULED"   # Rejalashtirilgan (Mijoz buyurtma berdi, haydovchi topildi, lekin yuklash vaqti kelmadi)
+    PENDING = "PENDING"          # Kutilmoqda (Mijoz buyurtma berdi, haydovchi qidirilmoqda)
+    ACCEPTED = "ACCEPTED"        # Qabul qilindi (Haydovchi zakazni oldi, yuklash nuqtasiga ketmoqda)
+    IN_PROGRESS = "IN_PROGRESS"  # Jarayonda (Haydovchi yukni oldi va manzil sari yo'lda)
+    COMPLETED = "COMPLETED"      # Yakunlandi (Yuk manziliga yetdi, buyurtma muvaffaqiyatli yopildi)
+    CANCELLED = "CANCELLED"      # Bekor qilindi (Mijoz yoki haydovchi tomonidan rad etildi)
 
 
-class WaypointStatus(enum.Enum):
-    PENDING   = "PENDING"
-    ARRIVED   = "ARRIVED"
-    COMPLETED = "COMPLETED"
-    SKIPPED   = "SKIPPED"
+
+class WaypointType(str, enum.Enum):
+    PICKUP = "PICKUP"            # Yuk ortish joyi (A nuqta - yuk mashinaga yuklanadigan joy)
+    DELIVERY = "DELIVERY"        # Yuk tushirish joyi (B nuqta - yuk yetib borishi kerak bo'lgan oxirgi manzil)
+    TRANSIT = "TRANSIT"          # Oraliq nuqta (Yo'l-yonakay boshqa joydan ham yuk olish yoki tashlash uchun)
 
 
+class WaypointStatus(str, enum.Enum):
+    PENDING = "PENDING"          # Kutilmoqda (Haydovchi hali bu manzilga yetib kelmadi)
+    ARRIVED = "ARRIVED"          # Yetib keldi (Haydovchi nuqtaga keldi va "Kelyapman/Kutib turibman" tugmasini bosdi)
+    COMPLETED = "COMPLETED"      # Bajarildi (Bu nuqtadagi yuk ortish yoki tushirish ishlari tugadi)
+    SKIPPED = "SKIPPED"          # Tashlab ketildi (Zarurat bo'lmagani uchun bu nuqtaga kirmasdan o'tib ketildi)
 
 class Order(Base):
     __tablename__ = "orders"
@@ -100,8 +41,20 @@ class Order(Base):
     driver_id   : Mapped[int | None] = mapped_column(Integer, ForeignKey("drivers.id"),   nullable=True)
 
     cargo_name  : Mapped[str]   = mapped_column(String(200), nullable=False)
-    weight      : Mapped[float] = mapped_column(Numeric(6, 2), nullable=False)
-    volume      : Mapped[float | None] = mapped_column(Numeric(6, 2), nullable=True)
+    weight      : Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+    volume      : Mapped[Decimal | None] = mapped_column(Numeric(6, 2), nullable=True)
+
+    pickup_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False
+    )
+
+    # Haydovchi yo'lga chiqishi kerak bo'lgan vaqt (Tizim hisoblaydi, boshida bo'sh bo'ladi)
+    departure_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        default=None,
+        nullable=True
+    )
 
     total_distance_km : Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
 
@@ -110,8 +63,6 @@ class Order(Base):
     price    : Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     currency : Mapped[str]   = mapped_column(String(10), default="UZS")
 
-    scheduled_start : Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    scheduled_end   : Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     status: Mapped[OrderStatus] = mapped_column(
         SQLEnum(
@@ -124,10 +75,13 @@ class Order(Base):
     )
 
     created_at : Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), nullable=False
+        DateTime(timezone=True),
+        server_default=func.now(), nullable=False
+
     )
     updated_at : Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True),
+        server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
     customer   = relationship("User",      foreign_keys=[customer_id], backref="customer_orders")
@@ -138,32 +92,6 @@ class Order(Base):
         "OrderWaypoint",
         back_populates="order",
         order_by="OrderWaypoint.sequence",
-        cascade="all, delete-orphan",
-    )
-
-    offers     : Mapped[list["OrderOffer"]] = relationship(
-        "OrderOffer",
-        back_populates="order",
-    )
-
-    chat_id  : Mapped[int | None] = mapped_column(Integer, ForeignKey("chats.id"), nullable=True)
-
-    chat       : Mapped["Chat"] = relationship(
-        "Chat",
-        foreign_keys=[chat_id],
-        back_populates="orders"
-    )
-
-    rating     : Mapped["Rating"] = relationship(
-        "Rating",
-        back_populates="order",
-        uselist=False,
-    )
-
-    tracks: Mapped[list["OrderTrack"]] = relationship(
-        "OrderTrack",
-        back_populates="order",
-        order_by="OrderTrack.recorded_at",
         cascade="all, delete-orphan",
     )
 
@@ -183,7 +111,7 @@ class Order(Base):
     @property
     def current_waypoint(self) -> "OrderWaypoint | None":
         for wp in self.waypoints:
-            if wp.status == WaypointStatus.PENDING:
+            if wp.status not in [WaypointStatus.COMPLETED, WaypointStatus.SKIPPED]:
                 return wp
         return None
 
@@ -196,10 +124,6 @@ class Order(Base):
         return f"<Order(id={_id}, status={_status})>"
 
 
-from sqlalchemy import Integer, ForeignKey, DateTime, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from geoalchemy2 import Geometry
-from datetime import datetime
 
 
 class OrderRoutePostGIS(Base):
@@ -214,7 +138,7 @@ class OrderRoutePostGIS(Base):
         Geometry(geometry_type="LINESTRING", srid=4326), nullable=False
     )
 
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 
@@ -238,7 +162,7 @@ class OrderWaypoint(Base):
     contact_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
     contact_phone: Mapped[str | None] = mapped_column(String(20),  nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     order: Mapped["Order"] = relationship("Order", back_populates="waypoints")
 
