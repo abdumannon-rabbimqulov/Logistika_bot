@@ -28,7 +28,8 @@ class UserRole(str, enum.Enum):
     SENDER = "sender"
     DRIVER = "driver"
     GUEST  = "guest"
-
+    DISPATCHER = "dispatcher"
+    MANAGER = "manager"
 
 
 

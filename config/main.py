@@ -17,8 +17,6 @@ from sqlalchemy.orm import configure_mappers
 configure_mappers()
 
 from driver.router import router as driver_router
-from order.router import router as order_router
-from order.geo_router import router as geo_router
 from users.router import router as auth_router
 from users.tariff_router import router as tariff_admin_router
 from Admin_panel.router import router as admin_router
@@ -76,8 +74,6 @@ def _register_api_routers(
 ) -> None:
     kwargs = {"prefix": prefix, "include_in_schema": include_in_schema}
     target.include_router(driver_router, **kwargs)
-    target.include_router(order_router, **kwargs)
-    target.include_router(geo_router, **kwargs)
     auth_prefix = f"{prefix}/auth".replace("//", "/")
     target.include_router(
         auth_router,

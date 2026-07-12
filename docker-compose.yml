@@ -1,7 +1,7 @@
 services:
   # 1. PostgreSQL bazasi
   db:
-    image: postgres:15-alpine
+    image: postgis/postgis:15-3.4-alpine
     container_name: postgres_db
     restart: always
     environment:
@@ -61,8 +61,6 @@ services:
       - "0.0.0.0"
       - --port
       - "8000"
-      - --log-config
-      - config/uvicorn_logging.json
     restart: always
     depends_on:
       db:

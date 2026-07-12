@@ -24,7 +24,6 @@ from Admin_panel import crud as admin_crud
 from Admin_panel import schemas as admin_schemas
 from Admin_panel.validation import is_admin
 from config.config import ADMIN_IDS, async_session, get_db
-from order import crud as order_crud
 from order import schemas as order_schemas
 from services import live_location
 from users import crud as user_crud
@@ -143,47 +142,6 @@ async def admin_list_orders(
     )
     response.headers["X-Total-Count"] = str(total)
     return rows
-
-
-@router.get("/orders/{order_id}", response_model=order_schemas.OrderResponse)
-async def admin_get_order(
-    order_id: int,
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(is_admin),
-):
-    order = await order_crud.get_order(db, order_id)
-    if not order:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Buyurtma topilmadi.")
-    return order
-
-
-@router.patch("/orders/{order_id}", response_model=order_schemas.OrderResponse)
-async def admin_update_order(
-    order_id: int,
-    data: admin_schemas.AdminOrderUpdate,
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(is_admin),
-):
-    order = await order_crud.get_order(db, order_id)
-    if not order:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Buyurtma topilmadi.")
-    await admin_crud.update_order_admin(db, order, data)
-    return await order_crud.get_order(db, order_id)
-
-
-@router.delete("/orders/{order_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def admin_delete_order(
-    order_id: int,
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(is_admin),
-):
-    order = await order_crud.get_order(db, order_id)
-    if not order:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Buyurtma topilmadi.")
-    await order_crud.delete_order(db, order_id)
-
-
-
 
 
 @router.get("/drivers/locations", response_model=List[admin_schemas.DriverLocationItem])

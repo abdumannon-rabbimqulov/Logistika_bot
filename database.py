@@ -5,7 +5,6 @@ from users.models import User
 
 import driver.models  # noqa: F401
 import order.models   # noqa: F401
-import ai.models      # noqa: F401
 
 
 

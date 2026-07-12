@@ -18,3 +18,5 @@ redis==5.0.4
 phonenumbers>=8.13.0
 phonenumbers==9.0.32
 aiofiles>=23.2.1
+geoalchemy2
+shapely

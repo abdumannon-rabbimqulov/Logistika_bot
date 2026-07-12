@@ -10,7 +10,6 @@ from sqlalchemy.orm import selectinload
 
 from driver.models import Driver
 from order.models import Order
-from order.crud import parse_order_status
 from users.models import User, UserRole
 from Admin_panel.schemas import (
     AdminDashboardStats,
@@ -100,48 +99,6 @@ async def update_user_admin(db: AsyncSession, user: User, data: AdminUserUpdate)
 # ORDERS
 # ════════════════════════════════════════════════════════════
 
-
-async def list_orders_admin(
-    db: AsyncSession,
-    *,
-    status: Optional[str] = None,
-    customer_id: Optional[int] = None,
-    driver_id: Optional[int] = None,
-    date_from: Optional[date] = None,
-    date_to: Optional[date] = None,
-    skip: int = 0,
-    limit: int = 50,
-) -> Tuple[List[Order], int]:
-    base = select(Order)
-    parsed_status = parse_order_status(status)
-    if parsed_status is not None:
-        base = base.where(Order.status == parsed_status)
-    if customer_id is not None:
-        base = base.where(Order.customer_id == customer_id)
-    if driver_id is not None:
-        base = base.where(Order.driver_id == driver_id)
-    if date_from:
-        base = base.where(Order.created_at >= datetime.combine(date_from, datetime.min.time()))
-    if date_to:
-        base = base.where(Order.created_at <= datetime.combine(date_to, datetime.max.time()))
-
-    total_stmt = select(func.count()).select_from(base.subquery())
-    total = (await db.execute(total_stmt)).scalar_one()
-
-    stmt = (
-        base.options(
-            selectinload(Order.waypoints),
-            selectinload(Order.customer),
-            selectinload(Order.driver).selectinload(Driver.user)
-        )
-        .order_by(desc(Order.created_at))
-        .offset(max(skip, 0))
-        .limit(min(max(limit, 1), 200))
-    )
-    rows = (await db.execute(stmt)).scalars().unique().all()
-    from order.crud import sort_order_waypoints
-
-    return [sort_order_waypoints(o) for o in rows], int(total)
 
 
 async def update_order_admin(db: AsyncSession, order: Order, data: AdminOrderUpdate) -> Order:
