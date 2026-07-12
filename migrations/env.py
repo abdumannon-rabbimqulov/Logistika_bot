@@ -6,10 +6,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config, AsyncEngine
 
 from alembic import context
 
-from config.config import Base
-from driver.models import TruckType,Driver
-from users.models import User,UserTariffPayment,VerificationCode
-from order.models import Order,OrderWaypoint
+from config.registry import Base
 
 
 target_metadata = Base.metadata

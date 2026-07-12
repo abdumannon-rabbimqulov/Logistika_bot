@@ -14,7 +14,7 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.schema import Index
-from config.config import Base
+from config.base import Base
 
 from sqlalchemy import text
 
@@ -22,7 +22,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING, Optional
 
-
+if TYPE_CHECKING:
+    from driver.models import Driver
 class UserRole(str, enum.Enum):
     ADMIN  = "admin"
     SENDER = "sender"
@@ -65,7 +66,7 @@ class User(Base):
         onupdate=func.now()
     )
 
-    driver = relationship("Driver", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    driver: Mapped[Optional["Driver"]] = relationship("Driver", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
     tariff_payments: Mapped[list["UserTariffPayment"]] = relationship(
         back_populates="user",

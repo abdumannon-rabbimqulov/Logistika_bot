@@ -3,8 +3,6 @@ from sqlalchemy import select, func, update
 from config.config import async_session
 from users.models import User
 
-import driver.models  # noqa: F401
-import order.models   # noqa: F401
 
 
 

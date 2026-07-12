@@ -1,13 +1,18 @@
 from __future__ import annotations
 import enum
-from config.config import Base
+from config.base import Base
 from sqlalchemy import Integer, ForeignKey, DateTime, func, BigInteger, String, Numeric, Enum as SQLEnum, SmallInteger
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from geoalchemy2 import Geometry
 from datetime import datetime
 from decimal import Decimal
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from users.models import User
+    from driver.models import Driver, TruckType
+
 
 
 
@@ -84,9 +89,9 @@ class Order(Base):
         server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    customer   = relationship("User",      foreign_keys=[customer_id], backref="customer_orders")
-    driver     = relationship("Driver",    foreign_keys=[driver_id],   backref="driver_orders")
-    truck_type = relationship("TruckType")
+    customer: Mapped["User"] = relationship("User", foreign_keys=[customer_id], backref="customer_orders")
+    driver: Mapped[Optional["Driver"]] = relationship("Driver", foreign_keys=[driver_id], backref="driver_orders")
+    truck_type: Mapped["TruckType"] = relationship("TruckType")
 
     waypoints  : Mapped[list["OrderWaypoint"]] = relationship(
         "OrderWaypoint",

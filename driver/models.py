@@ -12,7 +12,13 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 
-from config.config import Base
+from typing import TYPE_CHECKING, Optional
+
+from config.base import Base
+
+if TYPE_CHECKING:
+    from users.models import User
+
 
 
 class DriverVerificationStatus(enum.Enum):
@@ -110,8 +116,8 @@ class Driver(Base):
     created_at : Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at : Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    user           = relationship("User", back_populates="driver")
-    truck_type_obj : Mapped["TruckType"] = relationship("TruckType", back_populates="drivers")
+    user: Mapped["User"] = relationship("User", back_populates="driver")
+    truck_type_obj: Mapped["TruckType"] = relationship("TruckType", back_populates="drivers")
 
 
 

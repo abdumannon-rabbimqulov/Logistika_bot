@@ -1,13 +1,13 @@
 from fastapi import FastAPI
 from config.config import (
     engine,
-    Base,
     UPLOAD_DIR,
     STATIC_PATH,
     ENVIRONMENT,
     API_PUBLIC_PREFIX,
     WEBAPP_URL,
 )
+from config.registry import Base
 from middlewares.error_handler import setup_error_handlers
 import driver.models
 import order.models

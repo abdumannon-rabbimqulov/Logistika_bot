@@ -2,6 +2,7 @@ from aiogram import Router, types, F
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from users.models import UserRole
 
 from keyboards.reply import (
     get_language_keyboard,
@@ -12,8 +13,15 @@ from users.models import UserRole
 import database as db
 from utils.validation import normalize_phone_number
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 router = Router()
 
+
+ADMIN_ID=int(os.getenv("ADMIN", 0))
 
 class Registration(StatesGroup):
     language = State()
@@ -41,8 +49,36 @@ ROLE_MAP = {
 async def cmd_start(message: types.Message, state: FSMContext):
     # FSM holatini tozalaymiz, agar adashib qolgan bo'lsa boshidan boshlashi uchun
     await state.clear()
+    tg_id = message.from_user.id
+    user = await db.get_user(tg_id)
 
-    user = await db.get_user(message.from_user.id)
+    if tg_id == ADMIN_ID:
+        if not user:
+            user = await db.create_user(
+                user_id=tg_id,
+                full_name=message.from_user.full_name,
+                username=message.from_user.username,
+                language="uz",
+                phone_number=None,
+                role=UserRole.ADMIN
+            )
+        elif getattr(user, 'role', None) != UserRole.ADMIN:
+            await db.update_user_profile_from_tg(
+                user_id=tg_id,
+                full_name=message.from_user.full_name,
+                username=message.from_user.username,
+                language=user.language,
+                phone_number=user.phone_number,
+                role=UserRole.ADMIN
+            )
+            user = await db.get_user(tg_id)
+        
+        await message.answer(
+            f"Assalomu alaykum Admin, {message.from_user.full_name}!\n"
+            "Tizimga kirishga ruxsat berildi. Boshqaruv paneli huquqlari ochildi.",
+            reply_markup=types.ReplyKeyboardRemove()
+        )
+        return
 
     if user and user.phone_number:
         if user.language == "ru":
