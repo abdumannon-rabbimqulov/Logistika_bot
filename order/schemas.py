@@ -9,9 +9,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from order.models import OrderStatus, WaypointStatus, WaypointType
 
 
-# ============================================================
-#  OrderWaypoint sxemalari
-# ============================================================
 
 class OrderWaypointBase(BaseModel):
     sequence: int = Field(..., ge=1, description="Nuqta tartibi: 1 - pickup, oxirgisi - delivery")

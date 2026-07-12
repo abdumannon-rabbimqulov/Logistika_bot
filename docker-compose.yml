@@ -8,7 +8,7 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=2103
       - POSTGRES_DB=logistika_db
-      - TZ=Asia/Toshkent
+      - TZ=Asia/Tashkent
     ports:
       - "5432:5432"
     volumes:
@@ -19,17 +19,29 @@ services:
       timeout: 5s
       retries: 5
 
-  # 2. Redis server 
+  # 2. Redis server
   logistika-redis:
     image: redis:7-alpine
     container_name: logistika-redis
     restart: always
     ports:
-      - "6379:6379"
+      - "6380:6379"  # Tashqi portni 6380 qildik, shunda Mac-dagi eski Redis bilan urishmaydi!
     volumes:
       - redis_data:/data
 
-  # 3. FastAPI Web dasturi
+  # 3. OSRM Router (Xarita serveri)
+  osrm:
+    image: osrm/osrm-backend
+    container_name: osrm_router
+    platform: linux/amd64        # Apple Silicon Mac-lar uchun majburiy
+    volumes:
+      - .:/data
+    ports:
+      - "5001:5000"              # Tashqi portni 5001 qildik, AirPlay bilan urishmaydi!
+    command: osrm-routed --algorithm mld /data/uzbekistan-260710.osm.pbf
+    restart: always
+
+  # 4. FastAPI Web dasturi
   web:
     build: .
     container_name: fastapi_web_app
@@ -57,8 +69,10 @@ services:
         condition: service_healthy
       logistika-redis:
         condition: service_started
+      osrm:
+        condition: service_started
 
-  # 4. Telegram Bot
+  # 5. Telegram Bot
   bot:
     build: .
     container_name: aiogram_telegram_bot
@@ -74,6 +88,8 @@ services:
       db:
         condition: service_healthy
       logistika-redis:
+        condition: service_started
+      osrm:
         condition: service_started
 
 # Barcha volume'lar bitta joyda jamlandi
