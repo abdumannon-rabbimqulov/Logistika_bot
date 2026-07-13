@@ -4,6 +4,13 @@ import logging
 
 
 from config.config import  engine
+from config import registry
+import driver.models
+import order.models
+import users.models
+from sqlalchemy.orm import configure_mappers
+configure_mappers()
+
 from handlers import main_router
 
 from aiogram import Dispatcher

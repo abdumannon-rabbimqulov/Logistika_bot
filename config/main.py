@@ -1,3 +1,9 @@
+import logging
+import asyncio
+
+
+
+from config import registry
 from fastapi import FastAPI
 from config.config import (
     engine,
