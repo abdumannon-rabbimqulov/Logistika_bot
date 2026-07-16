@@ -1,5 +1,6 @@
 import logging
 import asyncio
+from contextlib import asynccontextmanager
 
 
 
@@ -12,6 +13,7 @@ from config.config import (
     ENVIRONMENT,
     API_PUBLIC_PREFIX,
     WEBAPP_URL,
+    CORS_ORIGINS,
 )
 from config.registry import Base
 from middlewares.error_handler import setup_error_handlers
@@ -30,11 +32,27 @@ from Admin_panel.router import router as admin_router
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: jadval sxemasini yaratish (production'da alembic migratsiyasi tavsiya etiladi).
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    # Shutdown: Redis ulanishini yopish.
+    from services.live_location import close_redis
+
+    await close_redis()
+
+
 _docs_prefix = API_PUBLIC_PREFIX or ""
 app = FastAPI(
     title="Logistika AI API",
     version="1.0.0",
     description="🚀 Logistics platform with AI-powered order management",
+    lifespan=lifespan,
     servers=[
         {"url": API_PUBLIC_PREFIX or "http://127.0.0.1:8003", "description": "API base (/api)"},
         {"url": "", "description": "Prefiksiz (localhost:8003)"},
@@ -54,23 +72,12 @@ app.mount(STATIC_PATH, StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS or [WEBAPP_URL],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
-@app.on_event("startup")
-async def startup():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    from services.live_location import close_redis
-
-    await close_redis()
 
 def _register_api_routers(
     target: FastAPI,

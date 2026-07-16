@@ -108,14 +108,19 @@ async def get_driver_location(driver_id: int) -> Optional[Dict[str, Any]]:
         return None
 
 async def get_all_online_drivers() -> List[Dict[str, Any]]:
-    """Barcha online (jonli translyatsiya qilayotgan) haydovchilarni olish."""
+    """Barcha online (jonli translyatsiya qilayotgan) haydovchilarni olish.
+
+    KEYS o'rniga SCAN ishlatiladi — KEYS butun Redis'ni bloklaydi va
+    production'da kalitlar ko'payganda serverni sekinlashtiradi.
+    """
     try:
         r = get_redis()
-        # Redis 5.0+ da iteratsiyani SCAN yordamida qilamiz yoki KEYS. KEYS tezroq kichik miqdor uchun.
-        keys = await r.keys("driver_location:*")
+        keys: List[str] = []
+        async for key in r.scan_iter(match="driver_location:*", count=500):
+            keys.append(key)
         if not keys:
             return []
-        
+
         values = await r.mget(keys)
         drivers = []
         for val in values:
