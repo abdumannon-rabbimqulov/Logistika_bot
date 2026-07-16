@@ -5,10 +5,12 @@ services:
     container_name: postgres_db
     restart: always
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=2103
-      - POSTGRES_DB=logistika_db
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:?DB_PASSWORD .env faylida belgilanishi shart}
+      - POSTGRES_DB=${DB_NAME:-logistika_db}
       - TZ=Asia/Tashkent
+    env_file:
+      - .env
     ports:
       - "5432:5432"
     volumes:

@@ -238,28 +238,25 @@ def validate_rating_score(value: int) -> int:
 
 def validate_text_no_sql_injection(value: str, max_length: int = 1000) -> str:
     """
-    SQL injection'dan himoya qilish.
-    Xavfli SQL keywords'ni tekshirish.
+    Matnni tozalash: uzunlik cheklovi va boshqariladigan (control) belgilarni olib tashlash.
+
+    Eslatma: SQL injection'dan himoya SQLAlchemy ORM'ning parametrlangan
+    so'rovlari orqali ta'minlanadi. "UNION/SELECT/--/;" kabi kalit so'zlarni
+    bloklash real himoya bermaydi, aksincha haqiqiy ma'lumotni (masalan
+    apostrofli ismlar yoki manzillar) noto'g'ri rad etadi. Shuning uchun bu
+    yerda faqat xavfsiz normalizatsiya qilinadi.
     """
     if not isinstance(value, str):
         raise ValueError("❌ Must be string")
-    
+
     if len(value) > max_length:
         raise ValueError(f"❌ Text too long (max {max_length} characters)")
-    
-    # Xavfli patterns
-    dangerous_patterns = [
-        r"(\bUNION\b|\bSELECT\b|\bDROP\b|\bINJECT\b|\bEXECUTE\b)",  # SQL keywords
-        r"(--|;|\/\*|\*\/)",  # SQL comments
-        r"(\$\{|__proto__|constructor)",  # Prototype pollution
-    ]
-    
-    value_upper = value.upper()
-    for pattern in dangerous_patterns:
-        if re.search(pattern, value_upper):
-            raise ValueError(f"❌ Invalid characters detected in text")
-    
-    return value.strip()
+
+    # Ko'rinmaydigan/boshqaruv belgilarini olib tashlaymiz (tab, newline, space qoladi).
+    cleaned = "".join(
+        ch for ch in value if ch in ("\t", "\n", "\r") or ord(ch) >= 32
+    )
+    return cleaned.strip()
 
 
 # ─────────────────────────────────────────────────────────────

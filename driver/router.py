@@ -1,8 +1,9 @@
 import logging
 import os
-import shutil
 import uuid
 from typing import List, Optional
+
+import aiofiles
 from fastapi import (
     APIRouter,
     Depends,
@@ -33,6 +34,9 @@ router = APIRouter(prefix="/drivers", tags=["Haydovchilar (Drivers)"])
 
 LAST_DB_WRITE: dict[int, float] = {}
 ORDER_TRACK_INTERVAL_SEC = 600
+
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB — rasm yuklash uchun maksimal hajm
+ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
 
 def _normalize_ws_token(raw: Optional[str]) -> Optional[str]:
@@ -65,15 +69,23 @@ async def upload_truck_type_image(
         raise HTTPException(status_code=400, detail="Faqat image fayl yuklash mumkin")
 
     file_ext = os.path.splitext(file.filename or "")[1].lower()
-    if file_ext not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
+    if file_ext not in ALLOWED_IMAGE_EXTS:
         raise HTTPException(status_code=400, detail="Rasm formati noto'g'ri")
+
+    # Hajm limiti — DoS/disk to'ldirilishining oldini olish uchun cheklab o'qiymiz.
+    contents = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Fayl juda katta (maks. 5MB)",
+        )
 
     unique_filename = f"truck_type_{uuid.uuid4()}{file_ext}"
     file_path = os.path.join(UPLOAD_DIR, unique_filename)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    async with aiofiles.open(file_path, "wb") as buffer:
+        await buffer.write(contents)
 
-    return {"url": f"{STATIC_PATH}/{unique_filename}", "filename": file.filename}
+    return {"url": f"{STATIC_PATH}/{unique_filename}"}
 
 @router.get("/truck-types/{pk}", response_model=schemas.TruckTypeResponse, summary="Mashina turi tafsilotlari,hamma uchun")
 async def get_truck_type(pk: int, db: AsyncSession = Depends(get_db)):

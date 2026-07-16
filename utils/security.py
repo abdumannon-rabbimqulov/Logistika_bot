@@ -51,20 +51,19 @@ limiter = SimpleRateLimiter()
 
 
 def validate_text(text: str, min_len: int = 1, max_len: int = 1000) -> str:
-    """Validate text input - prevent SQL injection and XSS."""
+    """Validate text input — uzunlik cheklovi.
+
+    Eslatma: SQL injection'dan himoya ORM parametrlangan so'rovlari orqali
+    ta'minlanadi; kalit so'z ("SELECT", "--", ";") blocklist'i real himoya
+    bermaydi va haqiqiy matnni noto'g'ri rad etadi, shuning uchun olib tashlandi.
+    """
     if not text or not isinstance(text, str):
         raise ValueError("❌ Invalid text input")
-    
+
     text = text.strip()
-    
+
     if len(text) < min_len or len(text) > max_len:
         raise ValueError(f"❌ Text length must be {min_len}-{max_len} chars")
-    
-    # Check for SQL injection patterns
-    dangerous = [" UNION ", " SELECT ", " DROP ", " INSERT ", " DELETE ", "--", ";"]
-    for pattern in dangerous:
-        if pattern.upper() in text.upper():
-            raise ValueError("❌ Invalid characters in text")
-    
+
     return text
 

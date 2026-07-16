@@ -63,6 +63,14 @@ LIVE_LOC_DEFAULT_PERIOD_SEC = int(get_optional_env("LIVE_LOC_DEFAULT_PERIOD_SEC"
 ENVIRONMENT = get_optional_env('ENVIRONMENT', 'development')
 LOG_LEVEL = get_optional_env('LOG_LEVEL', 'INFO')
 
+# CORS: ruxsat etilgan originlar (vergul bilan ajratilgan). "*" ishlatilmaydi —
+# allow_credentials=True bilan birga "*" xavfli va spetsifikatsiya bo'yicha taqiqlangan.
+CORS_ORIGINS: list[str] = [
+    o.strip()
+    for o in get_optional_env("CORS_ORIGINS", WEBAPP_URL or "").split(",")
+    if o.strip()
+]
+
 
 
 

@@ -1,5 +1,5 @@
 from jose import jwt, JWTError
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi.security import OAuth2PasswordBearer
 from fastapi import Depends, status
 from fastapi.exceptions import HTTPException
@@ -31,9 +31,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
+# Parolni tiklash tokeni qancha vaqt amal qiladi (daqiqa)
+PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = 10
+
+
 def create_access_token(data: dict):
     to_encode=data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
     to_encode.update({
         "exp": expire,
@@ -45,13 +49,30 @@ def create_access_token(data: dict):
 
 def create_refresh_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
 
     to_encode.update({
         "exp": expire,
         "type": "refresh"
     })
 
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_password_reset_token(data: dict):
+    """Faqat parol tiklash uchun — qisqa muddatli, type='reset'.
+
+    type='access' emas, shuning uchun bu token bilan boshqa himoyalangan
+    endpointlarga (get_current_user) kirib bo'lmaydi.
+    """
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+    )
+    to_encode.update({
+        "exp": expire,
+        "type": "reset",
+    })
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 

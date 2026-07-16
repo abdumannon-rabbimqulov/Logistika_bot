@@ -1,11 +1,18 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config.config import BOT_TOKEN, get_db, REDIS_HOST, REDIS_PORT, REDIS_DB
+from config.config import (
+    BOT_TOKEN,
+    get_db,
+    REDIS_HOST,
+    REDIS_PORT,
+    REDIS_DB,
+    REFRESH_TOKEN_EXPIRE_DAYS,
+)
 from handlers.verification_code import send_verification_code
 from users.crud import (
 
@@ -17,6 +24,7 @@ from users.crud import (
 )
 from users.auth import (
     create_access_token,
+    create_password_reset_token,
     create_refresh_token,
     get_current_user,
     hash_password,
@@ -35,17 +43,39 @@ from users.schemas import (
 from driver.crud import  get_driver_by_user_id
 from utils.validation import normalize_phone_number
 
-import redis
+import redis.asyncio as aioredis
+from redis import exceptions as redis_exceptions
 from datetime import timedelta, datetime, timezone
 
 from handlers.bot import bot
 
-redis_client = redis.Redis(
+# Async Redis — event loop bloklanmasligi uchun sinxron `redis.Redis` emas.
+redis_client = aioredis.Redis(
     host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
 )
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Brute-force / spam himoyasi uchun sozlamalar
+LOGIN_MAX_ATTEMPTS = 10          # bitta telefon+IP uchun oynadagi maksimal urinish
+LOGIN_WINDOW_SEC = 300           # 5 daqiqa
+RESET_CODE_COOLDOWN_SEC = 60     # kod qayta yuborish uchun kutish vaqti
+
+
+async def _rate_limit_ok(key: str, max_hits: int, window_sec: int) -> bool:
+    """Redis INCR asosidagi oddiy, jarayonlararo umumiy rate limiter.
+
+    Redis ishlamasa — xizmatni to'smaslik uchun ruxsat beradi (fail-open).
+    """
+    try:
+        current = await redis_client.incr(key)
+        if current == 1:
+            await redis_client.expire(key, window_sec)
+        return current <= max_hits
+    except (redis_exceptions.RedisError, OSError) as exc:
+        logger.warning("Rate limit tekshiruvi uchun Redis mavjud emas: %s", exc)
+        return True
 
 
 
@@ -68,12 +98,31 @@ async def refresh_tokens(data: RefreshTokenRequest):
     if not user_id:
         raise HTTPException(status_code=401, detail="Refresh token xato")
 
-    saved_token=redis_client.get(f"blacklist_refresh_{data.refresh_token}")
+    blacklist_key = f"blacklist_refresh_{data.refresh_token}"
+    try:
+        saved_token = await redis_client.get(blacklist_key)
+    except (redis_exceptions.RedisError, OSError) as exc:
+        logger.error("Refresh blacklist tekshiruvi uchun Redis mavjud emas: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Vaqtincha xizmat mavjud emas, keyinroq urinib ko'ring.",
+        ) from exc
+
     if saved_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Bu refresh token allaqachon ishlatilgan yoki yaroqsiz.",
         )
+
+    # Rotatsiya: eski refresh token endi ishlatib bo'linmaydi (bir martalik).
+    try:
+        await redis_client.set(blacklist_key, "1", ex=timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
+    except (redis_exceptions.RedisError, OSError) as exc:
+        logger.error("Refresh token rotatsiyasi saqlanmadi: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Vaqtincha xizmat mavjud emas, keyinroq urinib ko'ring.",
+        ) from exc
 
     token_payload = {"sub": str(user_id)}
     return Token(
@@ -83,8 +132,9 @@ async def refresh_tokens(data: RefreshTokenRequest):
 
 
 
-@router.post("/login", summary="")
+@router.post("/login", summary="Telefon+parol yoki Telegram initData orqali kirish")
 async def login(
+    request: Request,
     phone_number: Optional[str] = Body(None, embed=True),
     password: Optional[str] = Body(None, embed=True),
     init_data: Optional[str] = Body(None, embed=True),
@@ -97,6 +147,16 @@ async def login(
             phone_number = normalize_phone_number(phone_number)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
+
+    # Brute-force himoyasi: parol orqali kirishda telefon+IP bo'yicha cheklov.
+    if phone_number and password:
+        client_ip = request.client.host if request.client else "unknown"
+        rl_key = f"login_attempts:{phone_number}:{client_ip}"
+        if not await _rate_limit_ok(rl_key, LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Juda ko'p urinish. Bir necha daqiqadan so'ng qayta urinib ko'ring.",
+            )
 
     if init_data:
         if not BOT_TOKEN:
@@ -141,6 +201,18 @@ async def login(
                 detail="Telefon raqam yoki parol noto'g'ri.",
             )
 
+    # Banlangan yoki nofaol akkauntga token berilmaydi.
+    if user.is_banned:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Akkaunt bloklangan.",
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Akkaunt faol emas.",
+        )
+
     if user.role == UserRole.DRIVER:
         existing_driver = await get_driver_by_user_id(db, user.id)
         if not existing_driver:
@@ -165,95 +237,123 @@ async def login(
 
 @router.post(
     "/reset-phone",
-    summary="Telefon raqam bor bolsa code yuboriladi",)
+    summary="Parolni tiklash uchun Telegramga tasdiqlash kodi yuboradi",
+)
 async def reset_phone(
     phone_number: str = Body(..., embed=True),
     db: AsyncSession = Depends(get_db),
 ):
+    """1-qadam: telefon raqam bo'yicha Telegramga kod yuborish.
+
+    Xavfsizlik: bu endpoint HECH QANDAY token qaytarmaydi. Foydalanuvchi
+    mavjudligini oshkor qilmaslik uchun har doim bir xil javob beriladi
+    (user enumeration'ni oldini olish).
+    """
     try:
         phone_number = normalize_phone_number(phone_number)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    user = await get_user_by_phone(db, phone_number)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Bunday telefon raqam bilan foydalanuvchi topilmadi.",
-        )
-    if not user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Foydalanuvchining Telegram akkaunti ulanmagan.",
-        )
-    code = await send_verification_code(
-        bot=bot,
-        telegram_id=user.id,
-    )
-    verification_code = VerificationCode(
-        user_id=user.id,
-        code=code,
-    )
-    db.add(verification_code)
-    await db.commit()
 
-    token_payload = {"sub": str(user.id)}
-    return {"detail": "Tasdiqlash kodi Telegram akkauntingizga yuborildi.",
-            "access_token": create_access_token(token_payload),
-            }
+    generic_response = {
+        "detail": "Agar bu raqam ro'yxatdan o'tgan bo'lsa, Telegram akkauntingizga tasdiqlash kodi yuborildi.",
+    }
+
+    user = await get_user_by_phone(db, phone_number)
+    if not user or not user.id:
+        return generic_response
+
+    # Kodni tez-tez qayta yuborishni cheklash (spam / SMS-bomba himoyasi).
+    cooldown_key = f"reset_cooldown:{user.id}"
+    if not await _rate_limit_ok(cooldown_key, 1, RESET_CODE_COOLDOWN_SEC):
+        return generic_response
+
+    code = await send_verification_code(bot=bot, telegram_id=user.id)
+    db.add(VerificationCode(user_id=user.id, code=code))
+    await db.commit()
+    return generic_response
+
 
 @router.post(
     "/verify-reset-code",
-    summary="Tasdiqlash kodini tekshirish va parolni tiklash",
+    summary="Tasdiqlash kodini tekshirish (parol tiklash tokenini beradi)",
 )
 async def verify_reset_code(
-    current_user: User = Depends(get_current_user),
+    phone_number: str = Body(..., embed=True),
     code: str = Body(..., embed=True),
     db: AsyncSession = Depends(get_db),
 ):
-    user=current_user
-    if not user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Foydalanuvchining Telegram akkaunti ulanmagan.",
-        )
-    verification_code = await db.execute(
+    """2-qadam: kod to'g'ri bo'lsa, faqat parol tiklash uchun qisqa muddatli
+    token qaytariladi. Bu token boshqa endpointlar uchun yaroqsiz."""
+    try:
+        phone_number = normalize_phone_number(phone_number)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    user = await get_user_by_phone(db, phone_number)
+    invalid_exc = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Tasdiqlash kodi noto'g'ri yoki muddati tugagan.",
+    )
+    if not user or not user.id:
+        raise invalid_exc
+
+    result = await db.execute(
         select(VerificationCode).where(
             VerificationCode.user_id == user.id,
             VerificationCode.code == code,
             VerificationCode.expires_at > datetime.now(timezone.utc),
         )
     )
-    verification_code = verification_code.scalars().first()
+    verification_code = result.scalars().first()
     if not verification_code:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tasdiqlash kodi noto'g'ri yoki muddati tugagan.",
-        )
+        raise invalid_exc
+
+    # Kod bir martalik — tasdiqlangach o'chiriladi.
     await db.delete(verification_code)
     await db.commit()
-    return {"detail": "Kod tasdiqlandi. Endi yangi parolni tiklash uchun /reset-password endpoint'iga murojaat qilishingiz mumkin."}
 
+    return {
+        "detail": "Kod tasdiqlandi. Endi /reset-password ga reset_token bilan murojaat qiling.",
+        "reset_token": create_password_reset_token({"sub": str(user.id)}),
+    }
 
 
 @router.post(
     "/reset-password",
-    summary="Parolni tiklash (telefon raqam orqali)",
+    summary="Parolni tiklash (verify-reset-code bergan reset_token bilan)",
 )
 async def reset_password(
-    current_user: User = Depends(get_current_user),
-    new_password: str = Body(..., embed=True,min_length=8,max_length=20),
-    confirm_password: str = Body(..., embed=True,min_length=8,max_length=20),
+    reset_token: str = Body(..., embed=True),
+    new_password: str = Body(..., embed=True, min_length=8, max_length=128),
+    confirm_password: str = Body(..., embed=True, min_length=8, max_length=128),
     db: AsyncSession = Depends(get_db),
 ):
-    user=current_user
+    """3-qadam: reset_token tekshiriladi va yangi parol o'rnatiladi."""
+    payload = verify_token(reset_token)
+    if not payload or payload.get("type") != "reset":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Parol tiklash tokeni yaroqsiz yoki muddati tugagan.",
+        )
+
     if new_password != confirm_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Yangi parol va tasdiqlash paroli mos kelmadi.",
         )
 
-    new_hashed_password = hash_password(new_password)
-    await update_password(db, user, new_hashed_password)
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Token xato")
+
+    user = await get_user_by_id(db, int(user_id))
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Foydalanuvchi topilmadi.",
+        )
+
+    await update_password(db, user, hash_password(new_password))
     return {"detail": "Parol muvaffaqiyatli tiklandi."}
 
 
@@ -339,7 +439,11 @@ async def logout(
     if not user_id or str(user_id) != str(current_user.id):
         raise HTTPException(status_code=401, detail="Refresh token xato")
     try:
-        redis_client.set(f"blacklist_refresh_{refresh_token}", "true", ex=timedelta(days=1))
-    except (redis.exceptions.RedisError, OSError) as exc:
+        await redis_client.set(
+            f"blacklist_refresh_{refresh_token}",
+            "true",
+            ex=timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+        )
+    except (redis_exceptions.RedisError, OSError) as exc:
         logger.warning("Redis logout blacklist unavailable, local logout only: %s", exc)
     return {"detail": "Muvaffaqiyatli logout qilindi."}
