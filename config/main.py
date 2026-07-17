@@ -25,8 +25,8 @@ from sqlalchemy.orm import configure_mappers
 configure_mappers()
 
 from driver.router import router as driver_router
+from order.router import router as order_router
 from users.router import router as auth_router
-from users.tariff_router import router as tariff_admin_router
 from Admin_panel.router import router as admin_router
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -87,6 +87,7 @@ def _register_api_routers(
 ) -> None:
     kwargs = {"prefix": prefix, "include_in_schema": include_in_schema}
     target.include_router(driver_router, **kwargs)
+    target.include_router(order_router, **kwargs)
     auth_prefix = f"{prefix}/auth".replace("//", "/")
     target.include_router(
         auth_router,
@@ -94,7 +95,6 @@ def _register_api_routers(
         tags=["Auth"],
         include_in_schema=include_in_schema,
     )
-    target.include_router(tariff_admin_router, **kwargs)
     target.include_router(admin_router, **kwargs)
 
 

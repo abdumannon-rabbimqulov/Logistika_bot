@@ -129,3 +129,52 @@ class DriverLocationItem(BaseModel):
     lon: float
     ts: datetime
     expires_at: Optional[datetime] = None
+
+
+# ════════════════════════════════════════════════════════════
+# KOMISSIYA / BALANS (billing)
+# ════════════════════════════════════════════════════════════
+
+
+class CommissionSettingsResponse(BaseModel):
+    commission_percent: Decimal
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CommissionSettingsUpdate(BaseModel):
+    commission_percent: Decimal = Field(..., ge=0, le=100, description="Har bir order narxidan olinadigan foiz")
+
+
+class BalanceAdjustRequest(BaseModel):
+    amount: Decimal = Field(
+        ..., description="Musbat = balansga qo'shish (to'ldirish), manfiy = balansdan yechish (tuzatish)"
+    )
+    note: Optional[str] = Field(None, max_length=300)
+
+    @field_validator("amount")
+    @classmethod
+    def amount_not_zero(cls, v: Decimal) -> Decimal:
+        if v == 0:
+            raise ValueError("amount 0 bo'lishi mumkin emas")
+        return v
+
+
+class BalanceTransactionResponse(BaseModel):
+    id: int
+    user_id: int
+    type: str
+    amount: Decimal
+    balance_after: Decimal
+    order_id: Optional[int] = None
+    created_by_admin_id: Optional[int] = None
+    note: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def enum_to_value(cls, v):
+        return v.value if hasattr(v, "value") else v

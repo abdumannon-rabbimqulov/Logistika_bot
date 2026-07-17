@@ -54,6 +54,12 @@ REDIS_HOST = get_optional_env('REDIS_HOST', 'logistika_redis')
 REDIS_PORT = int(get_optional_env('REDIS_PORT', '6379'))
 REDIS_DB = int(get_optional_env('REDIS_DB', '2'))
 
+# Yandex Geocoder — manzil qidirish/aniqlash (order/router.py, services/yandex_geocoder.py)
+API_YANDEX_KEY = get_optional_env('API_YANDEX_KEY')
+
+# Self-hosted OSRM — marshrut/masofa hisoblash (docker-compose'dagi "osrm" xizmati)
+OSRM_BASE_URL = get_optional_env('OSRM_BASE_URL', 'http://osrm:5000')
+
 
 LIVE_LOC_TTL_SEC = int(get_optional_env("LIVE_LOC_TTL_SEC", "120"))
 LIVE_LOC_DB_THROTTLE_SEC = int(get_optional_env("LIVE_LOC_DB_THROTTLE_SEC", "60"))

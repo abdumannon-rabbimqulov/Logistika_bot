@@ -168,6 +168,14 @@ async def update_my_driver_profile(
     dump = data.model_dump(exclude_unset=True)
     dump.pop("last_latitude", None)
     dump.pop("last_longitude", None)
+
+    # Bloklangan (masalan qarz tufayli) haydovchi liniyaga chiqa olmaydi
+    if driver.is_blocked and (dump.get("is_available") or dump.get("is_live_location_active")):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Siz bloklangansiz — liniyaga chiqa olmaysiz. Sababi: " + (driver.block_reason or "noma'lum"),
+        )
+
     if dump:
         await crud.update_driver(db, driver.id, schemas.DriverUpdate(**dump))
         driver = await crud.get_driver(db, driver.id)

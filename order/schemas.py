@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from order.models import OrderStatus, WaypointStatus, WaypointType
 
@@ -21,8 +21,24 @@ class OrderWaypointBase(BaseModel):
 
 
 class OrderWaypointCreate(OrderWaypointBase):
-    """Buyurtma yaratishda kelayotgan waypoint (status kiritilmaydi, default PENDING)"""
-    pass
+    """Buyurtma yaratishda kelayotgan waypoint (status kiritilmaydi, default PENDING).
+
+    Ikkala holat ham qabul qilinadi:
+    - faqat `address` (matn) — backend Yandex Geocoder orqali koordinatani topadi;
+    - faqat `latitude`/`longitude` (masalan Telegram "joylashuvni yuborish") — backend
+      manzil matnini reverse-geocoding orqali topadi.
+    Ikkalasi ham berilishi mumkin — bu holda berilgan qiymatlar ustuvor, qidiruv qilinmaydi.
+    """
+
+    @model_validator(mode="after")
+    def check_address_or_coordinates(self) -> "OrderWaypointCreate":
+        has_coords = self.latitude is not None and self.longitude is not None
+        has_address = bool(self.address and self.address.strip())
+        if not has_coords and not has_address:
+            raise ValueError(
+                "Har bir nuqta uchun manzil matni yoki koordinata (latitude+longitude) kiritilishi shart"
+            )
+        return self
 
 
 class OrderWaypointUpdate(BaseModel):
@@ -153,3 +169,21 @@ class OrderDetailResponse(OrderResponse):
             OrderWaypointResponse.model_validate(order.current_waypoint) if order.current_waypoint else None
         )
         return base
+
+
+# ============================================================
+#  Manzil qidirish (Yandex Geocoder)
+# ============================================================
+
+class GeocodeSuggestion(BaseModel):
+    """Manzil matni bo'yicha qidiruv natijasi (autocomplete uchun)."""
+    address: str
+    latitude: float
+    longitude: float
+
+
+class ReverseGeocodeResponse(BaseModel):
+    """Koordinata bo'yicha topilgan manzil (sender o'z joylashuvini yuborganda)."""
+    address: Optional[str] = None
+    latitude: float
+    longitude: float

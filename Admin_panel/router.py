@@ -25,7 +25,7 @@ from Admin_panel import schemas as admin_schemas
 from Admin_panel.validation import is_admin
 from config.config import ADMIN_IDS, async_session, get_db
 from order import schemas as order_schemas
-from services import live_location
+from services import billing, live_location
 from users import crud as user_crud
 from users.auth import verify_token
 from users.models import User, UserRole
@@ -162,6 +162,63 @@ async def admin_get_driver_location(
     if not item:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Live lokatsiya yo'q.")
     return item
+
+
+# ════════════════════════════════════════════════════════════
+# KOMISSIYA / BALANS (billing)
+# ════════════════════════════════════════════════════════════
+
+
+@router.get("/settings/commission", response_model=admin_schemas.CommissionSettingsResponse)
+async def get_commission_settings(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(is_admin),
+):
+    return await billing.get_or_create_settings(db)
+
+
+@router.patch("/settings/commission", response_model=admin_schemas.CommissionSettingsResponse)
+async def update_commission_settings(
+    data: admin_schemas.CommissionSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(is_admin),
+):
+    return await billing.update_commission_percent(db, data.commission_percent)
+
+
+@router.post(
+    "/users/{user_id}/balance/adjust",
+    response_model=admin_schemas.BalanceTransactionResponse,
+    summary="Foydalanuvchi balansini qo'lda o'zgartirish (to'ldirish/tuzatish)",
+)
+async def adjust_user_balance(
+    user_id: int,
+    data: admin_schemas.BalanceAdjustRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(is_admin),
+):
+    user = await user_crud.get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Foydalanuvchi topilmadi.")
+    return await billing.adjust_user_balance(db, user, amount=data.amount, note=data.note, admin_id=admin.id)
+
+
+@router.get(
+    "/users/{user_id}/balance/transactions",
+    response_model=List[admin_schemas.BalanceTransactionResponse],
+    summary="Foydalanuvchi balans tarixi",
+)
+async def list_user_balance_transactions(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(is_admin),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+):
+    user = await user_crud.get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Foydalanuvchi topilmadi.")
+    return await billing.list_balance_transactions(db, user_id, skip=skip, limit=limit)
 
 
 # --- WebSocket: real-time driver location stream ---
