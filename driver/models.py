@@ -43,6 +43,10 @@ class TruckType(Base):
     height          : Mapped[Decimal|None] = mapped_column(Numeric(5, 2), nullable=True)    # m
     pallet_capacity : Mapped[int|None]     = mapped_column(Integer,       nullable=True)
 
+    # Narxlash — admin panel orqali belgilanadi, buyurtma narxini hisoblashda ishlatiladi
+    base_price  : Mapped[Decimal]      = mapped_column(Numeric(12, 2), nullable=False, default=0)  # boshlang'ich narx (UZS)
+    price_per_km: Mapped[Decimal]      = mapped_column(Numeric(12, 2), nullable=False, default=0)  # 1 km uchun narx (UZS)
+    min_price   : Mapped[Decimal|None] = mapped_column(Numeric(12, 2), nullable=True)               # minimal narx (qisqa masofa uchun pol)
 
     image_url   : Mapped[str|None]  = mapped_column(String(512), nullable=True)   # ikonka / rasm
     description : Mapped[str|None]  = mapped_column(String(200), nullable=True)
@@ -51,6 +55,13 @@ class TruckType(Base):
     created_at  : Mapped[datetime]  = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     drivers : Mapped[list["Driver"]] = relationship("Driver", back_populates="truck_type_obj")
+
+    def calculate_price(self, distance_km: Decimal) -> Decimal:
+        """Masofaga qarab narx: base_price + price_per_km * masofa, min_price dan past bo'lmaydi."""
+        price = self.base_price + self.price_per_km * distance_km
+        if self.min_price is not None and price < self.min_price:
+            price = self.min_price
+        return price
 
     def __repr__(self) -> str:
         return f"<TruckType(id={self.id}, name='{self.name}')>"

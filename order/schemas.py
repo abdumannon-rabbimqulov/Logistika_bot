@@ -70,12 +70,15 @@ class OrderBase(BaseModel):
     volume: Optional[Decimal] = Field(None, gt=0, description="Yuk hajmi, m³")
     pickup_at: datetime
     required_truck_type_id: int
-    price: Decimal = Field(..., gt=0)
-    currency: str = Field(default="UZS", max_length=10)
 
 
 class OrderCreate(OrderBase):
-    """Yangi buyurtma yaratish uchun (mijoz tomonidan yuboriladi)"""
+    """Yangi buyurtma yaratish uchun (mijoz tomonidan yuboriladi).
+
+    `price`/`currency` bu yerda YO'Q — narx mijozdan ishonch bilan qabul qilinmaydi,
+    backend marshrutni (OSRM) hisoblab, tanlangan `required_truck_type_id` narxlariga
+    (`TruckType.calculate_price`) qarab serverda avtomatik hisoblaydi.
+    """
 
     waypoints: list[OrderWaypointCreate] = Field(..., min_length=2)
 
@@ -131,6 +134,8 @@ class OrderResponse(OrderBase):
     driver_id: Optional[int] = None
     departure_at: Optional[datetime] = None
     total_distance_km: Optional[Decimal] = None
+    price: Decimal
+    currency: str
     status: OrderStatus
     created_at: datetime
     updated_at: datetime
@@ -187,3 +192,46 @@ class ReverseGeocodeResponse(BaseModel):
     address: Optional[str] = None
     latitude: float
     longitude: float
+
+
+# ============================================================
+#  Narx taklifi (Price estimate)
+# ============================================================
+
+class PriceEstimateLocation(BaseModel):
+    """Manzil matni yoki koordinata — ikkalasidan kamida bittasi berilishi shart."""
+    address: Optional[str] = Field(None, max_length=300)
+    latitude: Optional[Decimal] = Field(None, ge=-90, le=90)
+    longitude: Optional[Decimal] = Field(None, ge=-180, le=180)
+
+    @model_validator(mode="after")
+    def check_address_or_coordinates(self) -> "PriceEstimateLocation":
+        has_coords = self.latitude is not None and self.longitude is not None
+        has_address = bool(self.address and self.address.strip())
+        if not has_coords and not has_address:
+            raise ValueError(
+                "Manzil matni yoki koordinata (latitude+longitude) kiritilishi shart"
+            )
+        return self
+
+
+class PriceEstimateRequest(BaseModel):
+    """Pickup va delivery nuqtalari bo'yicha barcha mashina turlari uchun narx so'rovi."""
+    origin: PriceEstimateLocation
+    destination: PriceEstimateLocation
+
+
+class TruckTypePriceOption(BaseModel):
+    truck_type_id: int
+    name: str
+    image_url: Optional[str] = None
+    price: Decimal
+    currency: str = "UZS"
+
+
+class PriceEstimateResponse(BaseModel):
+    origin_address: Optional[str] = None
+    destination_address: Optional[str] = None
+    distance_km: Decimal
+    duration_min: Decimal
+    options: list[TruckTypePriceOption]

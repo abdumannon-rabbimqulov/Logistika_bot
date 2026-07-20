@@ -29,6 +29,9 @@ class TruckTypeBase(BaseModel):
     width: Optional[Decimal] = Field(None)
     height: Optional[Decimal] = Field(None)
     pallet_capacity: Optional[int] = Field(None)
+    base_price: Decimal = Field(Decimal("0"), ge=0, description="Boshlang'ich narx, UZS")
+    price_per_km: Decimal = Field(Decimal("0"), ge=0, description="1 km uchun narx, UZS")
+    min_price: Optional[Decimal] = Field(None, ge=0, description="Minimal narx (pol), UZS")
     image_url: Optional[str] = Field(None, max_length=512)
     description: Optional[str] = Field(None, max_length=200)
     is_active: bool = True
@@ -44,6 +47,9 @@ class TruckTypeUpdate(BaseModel):
     width: Optional[Decimal] = None
     height: Optional[Decimal] = None
     pallet_capacity: Optional[int] = None
+    base_price: Optional[Decimal] = Field(None, ge=0)
+    price_per_km: Optional[Decimal] = Field(None, ge=0)
+    min_price: Optional[Decimal] = Field(None, ge=0)
     image_url: Optional[str] = None
     description: Optional[str] = None
     is_active: Optional[bool] = None

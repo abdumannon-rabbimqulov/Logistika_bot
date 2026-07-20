@@ -99,6 +99,19 @@ async def reverse_geocode(
     return schemas.ReverseGeocodeResponse(address=address, latitude=latitude, longitude=longitude)
 
 
+@router.post("/estimate-price", response_model=schemas.PriceEstimateResponse,
+             summary="Manzillar bo'yicha barcha mashina turlari uchun narx taklifi")
+async def estimate_price(
+    data: schemas.PriceEstimateRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_active_user),
+):
+    try:
+        return await crud.estimate_price(db, data)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
 @router.get("/{order_id}", response_model=schemas.OrderDetailResponse, summary="Buyurtma tafsilotlari")
 async def get_order(
     order_id: int,

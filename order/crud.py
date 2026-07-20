@@ -9,39 +9,59 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from driver.models import TruckType
 from order.models import Order, OrderRoutePostGIS, OrderStatus, OrderWaypoint
-from order.schemas import OrderCreate, OrderUpdate, OrderWaypointCreate
+from order.schemas import OrderCreate, PriceEstimateRequest, OrderUpdate, OrderWaypointCreate
 from services import billing, osrm_client, yandex_geocoder
 
 logger = logging.getLogger(__name__)
 
 
-async def _resolve_waypoint_location(wp: OrderWaypointCreate) -> tuple[Optional[str], float, float]:
-    """Waypoint uchun (address, latitude, longitude) — yetishmagan tomonini to'ldiradi.
+async def _resolve_location(
+    address: Optional[str], latitude: Optional[Decimal], longitude: Optional[Decimal]
+) -> tuple[Optional[str], float, float]:
+    """(address, latitude, longitude) — yetishmagan tomonini to'ldiradi.
 
     - Koordinata berilgan bo'lsa (masalan sender Telegram orqali o'z joylashuvini yuborgan) —
       koordinata ustuvor, manzil matni bo'lmasa reverse-geocoding bilan topiladi.
     - Faqat manzil matni berilgan bo'lsa — Yandex Geocoder orqali qidirilib, eng mos
       (birinchi) natijaning koordinatasi olinadi.
     """
-    if wp.latitude is not None and wp.longitude is not None:
-        lat, lon = float(wp.latitude), float(wp.longitude)
-        address = wp.address
+    if latitude is not None and longitude is not None:
+        lat, lon = float(latitude), float(longitude)
         if not address:
             address = await yandex_geocoder.reverse_geocode(lat, lon)
         return address, lat, lon
 
-    candidates = await yandex_geocoder.search_address(wp.address or "")
+    candidates = await yandex_geocoder.search_address(address or "")
     if not candidates:
-        raise ValueError(f"Manzil topilmadi: '{wp.address}'")
+        raise ValueError(f"Manzil topilmadi: '{address}'")
     best = candidates[0]
     return best.address, best.latitude, best.longitude
 
 
+async def _resolve_waypoint_location(wp: OrderWaypointCreate) -> tuple[Optional[str], float, float]:
+    return await _resolve_location(wp.address, wp.latitude, wp.longitude)
+
+
 async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int) -> Order:
+    truck_type = await db.get(TruckType, data.required_truck_type_id)
+    if not truck_type or not truck_type.is_active:
+        raise ValueError("Ko'rsatilgan mashina turi topilmadi yoki faol emas")
+
     resolved: list[tuple[Optional[str], float, float]] = [
         await _resolve_waypoint_location(wp) for wp in data.waypoints
     ]
+
+    # Narx masofaga bog'liq bo'lgani uchun marshrutsiz buyurtma yaratib bo'lmaydi —
+    # avval mijozdan qo'lda qabul qilingan `price` shu yerda ishonchsiz manba edi.
+    try:
+        route = await osrm_client.get_route([(lat, lon) for _, lat, lon in resolved])
+    except osrm_client.OSRMRouteError as exc:
+        raise ValueError(f"Marshrutni hisoblab bo'lmadi, buyurtma yaratilmadi: {exc}") from exc
+
+    distance_km = Decimal(str(route.distance_km))
+    price = truck_type.calculate_price(distance_km)
 
     order = Order(
         customer_id=customer_id,
@@ -50,8 +70,10 @@ async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int)
         volume=data.volume,
         pickup_at=data.pickup_at,
         required_truck_type_id=data.required_truck_type_id,
-        price=data.price,
-        currency=data.currency,
+        price=price,
+        currency="UZS",
+        total_distance_km=distance_km,
+        route=OrderRoutePostGIS(geom_route=WKTElement(route.geometry_wkt, srid=4326)),
         waypoints=[
             OrderWaypoint(
                 sequence=wp.sequence,
@@ -65,16 +87,6 @@ async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int)
             for wp, (address, lat, lon) in zip(data.waypoints, resolved)
         ],
     )
-
-    try:
-        route = await osrm_client.get_route([(lat, lon) for _, lat, lon in resolved])
-    except osrm_client.OSRMRouteError as exc:
-        logger.warning("Marshrut hisoblanmadi, buyurtma marshrutsiz yaratiladi: %s", exc)
-        route = None
-
-    if route:
-        order.total_distance_km = Decimal(str(route.distance_km))
-        order.route = OrderRoutePostGIS(geom_route=WKTElement(route.geometry_wkt, srid=4326))
 
     db.add(order)
     await db.commit()
@@ -162,3 +174,45 @@ async def assign_driver(db: AsyncSession, order: Order, driver_id: int) -> Order
 async def delete_order(db: AsyncSession, order: Order) -> None:
     await db.delete(order)
     await db.commit()
+
+
+async def estimate_price(db: AsyncSession, data: PriceEstimateRequest) -> dict:
+    """Pickup/delivery manzillari bo'yicha masofani hisoblab, barcha aktiv mashina
+    turlari uchun narxni qaytaradi (mijoz mashina tanlashdan oldin ko'radi)."""
+    origin_address, origin_lat, origin_lon = await _resolve_location(
+        data.origin.address, data.origin.latitude, data.origin.longitude
+    )
+    dest_address, dest_lat, dest_lon = await _resolve_location(
+        data.destination.address, data.destination.latitude, data.destination.longitude
+    )
+
+    try:
+        route = await osrm_client.get_route([(origin_lat, origin_lon), (dest_lat, dest_lon)])
+    except osrm_client.OSRMRouteError as exc:
+        raise ValueError(f"Marshrut hisoblab bo'lmadi: {exc}") from exc
+
+    distance_km = Decimal(str(route.distance_km))
+
+    result = await db.execute(select(TruckType).where(TruckType.is_active.is_(True)))
+    truck_types = result.scalars().all()
+
+    options = sorted(
+        (
+            {
+                "truck_type_id": tt.id,
+                "name": tt.name,
+                "image_url": tt.image_url,
+                "price": tt.calculate_price(distance_km),
+            }
+            for tt in truck_types
+        ),
+        key=lambda o: o["price"],
+    )
+
+    return {
+        "origin_address": origin_address,
+        "destination_address": dest_address,
+        "distance_km": distance_km,
+        "duration_min": Decimal(str(route.duration_min)),
+        "options": options,
+    }
