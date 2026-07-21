@@ -170,6 +170,27 @@ class Driver(Base):
         score = rating_score + on_time_score + trip_bonus - cancel_penalty
         return round(max(score, 0.0), 1)
 
+    # FIX: `@hybrid_property` yolg'iz o'zi Python tomonidagi getter'ni SQL so'rovda ham
+    # ishlatishga urinadi — lekin bu yerdagi `min()`/`max()`/`float()`/`or` Python
+    # built-in'lari SQL ustunlarida (InstrumentedAttribute) ishlamaydi (`Driver.reliability_score`
+    # klass darajasida chaqirilganda `TypeError` tashlaydi). `order_by(Driver.reliability_score...)`
+    # amalda hech qachon ishlamagan — shu sababli SQL uchun alohida `.expression` qo'shildi
+    # (`func.coalesce`/`func.least`/`func.greatest` — PostgreSQL'da ishlaydi, loyiha shu DB'ni ishlatadi).
+    @reliability_score.expression
+    def reliability_score(cls):  # noqa: N805
+        rating = func.coalesce(cls.rating, 0)
+        on_time = func.coalesce(cls.on_time_percent, 0)
+        trips = func.coalesce(cls.total_trips, 0)
+        cancels = func.coalesce(cls.cancel_count, 0)
+
+        rating_score = (rating / 5.0) * 60
+        on_time_score = (on_time / 100.0) * 30
+        trip_bonus = func.least(trips / 5.0, 10)
+        cancel_penalty = func.least(cancels * 3.0, 30)
+
+        score = rating_score + on_time_score + trip_bonus - cancel_penalty
+        return func.greatest(score, 0.0)
+
     def __repr__(self) -> str:
         _id = self.__dict__.get("id", "Unknown")
         _truck = self.__dict__.get("truck_number", "Unknown")

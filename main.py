@@ -7,6 +7,7 @@ from config.config import  engine
 from config import registry
 import driver.models
 import order.models
+import order.dispatch_models
 import users.models
 from sqlalchemy.orm import configure_mappers
 configure_mappers()

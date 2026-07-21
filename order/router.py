@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, NoReturn, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,11 +9,16 @@ from config.config import ADMIN_IDS, get_db
 from driver.crud import get_driver_by_user_id
 from order import crud, schemas
 from order.models import Order
+from services import dispatch as dispatch_service
 from services import yandex_geocoder
 from users.auth import get_current_active_user, get_current_sender
 from users.models import User, UserRole
 
 router = APIRouter(prefix="/orders", tags=["Buyurtmalar (Orders)"])
+
+
+def _raise_dispatch_error(exc: dispatch_service.DispatchError) -> NoReturn:
+    raise HTTPException(exc.status_code, detail=str(exc)) from exc
 
 
 def _is_admin(user: User) -> bool:
@@ -164,33 +169,95 @@ async def update_order_status(
 
 
 @router.post("/{order_id}/assign-driver", response_model=schemas.OrderResponse,
-             summary="Buyurtmaga haydovchini biriktirish")
+             summary="Buyurtmaga qo'lda haydovchi biriktirish (faqat admin — favqulodda holat)")
 async def assign_driver_to_order(
     order_id: int,
     data: schemas.OrderAssignDriver,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
+    # Oddiy oqimda haydovchi buyurtmani `POST /orders/dispatch/{attempt_id}/accept` orqali,
+    # navbat bilan kelgan taklifni qabul qilib oladi (services/dispatch.py). Bu endpoint
+    # endi faqat admin uchun — masalan avtomatik dispatch ishlamay qolgan holatlarda qo'lda
+    # tuzatish uchun. Avval driverlar bu yerdan o'zini to'g'ridan-to'g'ri biriktira olardi —
+    # bu ochiq ro'yxatda lock yo'q edi va poyga sharoitiga (race condition) olib kelardi.
+    if not _is_admin(current_user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Ruxsat yo'q")
+
     order = await crud.get_order(db, order_id)
     if not order:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Buyurtma topilmadi")
 
-    if current_user.role == UserRole.DRIVER:
-        driver = await get_driver_by_user_id(db, current_user.id)
-        if not driver or driver.id != data.driver_id:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Faqat o'zingizni biriktira olasiz")
-        if driver.is_blocked:
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN,
-                detail="Siz bloklangansiz — buyurtma qabul qila olmaysiz. Sababi: " + (driver.block_reason or "noma'lum"),
-            )
-    elif not _is_admin(current_user):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Ruxsat yo'q")
-
-    if order.driver_id is not None:
+    updated = await crud.assign_driver(db, order, data.driver_id)
+    if updated is None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Buyurtmaga allaqachon haydovchi biriktirilgan")
+    return updated
 
-    return await crud.assign_driver(db, order, data.driver_id)
+
+@router.get("/dispatch/active", response_model=Optional[schemas.DispatchAttemptResponse],
+            summary="Haydovchining joriy faol dispatch taklifi (WebApp sinxronlash uchun)")
+async def get_active_dispatch(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if current_user.role != UserRole.DRIVER:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Faqat haydovchilar uchun")
+    driver = await get_driver_by_user_id(db, current_user.id)
+    if not driver:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Haydovchi profili topilmadi")
+    attempt = await dispatch_service.get_active_attempt(db, driver.id)
+    return schemas.DispatchAttemptResponse.model_validate(attempt) if attempt else None
+
+
+@router.post("/dispatch/{attempt_id}/accept", response_model=schemas.OrderDetailResponse,
+             summary="Haydovchi navbat bilan kelgan taklifni qabul qiladi")
+async def accept_dispatch(
+    attempt_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if current_user.role != UserRole.DRIVER:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Faqat haydovchilar uchun")
+    try:
+        order = await dispatch_service.accept_attempt(db, attempt_id, acting_user_id=current_user.id)
+    except dispatch_service.DispatchError as exc:
+        _raise_dispatch_error(exc)
+    return schemas.OrderDetailResponse.from_order(order)
+
+
+@router.post("/dispatch/{attempt_id}/reject", status_code=status.HTTP_204_NO_CONTENT,
+             summary="Haydovchi taklifni rad etadi — navbat keyingi nomzodga o'tadi")
+async def reject_dispatch(
+    attempt_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if current_user.role != UserRole.DRIVER:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Faqat haydovchilar uchun")
+    try:
+        await dispatch_service.reject_attempt(db, attempt_id, acting_user_id=current_user.id)
+    except dispatch_service.DispatchError as exc:
+        _raise_dispatch_error(exc)
+
+
+@router.post("/{order_id}/price-bump", response_model=schemas.OrderDetailResponse,
+             summary="Sender narxni oshirib qidiruvni davom ettiradi (5 urinish rad etilgandan keyin)")
+async def price_bump_order(
+    order_id: int,
+    data: schemas.PriceBumpRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_sender),
+):
+    order = await crud.get_order(db, order_id)
+    if not order:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Buyurtma topilmadi")
+    if order.customer_id != current_user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Faqat buyurtma egasi narxni oshira oladi")
+    try:
+        order = await dispatch_service.apply_price_bump(db, order, data.price)
+    except dispatch_service.DispatchError as exc:
+        _raise_dispatch_error(exc)
+    return schemas.OrderDetailResponse.from_order(order)
 
 
 @router.delete("/{order_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Buyurtmani bekor qilish (egasi)")

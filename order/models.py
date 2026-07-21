@@ -68,6 +68,17 @@ class Order(Base):
     price    : Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     currency : Mapped[str]     = mapped_column(String(10), default="UZS")
 
+    # Avtomatik dispatch: nechanchi haydovchi urinib ko'rilgani (docs/DISPATCH_SYSTEM_PLAN.md)
+    dispatch_round: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")
+    # Narx oshirilishidan oldingi asl narx (tarix uchun, birinchi bump'da to'ldiriladi)
+    original_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    # Barcha 5 urinish rad etilgan/tugagan payt — senderga narx oshirish so'ralganini bildiradi
+    price_bump_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Yuk og'irligi/hajmi tanlangan mashina sig'imidan oshsa shu yerga yoziladi (order bloklanmaydi,
+    # faqat sender/haydovchi/admin ko'radigan ogohlantirish — O'zbekiston bozorida haydovchilar
+    # ko'pincha "5 tonnalik"ga 6 tonna ham yuklaydi, shuning uchun majburiy taqiq qo'yilmagan)
+    overload_warning: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
 
     status: Mapped[OrderStatus] = mapped_column(
         SQLEnum(

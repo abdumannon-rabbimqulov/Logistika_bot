@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from decimal import Decimal
 from typing import Optional, Sequence
@@ -15,6 +16,22 @@ from order.schemas import OrderCreate, PriceEstimateRequest, OrderUpdate, OrderW
 from services import billing, osrm_client, yandex_geocoder
 
 logger = logging.getLogger(__name__)
+
+
+def _overload_warning(data: OrderCreate, truck_type: TruckType) -> Optional[str]:
+    """Yuk og'irligi/hajmi tanlangan mashina sig'imidan oshsa ogohlantirish matni qaytaradi.
+
+    Majburiy taqiq YO'Q — O'zbekiston bozorida haydovchilar ko'pincha e'lon qilingan
+    sig'imdan ortiqni ham qabul qiladi. Faqat ko'rinadigan ogohlantirish beriladi.
+    """
+    parts: list[str] = []
+    if data.weight is not None and data.weight > truck_type.max_weight:
+        parts.append(f"og'irlik {data.weight}t > {truck_type.max_weight}t")
+    if data.volume is not None and truck_type.max_volume is not None and data.volume > truck_type.max_volume:
+        parts.append(f"hajm {data.volume}m³ > {truck_type.max_volume}m³")
+    if not parts:
+        return None
+    return "Tanlangan mashina (" + truck_type.name + ") sig'imidan oshadi: " + ", ".join(parts)
 
 
 async def _resolve_location(
@@ -49,9 +66,11 @@ async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int)
     if not truck_type or not truck_type.is_active:
         raise ValueError("Ko'rsatilgan mashina turi topilmadi yoki faol emas")
 
-    resolved: list[tuple[Optional[str], float, float]] = [
-        await _resolve_waypoint_location(wp) for wp in data.waypoints
-    ]
+    # Har bir waypoint mustaqil ravishda geocode qilinadi — ketma-ket kutish o'rniga
+    # parallel yuborish umumiy javob vaqtini (N ta manzil bo'lsa ham) bitta so'rovga tenglashtiradi.
+    resolved: list[tuple[Optional[str], float, float]] = list(
+        await asyncio.gather(*(_resolve_waypoint_location(wp) for wp in data.waypoints))
+    )
 
     # Narx masofaga bog'liq bo'lgani uchun marshrutsiz buyurtma yaratib bo'lmaydi —
     # avval mijozdan qo'lda qabul qilingan `price` shu yerda ishonchsiz manba edi.
@@ -73,6 +92,7 @@ async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int)
         price=price,
         currency="UZS",
         total_distance_km=distance_km,
+        overload_warning=_overload_warning(data, truck_type),
         route=OrderRoutePostGIS(geom_route=WKTElement(route.geometry_wkt, srid=4326)),
         waypoints=[
             OrderWaypoint(
@@ -91,6 +111,18 @@ async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int)
     db.add(order)
     await db.commit()
     await db.refresh(order, attribute_names=["waypoints", "route"])
+
+    # Avtomatik dispatch: eng yaqin/mos haydovchiga taklif yuborishni boshlaydi
+    # (docs/DISPATCH_SYSTEM_PLAN.md). Bu xatoga uchrasa ham order yaratilishi buzilmasin —
+    # order PENDING holatda qoladi, admin/keyingi sweep qayta urinib ko'radi.
+    from services import dispatch as dispatch_service
+
+    try:
+        await dispatch_service.start_dispatch(db, order)
+    except Exception:
+        logger.exception("Order #%s uchun dispatch boshlanmadi", order.id)
+        await db.rollback()
+
     return order
 
 
@@ -157,15 +189,36 @@ async def update_order_status(db: AsyncSession, order: Order, new_status: OrderS
     if new_status == OrderStatus.COMPLETED and not was_completed:
         try:
             await billing.charge_order_commission(db, order)
-        except Exception:
+        except Exception as exc:
             logger.exception("Order #%s uchun komissiya yechishda xato", order.id)
+            # Xato jim qolmasin — komissiya yechilmasa tizim pul yo'qotadi, admin darhol
+            # Telegram orqali xabardor bo'lishi kerak (order baribir COMPLETED holatda qoladi).
+            from utils.admin_alerts import format_details_for_alert, send_error_to_admins
+
+            await send_error_to_admins(
+                title="Komissiya yechishda xato",
+                request_id="-",
+                method="INTERNAL",
+                path=f"order/{order.id}/complete",
+                client="-",
+                exc_type=type(exc).__name__,
+                details=format_details_for_alert(exc),
+            )
 
     return order
 
 
-async def assign_driver(db: AsyncSession, order: Order, driver_id: int) -> Order:
-    order.driver_id = driver_id
-    order.status = OrderStatus.ACCEPTED
+async def assign_driver(db: AsyncSession, order: Order, driver_id: int) -> Optional[Order]:
+    """Haydovchini biriktiradi — atomik (`WHERE driver_id IS NULL`), shuning uchun bir
+    vaqtda kelgan ikkinchi so'rov 0 qator yangilaydi va `None` qaytaradi (409 uchun)."""
+    result = await db.execute(
+        update(Order)
+        .where(Order.id == order.id, Order.driver_id.is_(None))
+        .values(driver_id=driver_id, status=OrderStatus.ACCEPTED)
+    )
+    if result.rowcount == 0:
+        await db.rollback()
+        return None
     await db.commit()
     await db.refresh(order, attribute_names=["driver_id", "status", "updated_at"])
     return order
@@ -179,11 +232,9 @@ async def delete_order(db: AsyncSession, order: Order) -> None:
 async def estimate_price(db: AsyncSession, data: PriceEstimateRequest) -> dict:
     """Pickup/delivery manzillari bo'yicha masofani hisoblab, barcha aktiv mashina
     turlari uchun narxni qaytaradi (mijoz mashina tanlashdan oldin ko'radi)."""
-    origin_address, origin_lat, origin_lon = await _resolve_location(
-        data.origin.address, data.origin.latitude, data.origin.longitude
-    )
-    dest_address, dest_lat, dest_lon = await _resolve_location(
-        data.destination.address, data.destination.latitude, data.destination.longitude
+    (origin_address, origin_lat, origin_lon), (dest_address, dest_lat, dest_lon) = await asyncio.gather(
+        _resolve_location(data.origin.address, data.origin.latitude, data.origin.longitude),
+        _resolve_location(data.destination.address, data.destination.latitude, data.destination.longitude),
     )
 
     try:
@@ -211,7 +262,11 @@ async def estimate_price(db: AsyncSession, data: PriceEstimateRequest) -> dict:
 
     return {
         "origin_address": origin_address,
+        "origin_latitude": origin_lat,
+        "origin_longitude": origin_lon,
         "destination_address": dest_address,
+        "destination_latitude": dest_lat,
+        "destination_longitude": dest_lon,
         "distance_km": distance_km,
         "duration_min": Decimal(str(route.duration_min)),
         "options": options,

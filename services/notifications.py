@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-from typing import Iterable, Literal
+from typing import Iterable, Literal, Optional
 
 DeletedBy = Literal["admin", "sender"]
 from urllib import error, parse, request
@@ -24,17 +25,50 @@ def _truncate(text: str, limit: int = 3200) -> str:
     return text[: limit - 20] + "\n... [truncated]"
 
 
-def _send_sync(chat_id: int, text: str) -> None:
-    """Telegram Bot API POST /sendMessage (sync, thread-safe)."""
+def inline_keyboard(buttons: list[list[tuple[str, str]]]) -> dict:
+    """[[("✅ Qabul qilish", "dispatch:accept:5")], ...] -> Telegram `reply_markup` dict."""
+    return {
+        "inline_keyboard": [
+            [{"text": text, "callback_data": callback_data} for text, callback_data in row]
+            for row in buttons
+        ]
+    }
+
+
+def _send_sync(chat_id: int, text: str, reply_markup: Optional[dict] = None) -> Optional[int]:
+    """Telegram Bot API POST /sendMessage (sync, thread-safe). Yuborilgan xabar id'sini qaytaradi."""
     if not BOT_TOKEN:
         logger.warning("BOT_TOKEN yo'q — Telegram xabari yuborilmadi (chat_id=%s)", chat_id)
-        return
+        return None
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": str(chat_id),
         "text": _truncate(text),
         "disable_web_page_preview": "true",
     }
+    if reply_markup is not None:
+        payload["reply_markup"] = json.dumps(reply_markup)
+    data = parse.urlencode(payload).encode("utf-8")
+    req = request.Request(url, data=data, method="POST")
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    with request.urlopen(req, timeout=6) as resp:  # noqa: S310
+        body = json.loads(resp.read().decode("utf-8"))
+    return body.get("result", {}).get("message_id")
+
+
+def _edit_sync(chat_id: int, message_id: int, text: str, reply_markup: Optional[dict] = None) -> None:
+    """Telegram Bot API POST /editMessageText (sync, thread-safe)."""
+    if not BOT_TOKEN:
+        return
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageText"
+    payload = {
+        "chat_id": str(chat_id),
+        "message_id": str(message_id),
+        "text": _truncate(text),
+        "disable_web_page_preview": "true",
+    }
+    # reply_markup berilmasa (None) — tugmalar olib tashlanadi (bo'sh inline_keyboard)
+    payload["reply_markup"] = json.dumps(reply_markup if reply_markup is not None else {"inline_keyboard": []})
     data = parse.urlencode(payload).encode("utf-8")
     req = request.Request(url, data=data, method="POST")
     req.add_header("Content-Type", "application/x-www-form-urlencoded")
@@ -42,14 +76,31 @@ def _send_sync(chat_id: int, text: str) -> None:
         _ = resp.read()
 
 
-async def send_telegram_message(chat_id: int, text: str) -> None:
-    """Bitta Telegram chat_id ga xabar; xato bo'lsa exception tashlamaydi."""
+async def send_telegram_message(
+    chat_id: int, text: str, *, reply_markup: Optional[dict] = None
+) -> Optional[int]:
+    """Bitta Telegram chat_id ga xabar; xato bo'lsa exception tashlamaydi. Xabar id qaytaradi."""
     try:
-        await asyncio.to_thread(_send_sync, int(chat_id), text)
+        return await asyncio.to_thread(_send_sync, int(chat_id), text, reply_markup)
     except (ValueError, error.URLError, error.HTTPError, TimeoutError) as exc:
         logger.warning("Telegram xabar yuborilmadi (chat_id=%s): %s", chat_id, exc)
     except Exception as exc:
         logger.warning("Kutilmagan Telegram xato (chat_id=%s): %s", chat_id, exc)
+    return None
+
+
+async def edit_telegram_message(
+    chat_id: int, message_id: int, text: str, *, reply_markup: Optional[dict] = None
+) -> None:
+    """Avval yuborilgan xabarni tahrirlaydi (masalan "⏱ Vaqt tugadi"); xato bo'lsa jim ketadi."""
+    if not chat_id or not message_id:
+        return
+    try:
+        await asyncio.to_thread(_edit_sync, int(chat_id), int(message_id), text, reply_markup)
+    except (ValueError, error.URLError, error.HTTPError, TimeoutError) as exc:
+        logger.warning("Telegram xabar tahrirlanmadi (chat_id=%s, message_id=%s): %s", chat_id, message_id, exc)
+    except Exception as exc:
+        logger.warning("Kutilmagan Telegram tahrirlash xatosi (chat_id=%s): %s", chat_id, exc)
 
 
 def order_deleted_message(cargo_name: str, deleted_by: DeletedBy) -> str:

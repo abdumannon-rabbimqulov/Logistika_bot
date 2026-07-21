@@ -19,6 +19,7 @@ from config.registry import Base
 from middlewares.error_handler import setup_error_handlers
 import driver.models
 import order.models
+import order.dispatch_models
 import users.models
 
 from sqlalchemy.orm import configure_mappers
@@ -35,13 +36,40 @@ from fastapi.staticfiles import StaticFiles
 logger = logging.getLogger(__name__)
 
 
+DISPATCH_SWEEP_INTERVAL_SEC = 20
+
+
+async def _dispatch_sweep_loop() -> None:
+    """Muddati o'tgan-u hali `pending` qolgan dispatch urinishlarini davriy tozalaydi.
+
+    `services/dispatch.py`dagi har bir urinish uchun alohida `asyncio.create_task` bilan
+    60s timeout ham bor, lekin process qayta ishga tushsa (deploy/crash) o'sha tasklar
+    yo'qoladi — shu sweep zaxira sifatida ishlaydi va navbatni tiklaydi.
+    """
+    from config.config import async_session
+    from services import dispatch as dispatch_service
+
+    while True:
+        try:
+            async with async_session() as db:
+                swept = await dispatch_service.sweep_expired(db)
+                if swept:
+                    logger.info("Dispatch sweep: %s ta muddati o'tgan urinish yopildi", swept)
+        except Exception:
+            logger.exception("Dispatch sweep xatosi")
+        await asyncio.sleep(DISPATCH_SWEEP_INTERVAL_SEC)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: jadval sxemasini yaratish (production'da alembic migratsiyasi tavsiya etiladi).
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    sweep_task = asyncio.create_task(_dispatch_sweep_loop())
     yield
-    # Shutdown: Redis ulanishini yopish.
+    # Shutdown: dispatch sweep tasklarini va Redis ulanishini yopish.
+    sweep_task.cancel()
     from services.live_location import close_redis
 
     await close_redis()

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from order.dispatch_models import DispatchAttemptStatus, DispatchMatchType
 from order.models import OrderStatus, WaypointStatus, WaypointType
 
 
@@ -82,6 +83,16 @@ class OrderCreate(OrderBase):
 
     waypoints: list[OrderWaypointCreate] = Field(..., min_length=2)
 
+    @field_validator("pickup_at")
+    @classmethod
+    def validate_pickup_at_not_in_past(cls, value: datetime) -> datetime:
+        # Soat mintaqasiz (naive) qiymat kelsa UTC deb qabul qilinadi (DB ustuni timezone=True).
+        aware_value = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+        # 1 daqiqalik imtiyoz — mijoz "hozir" tanlaganda so'rov tarmoqda kechikishi mumkin.
+        if aware_value < datetime.now(timezone.utc) - timedelta(minutes=1):
+            raise ValueError("Yuklash vaqti (pickup_at) o'tmishda bo'lishi mumkin emas")
+        return value
+
     @field_validator("waypoints")
     @classmethod
     def validate_waypoints(cls, waypoints: list[OrderWaypointCreate]) -> list[OrderWaypointCreate]:
@@ -135,8 +146,12 @@ class OrderResponse(OrderBase):
     departure_at: Optional[datetime] = None
     total_distance_km: Optional[Decimal] = None
     price: Decimal
+    original_price: Optional[Decimal] = None
     currency: str
     status: OrderStatus
+    dispatch_round: int = 0
+    price_bump_requested_at: Optional[datetime] = None
+    overload_warning: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     waypoints: list[OrderWaypointResponse] = []
@@ -154,6 +169,7 @@ class OrderListItem(BaseModel):
     status: OrderStatus
     pickup_at: datetime
     driver_id: Optional[int] = None
+    overload_warning: Optional[str] = None
     created_at: datetime
 
 
@@ -231,7 +247,35 @@ class TruckTypePriceOption(BaseModel):
 
 class PriceEstimateResponse(BaseModel):
     origin_address: Optional[str] = None
+    origin_latitude: float
+    origin_longitude: float
     destination_address: Optional[str] = None
+    destination_latitude: float
+    destination_longitude: float
     distance_km: Decimal
     duration_min: Decimal
     options: list[TruckTypePriceOption]
+
+
+# ============================================================
+#  Avtomatik dispatch (docs/DISPATCH_SYSTEM_PLAN.md)
+# ============================================================
+
+class DispatchAttemptResponse(BaseModel):
+    """Haydovchiga yuborilgan joriy taklif (WebApp `GET /orders/dispatch/active` uchun)."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    order_id: int
+    driver_id: int
+    round_number: int
+    match_type: DispatchMatchType
+    distance_km: Optional[Decimal] = None
+    status: DispatchAttemptStatus
+    sent_at: datetime
+    expires_at: datetime
+
+
+class PriceBumpRequest(BaseModel):
+    """Sender barcha urinishlar rad etilgandan keyin narxni oshiradi."""
+    price: Decimal = Field(..., gt=0)

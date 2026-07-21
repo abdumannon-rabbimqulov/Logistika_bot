@@ -3,6 +3,7 @@ from config.base import Base
 from users.models import User, UserRole, BalanceTransaction, BalanceTransactionType, VerificationCode
 from driver.models import Driver, TruckType, DriverVerificationStatus
 from order.models import Order, OrderWaypoint, OrderRoutePostGIS, OrderStatus, WaypointType, WaypointStatus
+from order.dispatch_models import DispatchAttempt, DispatchAttemptStatus, DispatchMatchType
 from Admin_panel.models import PlatformSettings
 
 # Barcha modellarni SQLAlchemy ro'yxatidan o'tkazish (Registry) kafolati
@@ -11,5 +12,6 @@ __all__ = [
     "User", "UserRole", "BalanceTransaction", "BalanceTransactionType", "VerificationCode",
     "Driver", "TruckType", "DriverVerificationStatus",
     "Order", "OrderWaypoint", "OrderRoutePostGIS", "OrderStatus", "WaypointType", "WaypointStatus",
+    "DispatchAttempt", "DispatchAttemptStatus", "DispatchMatchType",
     "PlatformSettings",
 ]
