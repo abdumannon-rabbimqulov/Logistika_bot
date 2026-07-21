@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/logistika-design-system-2d19e21b-bbef-465b-9789-26545c5e22a6/tokens/spacing.css">
+  <link rel="stylesheet" href="_ds/logistika-design-system-2d19e21b-bbef-465b-9789-26545c5e22a6/tokens/radii-shadows.css">
+  <link rel="stylesheet" href="_ds/logistika-design-system-2d19e21b-bbef-465b-9789-26545c5e22a6/tokens/motion.css">
+  <script src="_ds/logistika-design-system-2d19e21b-bbef-465b-9789-26545c5e22a6/_ds_bundle.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+    body { margin:0; background:#F4F5F7; }
+    .yk-scroll::-webkit-scrollbar { display:none; }
+    .yk-navitem { display:flex; flex-direction:column; align-items:center; gap:4px; flex:1; }
+  </style>
+</helmet>
+
+<div style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:16px; background:#F4F5F7; font-family:'Inter',sans-serif;">
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="393px,852px">
+
+    <div style="position:relative; width:100%; height:100%; overflow:hidden; background:#FFFFFF;">
+
+      <!-- scrollable content -->
+      <div class="yk-scroll" style="position:absolute; inset:0; bottom:78px; overflow-y:auto; -ms-overflow-style:none; scrollbar-width:none;">
+
+        <!-- top bar -->
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:60px 20px 8px;">
+          <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:20px; letter-spacing:.02em; color:#0F1319;">YUK</div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div style="position:relative; width:40px; height:40px; border-radius:50%; background:#F4F5F7; display:flex; align-items:center; justify-content:center;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0F1319" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 4-2 5-2 6h16c0-1-2-2-2-6"></path><path d="M10 20a2 2 0 004 0"></path></svg>
+              <span style="position:absolute; top:9px; right:10px; width:7px; height:7px; border-radius:50%; background:#EA5A15; border:1.5px solid #fff;"></span>
+            </div>
+            <div style="width:40px; height:40px; border-radius:50%; background:#F4F5F7; display:flex; align-items:center; justify-content:center;">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0F1319" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.5-7 8-7s8 3 8 7"></path></svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- main CTA -->
+        <div style="padding:14px 20px 0;">
+          <div style="display:flex; align-items:center; gap:14px; background:#FFFFFF; border:1.5px solid #EAECF0; border-radius:20px; padding:18px 18px; box-shadow:0 2px 10px rgba(15,19,25,.06);">
+            <div style="width:42px; height:42px; border-radius:14px; background:#FDEDE2; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EA5A15" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z"></path><circle cx="12" cy="10" r="2.4"></circle></svg>
+            </div>
+            <div style="flex:1;">
+              <div style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:17px; color:#0F1319;">Qayerga yuk jo'natasiz?</div>
+              <div style="font-size:13px; color:#8A93A2; margin-top:2px;">Manzilni kiriting va bir necha soniyada narxni bilib oling</div>
+            </div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8A93A2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M9 18l6-6-6-6"></path></svg>
+          </div>
+        </div>
+
+        <!-- active order card -->
+        <div style="padding:16px 20px 0;">
+          <div style="background:#0F1319; border-radius:20px; padding:18px; color:#fff;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="display:flex; align-items:center; gap:7px;">
+                <span style="width:7px; height:7px; border-radius:50%; background:#EA5A15;"></span>
+                <span style="font-size:12px; font-weight:600; letter-spacing:.04em; color:#EA5A15; text-transform:uppercase;">Yo'lda</span>
+              </div>
+              <span style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:22px;">14<span style="font-size:13px; font-weight:500; opacity:.6;"> daq</span></span>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; margin-top:14px;">
+              <div style="width:44px; height:44px; border-radius:12px; background:rgba(255,255,255,.08); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="8" width="15" height="9" rx="1.5"></rect><path d="M16 11h4l3 3v3h-3"></path><circle cx="6.5" cy="19" r="1.7"></circle><circle cx="17.5" cy="19" r="1.7"></circle></svg>
+              </div>
+              <div style="flex:1;">
+                <div style="font-size:14px; font-weight:600;">Sardor A. · Isuzu · Tentli</div>
+                <div style="font-size:12px; color:rgba(255,255,255,.55); margin-top:2px;">Toshkent → Samarqand</div>
+              </div>
+              <div style="padding:10px 18px; border-radius:12px; background:#EA5A15; font-size:13px; font-weight:600;">Kuzatish</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- quick transport select -->
+        <div style="padding:22px 0 0;">
+          <div style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px; color:#0F1319; padding:0 20px;">Transport turini tanlang</div>
+          <div class="yk-scroll" style="display:flex; gap:10px; padding:12px 20px; overflow-x:auto;">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:8px; min-width:66px;">
+              <div style="width:56px; height:56px; border-radius:16px; background:#F4F5F7; display:flex; align-items:center; justify-content:center;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0F1319" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="9" width="13" height="8" rx="1.5"></rect><path d="M15 11h4l3 3v3h-3"></path><circle cx="6.5" cy="18.5" r="1.6"></circle><circle cx="16.5" cy="18.5" r="1.6"></circle></svg></div>
+              <span style="font-size:12px; color:#0F1319; font-weight:500;">Damas</span>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:8px; min-width:66px;">
+              <div style="width:56px; height:56px; border-radius:16px; background:#FDEDE2; display:flex; align-items:center; justify-content:center;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#EA5A15" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="8" width="15" height="9" rx="1.5"></rect><path d="M16 11h4l3 3v3h-3"></path><circle cx="6.5" cy="19" r="1.7"></circle><circle cx="17.5" cy="19" r="1.7"></circle></svg></div>
+              <span style="font-size:12px; color:#0F1319; font-weight:600;">Tentli</span>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:8px; min-width:66px;">
+              <div style="width:56px; height:56px; border-radius:16px; background:#F4F5F7; display:flex; align-items:center; justify-content:center;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0F1319" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M4.5 6.5l15 11M19.5 6.5l-15 11M4 12h16M6 4l2.5 2.5M17.5 4L15 6.5M6 20l2.5-2.5M17.5 20L15 17.5"></path></svg></div>
+              <span style="font-size:12px; color:#0F1319; font-weight:500;">Sovutqich</span>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:8px; min-width:66px;">
+              <div style="width:56px; height:56px; border-radius:16px; background:#F4F5F7; display:flex; align-items:center; justify-content:center;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0F1319" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-5 9 5-9 5-9-5z"></path><path d="M3 9v7l9 5 9-5V9M12 14v7"></path></svg></div>
+              <span style="font-size:12px; color:#0F1319; font-weight:500;">Bortli</span>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:8px; min-width:66px;">
+              <div style="width:56px; height:56px; border-radius:16px; background:#F4F5F7; display:flex; align-items:center; justify-content:center;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0F1319" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="3"></rect><path d="M9 8h6M12 6v6"></path></svg></div>
+              <span style="font-size:12px; color:#0F1319; font-weight:500;">Izoterm</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- saved addresses -->
+        <div style="padding:18px 20px 0;">
+          <div style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px; color:#0F1319;">Saqlangan manzillar</div>
+          <div style="display:flex; flex-direction:column; margin-top:8px;">
+            <div style="display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid #EAECF0;">
+              <div style="width:36px; height:36px; border-radius:10px; background:#F4F5F7; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0F1319" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"></path><path d="M5 10v10h14V10"></path></svg></div>
+              <div style="flex:1;">
+                <div style="font-size:14px; font-weight:600; color:#0F1319;">Uy</div>
+                <div style="font-size:12px; color:#8A93A2;">Chilonzor tumani, 7-mavze</div>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; padding:12px 0;">
+              <div style="width:36px; height:36px; border-radius:10px; background:#F4F5F7; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0F1319" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"></rect><path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2"></path></svg></div>
+              <div style="flex:1;">
+                <div style="font-size:14px; font-weight:600; color:#0F1319;">Ish</div>
+                <div style="font-size:12px; color:#8A93A2;">Yunusobod, Bobur ko'chasi 174</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- recent orders -->
+        <div style="padding:18px 20px 0;">
+          <div style="font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px; color:#0F1319;">Oxirgi buyurtmalar</div>
+          <div style="display:flex; flex-direction:column; gap:10px; margin-top:8px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:14px; border:1px solid #EAECF0; border-radius:16px;">
+              <div>
+                <div style="font-size:14px; font-weight:600; color:#0F1319;">Toshkent → Andijon</div>
+                <div style="font-size:12px; color:#8A93A2; margin-top:2px;">3 kun oldin · Tentli</div>
+              </div>
+              <div style="padding:9px 16px; border-radius:10px; background:#F4F5F7; font-size:13px; font-weight:600; color:#0F1319;">Takrorlash</div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:14px; border:1px solid #EAECF0; border-radius:16px;">
+              <div>
+                <div style="font-size:14px; font-weight:600; color:#0F1319;">Farg'ona → Namangan</div>
+                <div style="font-size:12px; color:#8A93A2; margin-top:2px;">1 hafta oldin · Bortli</div>
+              </div>
+              <div style="padding:9px 16px; border-radius:10px; background:#F4F5F7; font-size:13px; font-weight:600; color:#0F1319;">Takrorlash</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- banner -->
+        <div style="padding:18px 20px 24px;">
+          <div style="display:flex; align-items:center; gap:12px; background:#F4F5F7; border-radius:16px; padding:14px 16px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F1319" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16h.01"></path></svg>
+            <div style="font-size:12.5px; color:#0F1319; line-height:1.4;">Yangi haydovchilar uchun tekshiruv kuchaytirildi — yukingiz xavfsiz qo'lda.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- bottom nav -->
+      <div style="position:absolute; left:0; right:0; bottom:0; height:78px; background:#FFFFFF; border-top:1px solid #EAECF0; display:flex; align-items:center; padding:6px 8px 14px;">
+        <div class="yk-navitem">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#EA5A15" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"></path><path d="M5 10v10h14V10"></path></svg>
+          <span style="font-size:11px; font-weight:600; color:#EA5A15;">Bosh sahifa</span>
+        </div>
+        <div class="yk-navitem">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#8A93A2" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"></rect><path d="M3 11h18M9 15h6"></path></svg>
+          <span style="font-size:11px; color:#8A93A2;">Buyurtmalar</span>
+        </div>
+        <div class="yk-navitem">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#8A93A2" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path></svg>
+          <span style="font-size:11px; color:#8A93A2;">Xabarlar</span>
+        </div>
+        <div class="yk-navitem">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#8A93A2" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 3.5-7 8-7s8 3 8 7"></path></svg>
+          <span style="font-size:11px; color:#8A93A2;">Profil</span>
+        </div>
+      </div>
+
+    </div>
+
+  </x-import>
+</div>
+
+</x-dc>
+</body>
+</html>

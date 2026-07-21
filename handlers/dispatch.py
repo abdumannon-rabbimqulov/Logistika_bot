@@ -13,9 +13,11 @@ from decimal import Decimal, InvalidOperation
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
 
+import driver.crud as driver_crud
 import order.crud as order_crud
 from config.config import async_session
-from services import dispatch as dispatch_service
+from driver.schemas import DriverUpdate
+from services import dispatch as dispatch_service, notifications
 from services.dispatch import DispatchError
 
 logger = logging.getLogger(__name__)
@@ -37,6 +39,36 @@ async def on_dispatch_accept(callback: CallbackQuery) -> None:
             await callback.answer("Xatolik yuz berdi, keyinroq urinib ko'ring", show_alert=True)
             return
     await callback.answer("✅ Qabul qilindi!")
+
+    # Majburiy emas — shunchaki qulaylik uchun so'raladi: yangi buyurtma bilan band
+    # bo'lgani uchun boshqa takliflar kelmasligini xohlashi mumkin.
+    keyboard = notifications.inline_keyboard(
+        [[("✅ Ha, chiqaman", "goinactive:yes"), ("Yo'q, liniyada qolaman", "goinactive:no")]]
+    )
+    await notifications.send_telegram_message(
+        callback.from_user.id,
+        "Liniyadan vaqtincha chiqasizmi (yangi takliflar kelmasligi uchun)?",
+        reply_markup=keyboard,
+    )
+
+
+@router.callback_query(F.data.startswith("goinactive:"))
+async def on_go_inactive_response(callback: CallbackQuery) -> None:
+    answer = callback.data.split(":", 1)[1]
+    if answer == "yes":
+        async with async_session() as db:
+            driver = await driver_crud.get_driver_by_user_id(db, callback.from_user.id)
+            if driver:
+                await driver_crud.update_driver(db, driver.id, DriverUpdate(is_available=False))
+        await callback.answer("Liniyadan chiqdingiz")
+    else:
+        await callback.answer("Liniyada qoldingiz")
+
+    if callback.message:
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
 
 
 @router.callback_query(F.data.startswith("dispatch:reject:"))

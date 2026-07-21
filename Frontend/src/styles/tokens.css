@@ -1,0 +1,57 @@
+/*
+ * Dizayn tokenlari — design_handoff_yuk_asosiy_ekranlar/README.md asosida.
+ * Asosiy manba: "Yuk - Bosh Sahifa.dc.html" dagi literal hex qiymatlar (bu fayl
+ * var(--token) o'rniga to'g'ridan-to'g'ri hex ishlatgan). "order-screen.dc.html"
+ * faqat var(--token) ishlatadi va literal qiymat bermaydi — undagi gray-50..900 va
+ * brand-500/700 shu quyidagi qiymatlarga mos qat'iy neytral shkala sifatida qayta
+ * tiklangan (aniq manba yo'q joyda oqilona taxmin, layout/matn o'zgarmagan).
+ */
+:root {
+  /* Neytral shkala */
+  --color-gray-50: #FAFAFB;
+  --color-gray-100: #F4F5F7;
+  --color-gray-200: #EAECF0;
+  --color-gray-300: #D8DCE3;
+  --color-gray-400: #B4BAC4;
+  --color-gray-500: #8A93A2;
+  --color-gray-700: #4B5563;
+  --color-gray-800: #333A45;
+  --color-gray-900: #0F1319;
+
+  /* Accent (burnt orange) — faqat CTA/urg'u */
+  --color-accent: #EA5A15;
+  --color-accent-pressed: #CE4C0C;
+  --color-accent-tint: #FDEDE2;
+
+  /* Semantik */
+  --color-bg: #FFFFFF;
+  --color-bg-sunken: var(--color-gray-100);
+  --color-border: var(--color-gray-200);
+  --color-text-primary: var(--color-gray-900);
+  --color-text-secondary: var(--color-gray-500);
+  --color-text-tertiary: var(--color-gray-400);
+  --color-dark-card: var(--color-gray-900);
+  --color-danger: #D92D20;
+  --color-success: #12875A;
+
+  --border-w: 1px;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  --shadow-sm: 0 1px 3px rgba(15, 19, 25, 0.08);
+  --shadow-md: 0 2px 10px rgba(15, 19, 25, 0.06);
+  --shadow-lg: 0 -4px 24px rgba(15, 19, 25, 0.10);
+
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Space Grotesk', var(--font-body);
+
+  --text-body-xs: 400 12px/1.4 var(--font-body);
+  --text-body-sm: 500 13px/1.4 var(--font-body);
+  --text-body-md: 500 14px/1.4 var(--font-body);
+  --text-label-sm: 600 13px/1.2 var(--font-body);
+  --bottom-nav-height: 78px;
+}

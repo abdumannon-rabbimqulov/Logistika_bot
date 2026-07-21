@@ -8,6 +8,7 @@ from keyboards.reply import (
     get_language_keyboard,
     get_phone_keyboard,
     get_role_keyboard,
+    get_sender_webapp_keyboard,
 )
 from users.models import UserRole
 import database as db
@@ -92,7 +93,8 @@ async def cmd_start(message: types.Message, state: FSMContext):
             help_text = "Sizga qanday yordam bera olaman?"
 
         # TUZATILDI: Foydalanuvchiga javob yuborish qo'shildi
-        await message.answer(f"{greet}, {message.from_user.full_name}!\n{help_text}")
+        webapp_kb = get_sender_webapp_keyboard(user.language) if user.role == UserRole.SENDER else None
+        await message.answer(f"{greet}, {message.from_user.full_name}!\n{help_text}", reply_markup=webapp_kb)
     else:
         await message.answer(
             "Assalomu alaykum! Botdan foydalanish uchun tilni tanlang:\n"
@@ -184,7 +186,8 @@ async def select_role(message: types.Message, state: FSMContext):
         )
 
     # TUZATILDI: Ro'yxatdan o'tish tugaganligi haqida xabar yuborish qo'shildi
-    await message.answer(text, reply_markup=types.ReplyKeyboardRemove())  # Eski tugmalarni o'chirish uchun
+    webapp_kb = get_sender_webapp_keyboard(lang) if role == UserRole.SENDER else None
+    await message.answer(text, reply_markup=webapp_kb or types.ReplyKeyboardRemove())
     await state.clear()
 
 

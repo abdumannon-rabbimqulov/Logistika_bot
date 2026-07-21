@@ -26,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import driver.crud as driver_crud
@@ -103,6 +103,7 @@ async def _find_next_candidate(
                     Driver.is_available.is_(True),
                     Driver.is_blocked.is_(False),
                     Driver.docs_verified.is_(True),
+                    or_(Driver.available_from_date.is_(None), Driver.available_from_date <= order.pickup_at.date()),
                 )
             )
             eligible = {d.id: d for d in result.scalars().all()}
@@ -118,6 +119,7 @@ async def _find_next_candidate(
         Driver.is_available.is_(True),
         Driver.is_blocked.is_(False),
         Driver.docs_verified.is_(True),
+        or_(Driver.available_from_date.is_(None), Driver.available_from_date <= order.pickup_at.date()),
     )
     if exclude_driver_ids:
         query = query.where(Driver.id.notin_(exclude_driver_ids))

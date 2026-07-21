@@ -1,0 +1,337 @@
+.page {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--color-bg);
+}
+
+.scroll {
+  padding-bottom: calc(var(--bottom-nav-height) + 12px);
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 60px 20px 8px;
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.02em;
+  color: var(--color-text-primary);
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.iconCircle {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--color-bg-sunken);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.section {
+  padding: 14px 20px 0;
+}
+
+.mainCta {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--color-bg);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: 18px;
+  box-shadow: var(--shadow-md);
+  text-align: left;
+}
+
+.mainCtaIcon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: var(--color-accent-tint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mainCtaText {
+  flex: 1;
+  min-width: 0;
+}
+
+.mainCtaTitle {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 17px;
+  color: var(--color-text-primary);
+}
+
+.mainCtaSubtitle {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+
+.activeCard {
+  width: 100%;
+  background: var(--color-dark-card);
+  border-radius: var(--radius-xl);
+  padding: 18px;
+  color: #fff;
+  text-align: left;
+}
+
+.activeTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.activeStatus {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--color-accent);
+  text-transform: uppercase;
+}
+
+.activeDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.activeBody {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.activeIconBox {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.activeInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.activeRoute {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activeMeta {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 2px;
+}
+
+.trackBtn {
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: var(--color-accent);
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.sectionTitle {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--color-text-primary);
+  padding: 0 20px;
+}
+
+.transportScroll {
+  display: flex;
+  gap: 10px;
+  padding: 12px 20px;
+  overflow-x: auto;
+}
+
+.transportItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 66px;
+  flex-shrink: 0;
+}
+
+.transportIconBox {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--color-bg-sunken);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.transportIconBoxSelected {
+  composes: transportIconBox;
+  background: var(--color-accent-tint);
+}
+
+.transportLabel {
+  font-size: 12px;
+  color: var(--color-text-primary);
+  font-weight: 500;
+  max-width: 72px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transportLabelSelected {
+  composes: transportLabel;
+  font-weight: 600;
+}
+
+.addressRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border);
+  width: 100%;
+  text-align: left;
+}
+
+.addressRow:last-child {
+  border-bottom: none;
+}
+
+.addressIconBox {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--color-bg-sunken);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.addressInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.addressLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.addressSub {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recentList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.recentCard {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  text-align: left;
+  background: var(--color-bg);
+}
+
+.recentInfo {
+  min-width: 0;
+}
+
+.recentRoute {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recentMeta {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+
+.repeatBtn {
+  padding: 9px 16px;
+  border-radius: 10px;
+  background: var(--color-bg-sunken);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  flex-shrink: 0;
+}
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--color-bg-sunken);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+}
+
+.bannerText {
+  font-size: 12.5px;
+  color: var(--color-text-primary);
+  line-height: 1.4;
+}
+
+.emptyHint {
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  padding: 4px 20px 0;
+}

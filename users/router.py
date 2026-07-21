@@ -21,6 +21,7 @@ from users.crud import (
     get_user_by_phone,
     update_password,
     update_user,
+    update_user_role,
 )
 from users.auth import (
     create_access_token,
@@ -36,6 +37,7 @@ from users.telegram_auth import validate_telegram_init_data
 from users.schemas import (
     ChangePasswordRequest,
     RefreshTokenRequest,
+    RoleSelectRequest,
     Token,
     UserRead,
     UserUpdate,
@@ -384,6 +386,28 @@ async def update_my_profile(
                 detail="Bu telefon raqam allaqachon ro'yxatdan o'tgan.",
             )
     return await update_user(db, current_user, data)
+
+
+@router.post(
+    "/select-role",
+    response_model=UserRead,
+    summary="Ro'yxatdan o'tishda rolni birinchi marta tanlash (GUEST -> sender/driver)",
+)
+async def select_role(
+    data: RoleSelectRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Faqat hali rol tanlanmagan (GUEST) foydalanuvchi o'zi tanlay oladi — sender/driver
+    # bo'lib bo'lgan (yoki admin/dispatcher/manager) foydalanuvchi bu orqali o'zgartira
+    # olmaydi (buni faqat admin panel qila oladi).
+    if current_user.role != UserRole.GUEST:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Rolingiz allaqachon belgilangan.",
+        )
+    new_role = UserRole.SENDER if data.role == "sender" else UserRole.DRIVER
+    return await update_user_role(db, current_user, new_role)
 
 
 @router.patch(

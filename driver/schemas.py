@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict, field_validator, field_serializer
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 from utils.validation import CaseInsensitiveSchemaEnum
@@ -101,6 +101,9 @@ class DriverUpdate(BaseModel):
     current_region: Optional[str] = None
     is_available: Optional[bool] = None
     is_live_location_active: Optional[bool] = None
+    # Liniyaga chiqishda: NULL/berilmasa = hoziroq mavjud, sana berilsa shu sanadan
+    # boshlab yuk qabul qilishni bildiradi (services/dispatch.py moslashtiruvchisi uchun).
+    available_from_date: Optional[date] = None
 
 
 class UserStatus(CaseInsensitiveSchemaEnum):
@@ -133,6 +136,7 @@ class DriverProfileResponse(BaseModel):
     current_city: Optional[str] = None
     current_region: Optional[str] = None
     is_available: bool
+    available_from_date: Optional[date] = None
     total_trips: int
     on_time_percent: Decimal
     is_blocked: bool = False

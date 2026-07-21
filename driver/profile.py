@@ -51,6 +51,7 @@ async def build_driver_profile(
         current_city=driver.current_city,
         current_region=driver.current_region,
         is_available=driver.is_available,
+        available_from_date=driver.available_from_date,
         total_trips=driver.total_trips,
         on_time_percent=Decimal(str(driver.on_time_percent or 0)),
         is_blocked=driver.is_blocked,

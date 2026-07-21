@@ -1,11 +1,11 @@
 from __future__ import annotations
 import enum
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger, Integer, String, Boolean,
-    Numeric, Float, DateTime, ForeignKey,
+    Numeric, Float, Date, DateTime, ForeignKey,
     SmallInteger, func, text, CheckConstraint,
     Enum as SQLEnum,
 )
@@ -101,6 +101,11 @@ class Driver(Base):
     on_time_percent : Mapped[Decimal] = mapped_column(Numeric(5, 2), default=100.0)
 
     is_available  : Mapped[bool] = mapped_column(Boolean, default=True)
+    # Liniyaga chiqishda haydovchi belgilaydi — NULL = "hoziroq mavjud", sana berilsa
+    # "shu sanadan boshlab yuk qabul qilaman" (hozir boshqa buyurtmada bo'lsa ham,
+    # kelajakdagi yuklar uchun oldindan liniyaga kirish imkonini beradi). Faqat
+    # dispatch moslashtiruvchida ishlatiladi: services/dispatch.py _find_next_candidate.
+    available_from_date : Mapped[date | None] = mapped_column(Date, nullable=True)
     docs_verified : Mapped[bool] = mapped_column(
         Boolean,
         default=False,

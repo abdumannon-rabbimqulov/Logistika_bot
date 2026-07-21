@@ -1,0 +1,172 @@
+.page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-bottom: 32px;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 60px 20px 8px;
+}
+
+.backBtn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--color-bg-sunken);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 17px;
+}
+
+.section {
+  padding: 16px 20px 0;
+}
+
+.statusCard {
+  background: var(--color-dark-card);
+  color: #fff;
+  border-radius: var(--radius-xl);
+  padding: 20px;
+}
+
+.statusLabel {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.statusHeadline {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  margin-top: 8px;
+}
+
+.progressTrack {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.12);
+  margin-top: 16px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: var(--radius-pill);
+  transition: width 0.3s ease;
+}
+
+.progressHint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 8px;
+}
+
+.card {
+  background: var(--color-bg);
+  border: var(--border-w) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+}
+
+.routeRow {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.routePoint {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.routeDotOrigin {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--color-accent-pressed);
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.routeDotDest {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--color-gray-900);
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.priceRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
+}
+
+.priceLabel {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.priceValue {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.bumpBox {
+  background: var(--color-accent-tint);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+}
+
+.bumpText {
+  font-size: 13.5px;
+  color: var(--color-accent-pressed);
+  line-height: 1.4;
+  margin-bottom: 12px;
+}
+
+.bumpButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.bumpBtn {
+  flex: 1;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.bumpBtn:disabled {
+  opacity: 0.6;
+}
+
+.errorText {
+  color: var(--color-danger);
+  font-size: 13px;
+  margin-top: 8px;
+}

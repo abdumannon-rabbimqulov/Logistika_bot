@@ -63,3 +63,12 @@ class RefreshTokenRequest(BaseModel):
 
 class TelegramWebAppLoginRequest(BaseModel):
     init_data: str = Field(..., min_length=1)
+
+
+class RoleSelectRequest(BaseModel):
+    """Ro'yxatdan o'tishda GUEST o'z rolini birinchi marta tanlaydi (Mini App uchun).
+
+    Faqat SENDER/DRIVER ruxsat etiladi — ADMIN/DISPATCHER/MANAGER kabi rollarni
+    hech kim o'ziga o'zi tayinlay olmasligi kerak (bu faqat admin panel ishi).
+    """
+    role: Literal["sender", "driver"]

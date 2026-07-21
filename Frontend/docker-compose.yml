@@ -1,0 +1,22 @@
+# Frontend (Telegram Mini App) uchun alohida docker-compose — backend'ning
+# docker-compose.yml (repo ildizida) bilan bog'liq emas, mustaqil ishga tushiriladi:
+#
+#   cd Frontend
+#   docker compose up -d --build
+#
+# VITE_API_BASE_URL build vaqtida JS bundle'ga "quyiladi" (Vite env'lari runtime'da
+# o'zgarmaydi) — shuning uchun backend manzili o'zgarsa image qayta build qilinishi kerak.
+# Qiymat shu papkadagi `.env` faylidan olinadi (docker compose uni avtomatik o'qiydi).
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api}
+    image: yuk_frontend:latest
+    container_name: yuk_frontend
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    restart: unless-stopped
