@@ -3,6 +3,7 @@ import styles from './App.module.css';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { DriverGate } from './pages/DriverGate';
 import { HomePage } from './pages/HomePage';
+import { LocalLoginPage } from './pages/LocalLoginPage';
 import { MessagesPage } from './pages/MessagesPage';
 import { OrderPage } from './pages/OrderPage';
 import { OrderTrackingPage } from './pages/OrderTrackingPage';
@@ -45,6 +46,9 @@ function AuthGate() {
           </button>
         </div>
       );
+
+    case 'local-login':
+      return <LocalLoginPage />;
 
     case 'guest':
       return <RegisterPage />;

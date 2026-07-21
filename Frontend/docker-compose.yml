@@ -19,4 +19,6 @@ services:
     container_name: yuk_frontend
     ports:
       - "${FRONTEND_PORT:-8080}:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped

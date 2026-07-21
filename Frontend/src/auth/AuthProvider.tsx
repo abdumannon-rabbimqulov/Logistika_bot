@@ -1,14 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { getMe, loginWithInitData } from '../api/auth';
+import { getMe, loginWithInitData, loginWithPassword } from '../api/auth';
 import { clearTokens, getAccessToken, getRefreshToken, setTokens, setUnauthorizedHandler } from '../api/client';
 import { getInitData } from '../telegram';
 import type { UserRole } from '../types/api';
 
+// 'local-login' — Telegram init_data yo'q (oddiy brauzer/local manzildan ochilgan) —
+//                 telefon+parol bilan kirish formasi ko'rsatiladi
 // 'guest'   — hali rol tanlanmagan, Register oqimi ko'rsatiladi
 // 'sender'  — to'liq sender ilovasi
 // 'driver'  — haydovchi (DriverGate o'zi profil borligini tekshiradi)
 // 'unsupported' — admin/dispatcher/manager kabi Mini App uchun mo'ljallanmagan rol
-type AuthStatus = 'loading' | 'guest' | 'sender' | 'driver' | 'unsupported' | 'error';
+type AuthStatus = 'loading' | 'local-login' | 'guest' | 'sender' | 'driver' | 'unsupported' | 'error';
 
 interface AuthState {
   status: AuthStatus;
@@ -17,6 +19,7 @@ interface AuthState {
   errorMessage: string | null;
   retry: () => void;
   refreshRole: () => Promise<void>;
+  loginWithPhone: (phone: string, password: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -37,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
-      // Refresh ham ishlamadi — tozalab, qayta Telegram init_data bilan kirishga urinamiz.
+      // Refresh ham ishlamadi — tozalab, qayta kirishga urinamiz (init_data yoki local-login).
       setStatus('loading');
       setAttempt((n) => n + 1);
     });
@@ -53,9 +56,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!getAccessToken() || !getRefreshToken()) {
           const initData = getInitData();
           if (!initData) {
-            throw new Error(
-              "Telegram orqali ochilmagan — bu ilova faqat Telegram Mini App sifatida ishlaydi.",
-            );
+            // Telegram tashqarisida ochilgan (masalan lokal http://localhost:5173) —
+            // xato bermasdan telefon+parol bilan kirish formasini ko'rsatamiz.
+            setStatus('local-login');
+            return;
           }
           const login = await loginWithInitData(initData);
           if (cancelled) return;
@@ -97,9 +101,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus(statusForRole(me.role as UserRole));
   }, []);
 
+  // 'local-login' ekranidan (LocalLoginPage) chaqiriladi — Telegram init_data'ga
+  // muqobil, backendda allaqachon mavjud telefon+parol oqimi.
+  const loginWithPhone = useCallback(async (phone: string, password: string) => {
+    const login = await loginWithPassword(phone, password);
+    setTokens(login.access_token, login.refresh_token);
+    setRole(login.role);
+    setUserId(login.user_id);
+    setStatus(statusForRole(login.role));
+  }, []);
+
   const value = useMemo<AuthState>(
-    () => ({ status, role, userId, errorMessage, retry, refreshRole }),
-    [status, role, userId, errorMessage, retry, refreshRole],
+    () => ({ status, role, userId, errorMessage, retry, refreshRole, loginWithPhone }),
+    [status, role, userId, errorMessage, retry, refreshRole, loginWithPhone],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

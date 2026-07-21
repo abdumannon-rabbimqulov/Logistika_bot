@@ -108,8 +108,8 @@
   margin-top: 16px;
   padding: 14px;
   border-radius: var(--radius-lg);
-  background: #FDEDE2;
-  color: var(--color-accent-pressed);
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
   font-size: 13px;
   line-height: 1.4;
 }
