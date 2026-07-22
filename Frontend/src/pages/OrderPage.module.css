@@ -6,7 +6,7 @@
   background: var(--color-gray-50);
 }
 
-/* ===== Static dekorativ "xarita" — real integratsiya emas (dizayn shunday belgilagan) ===== */
+/* ===== Xarita qatlami — YandexMap komponenti shu ichida to'liq bo'yalib chiqadi ===== */
 .mapLayer {
   position: absolute;
   inset: 0;
@@ -14,110 +14,9 @@
   overflow: hidden;
 }
 
-.mapBlobA {
-  position: absolute;
-  left: -40px;
-  top: 60px;
-  width: 180px;
-  height: 150px;
-  border-radius: 40% 60% 55% 45%;
-  background: var(--color-gray-100);
-}
-
-.mapBlobB {
-  position: absolute;
-  right: -30px;
-  top: 420px;
-  width: 150px;
-  height: 130px;
-  border-radius: 50% 40% 60% 50%;
-  background: var(--color-gray-100);
-}
-
-.mapGrid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    repeating-linear-gradient(0deg, var(--color-gray-200) 0 1.5px, transparent 1.5px 96px),
-    repeating-linear-gradient(90deg, var(--color-gray-200) 0 1.5px, transparent 1.5px 116px);
-}
-
-.mapRoadA {
-  position: absolute;
-  left: -20%;
-  top: 38%;
-  width: 140%;
-  height: 3px;
-  background: var(--color-gray-300);
-  transform: rotate(-18deg);
-}
-
-.mapRoadB {
-  position: absolute;
-  left: 20%;
-  top: 0;
-  width: 3px;
-  height: 110%;
-  background: var(--color-gray-300);
-  transform: rotate(10deg);
-}
-
-.pickupDotWrap {
-  position: absolute;
-  left: 76px;
-  top: 452px;
-  width: 36px;
-  height: 36px;
-}
-
-.pickupDotPulse {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: var(--color-accent);
-  opacity: 0.18;
-  animation: pulse 1.6s ease-out infinite;
-}
-
-.pickupDotCore {
-  position: absolute;
-  left: 11px;
-  top: 11px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--color-accent-pressed);
-  border: 3px solid #fff;
-  box-shadow: var(--shadow-sm);
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.8);
-    opacity: 0;
-  }
-}
-
-.destinationPin {
-  position: absolute;
-  left: 246px;
-  top: 164px;
-  width: 30px;
-  height: 30px;
-  background: var(--color-gray-900);
-  border-radius: 50% 50% 50% 0;
-  transform: rotate(-45deg);
-  box-shadow: var(--shadow-sm);
-}
-
 .etaBadge {
   position: absolute;
-  left: 180px;
+  left: 16px;
   top: 190px;
   display: flex;
   align-items: center;

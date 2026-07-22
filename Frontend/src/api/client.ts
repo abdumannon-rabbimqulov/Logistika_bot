@@ -83,7 +83,11 @@ interface RequestOptions {
 }
 
 function buildUrl(path: string, query?: RequestOptions['query']): string {
-  const url = new URL(`${BASE_URL}${path}`);
+  // Ikkinchi argument (base) BASE_URL nisbiy ("/api", nginx proxy uchun) bo'lganda kerak —
+  // `new URL()` bazasiz nisbiy manzilni sinxron ravishda tashlaydi (hech qanday tarmoq
+  // so'rovi yuborilmasdan), BASE_URL absolyut bo'lganda esa bu argument shunchaki e'tiborga
+  // olinmaydi (URL spetsifikatsiyasi bo'yicha), shuning uchun ikkala holatda ham xavfsiz.
+  const url = new URL(`${BASE_URL}${path}`, window.location.origin);
   if (query) {
     for (const [key, value] of Object.entries(query)) {
       if (value !== undefined) url.searchParams.set(key, String(value));

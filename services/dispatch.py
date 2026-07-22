@@ -306,6 +306,7 @@ async def accept_attempt(db: AsyncSession, attempt_id: int, *, acting_user_id: i
     if row.bot_chat_id and row.bot_message_id:
         await notifications.edit_telegram_message(row.bot_chat_id, row.bot_message_id, "✅ Siz bu buyurtmani qabul qildingiz!")
 
+    await _send_navigation_links(order, driver.user_id)
     await _notify_sender_driver_found(db, order, driver)
     return order
 

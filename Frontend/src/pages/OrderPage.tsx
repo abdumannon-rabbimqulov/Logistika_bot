@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { createOrder, estimatePrice, reverseGeocode } from '../api/orders';
 import { AddressSearchSheet } from '../components/AddressSearchSheet';
 import { type CargoDetails, CargoDetailsSheet } from '../components/CargoDetailsSheet';
+import { YandexMap } from '../components/YandexMap';
 import {
   BackIcon,
   CalendarIcon,
@@ -137,16 +138,7 @@ export function OrderPage() {
   return (
     <div className={styles.page}>
       <div className={styles.mapLayer}>
-        <div className={styles.mapBlobA} />
-        <div className={styles.mapBlobB} />
-        <div className={styles.mapGrid} />
-        <div className={styles.mapRoadA} />
-        <div className={styles.mapRoadB} />
-        <div className={styles.pickupDotWrap}>
-          <div className={styles.pickupDotPulse} />
-          <div className={styles.pickupDotCore} />
-        </div>
-        {destination && <div className={styles.destinationPin} />}
+        <YandexMap origin={origin} destination={destination} />
         {durationMin !== null && (
           <div className={styles.etaBadge}>
             <ClockIcon />

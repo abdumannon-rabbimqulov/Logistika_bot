@@ -26,13 +26,30 @@ def _truncate(text: str, limit: int = 3200) -> str:
 
 
 def inline_keyboard(buttons: list[list[tuple[str, str]]]) -> dict:
-    """[[("✅ Qabul qilish", "dispatch:accept:5")], ...] -> Telegram `reply_markup` dict."""
-    return {
-        "inline_keyboard": [
-            [{"text": text, "callback_data": callback_data} for text, callback_data in row]
-            for row in buttons
-        ]
-    }
+    """[[("✅ Qabul qilish", "dispatch:accept:5")], ...] -> Telegram `reply_markup` dict.
+
+    Ikkinchi element "http://"/"https://" bilan boshlansa — havola tugmasi (url),
+    aks holda odatdagi callback tugmasi bo'ladi.
+    """
+
+    def _button(text: str, action: str) -> dict:
+        key = "url" if action.startswith(("http://", "https://")) else "callback_data"
+        return {"text": text, key: action}
+
+    return {"inline_keyboard": [[_button(text, action) for text, action in row] for row in buttons]}
+
+
+def url_keyboard(buttons: list[list[tuple[str, Optional[str]]]]) -> Optional[dict]:
+    """inline_keyboard kabi, lekin URL'i None bo'lgan tugmalarni tashlab ketadi.
+
+    Koordinata bo'lmasa navigatsiya havolasi tuzilmaydi (None qaytadi) — shunda
+    tugma umuman ko'rsatilmasligi kerak. Hech narsa qolmasa None qaytariladi.
+    """
+    rows = [[(text, url) for text, url in row if url] for row in buttons]
+    non_empty = [row for row in rows if row]
+    if not non_empty:
+        return None
+    return inline_keyboard(non_empty)  # type: ignore[arg-type]
 
 
 def _send_sync(chat_id: int, text: str, reply_markup: Optional[dict] = None) -> Optional[int]:
