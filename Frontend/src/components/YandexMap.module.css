@@ -18,3 +18,23 @@
   font: var(--text-label-sm);
   color: var(--color-text-secondary);
 }
+
+/* Xarita tayyor bo'lguncha ko'rinadigan aylanuvchi indikator (bo'sh kulrang ekran o'rniga). */
+.spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 32px;
+  height: 32px;
+  margin: -16px 0 0 -16px;
+  border: 3px solid var(--color-gray-200);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: mapSpin 0.8s linear infinite;
+}
+
+@keyframes mapSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,7 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   loadYandexMaps,
-  UZBEKISTAN_BOUNDS,
   UZBEKISTAN_CENTER,
   UZBEKISTAN_DEFAULT_ZOOM,
   type YMap,
@@ -9,9 +8,11 @@ import {
 import styles from './YandexMap.module.css';
 
 // Bitta nuqtaga (masalan foydalanuvchi joylashuvi) markazlashganda ishlatiladigan zoom.
-// Yuqoriroq son = yaqinroq/kattaroq ko'rinish (ko'chalar ko'rinadigan darajada).
+// Yandex shkalasi 0–19; ko'cha darajasi ko'rinadi, lekin haddan tashqari yaqin emas.
 const SINGLE_POINT_ZOOM = 15;
 const MY_LOCATION_ZOOM = 16;
+// Eng uzoq (kichik) zoom — foydalanuvchi butun O'zbekistonni ko'ra olishi uchun.
+const MIN_ZOOM = 4;
 
 interface MapPoint {
   latitude: number;
@@ -54,7 +55,9 @@ export const YandexMap = forwardRef<YandexMapHandle, Props>(function YandexMap(
         const map = new ymaps.Map(
           containerRef.current,
           { center: UZBEKISTAN_CENTER, zoom: UZBEKISTAN_DEFAULT_ZOOM, controls: ['zoomControl'] },
-          { restrictMapArea: UZBEKISTAN_BOUNDS, minZoom: 5 },
+          // restrictMapArea ATAYLAB YO'Q: u viewport'ni O'zbekiston to'rtburchagi ichida
+          // ushlab, telefon (vertikal) ekranida butun mamlakat ko'rinishiga to'sqinlik qilardi.
+          { minZoom: MIN_ZOOM },
         );
         mapRef.current = map;
         setReady(true);
@@ -123,6 +126,7 @@ export const YandexMap = forwardRef<YandexMapHandle, Props>(function YandexMap(
   return (
     <div className={styles.wrap}>
       <div ref={containerRef} className={styles.map} />
+      {!ready && !failed && <div className={styles.spinner} aria-label="Xarita yuklanmoqda" />}
       {failed && <div className={styles.error}>Xarita yuklanmadi</div>}
     </div>
   );

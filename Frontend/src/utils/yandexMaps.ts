@@ -34,15 +34,10 @@ export interface YMap {
   destroy(): void;
 }
 
-// O'zbekiston chegaralarini qamrab oluvchi to'rtburchak — xarita shu hududdan
-// tashqariga siljib ketmasligi (restrictMapArea) uchun ishlatiladi.
-export const UZBEKISTAN_BOUNDS: [[number, number], [number, number]] = [
-  [37.0, 55.9],
-  [45.6, 73.3],
-];
-
 export const UZBEKISTAN_CENTER: [number, number] = [41.377491, 64.585262];
-export const UZBEKISTAN_DEFAULT_ZOOM = 6;
+// Boshlang'ich zoom — butun O'zbekiston telefon ekraniga sig'adigan daraja.
+// (Oldin 6 edi — keng mamlakat vertikal ekranga to'liq sig'masdi.)
+export const UZBEKISTAN_DEFAULT_ZOOM = 5;
 
 let loadPromise: Promise<YMaps> | null = null;
 
