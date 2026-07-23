@@ -222,5 +222,7 @@ export interface PriceEstimateResponse {
   destination_longitude: number;
   distance_km: number;
   duration_min: number;
+  // OSRM marshrut chizig'i: [[latitude, longitude], ...] — xaritada ko'rsatiladi
+  route_geometry: [number, number][];
   options: PriceEstimateOption[];
 }

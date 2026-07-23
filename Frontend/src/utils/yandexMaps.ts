@@ -17,6 +17,11 @@ export interface YMaps {
     properties?: Record<string, unknown>,
     options?: Record<string, unknown>,
   ) => unknown;
+  Polyline: new (
+    geometry: [number, number][],
+    properties?: Record<string, unknown>,
+    options?: Record<string, unknown>,
+  ) => unknown;
   GeoObjectCollection: new () => unknown;
   util: { bounds: { fromPoints(points: [number, number][]): [[number, number], [number, number]] } };
 }

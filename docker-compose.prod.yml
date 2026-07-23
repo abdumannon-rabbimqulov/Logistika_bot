@@ -1,4 +1,32 @@
 services:
+  # OSRM — marshrut/masofa hisoblash. Busiz narx hisoblash umuman ishlamaydi
+  # (`POST /orders/estimate-price` va buyurtma yaratish 503 qaytaradi).
+  #
+  # db va redis bu faylda ataylab yo'q — ular holatli (stateful) xizmatlar va
+  # odatda host'da yoki alohida boshqariladi (shuning uchun `extra_hosts` bor).
+  # OSRM esa holatsiz: u faqat `osrm-data/` ni o'qiydi, shuning uchun konteynerda
+  # turgani ma'qul — dev bilan prod bir xil bo'ladi.
+  osrm:
+    image: osrm/osrm-backend
+    container_name: logistika_osrm_prod
+    volumes:
+      - ./osrm-data:/data:ro
+    command: osrm-routed --algorithm mld /data/uzbekistan.osrm
+    restart: always
+    # Tashqariga port ochilmaydi — faqat web/bot ichki tarmoq orqali murojaat qiladi.
+    expose:
+      - "5000"
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - 'exec 3<>/dev/tcp/127.0.0.1/5000 && printf "GET /route/v1/driving/69.24,41.31;69.28,41.33?overview=false HTTP/1.0\r\n\r\n" >&3 && grep -q ''"code":"Ok"'' <&3'
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
   web:
     build: .
     container_name: logistika_web_prod
@@ -13,6 +41,9 @@ services:
       - FORCE_COLOR=1
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      osrm:
+        condition: service_healthy
     command:
       - uvicorn
       - config.main:app
@@ -35,5 +66,8 @@ services:
       - TZ=Asia/Tashkent
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      osrm:
+        condition: service_healthy
     command: python main.py
     restart: always

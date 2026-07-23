@@ -38,6 +38,7 @@ export function OrderPage() {
   const [options, setOptions] = useState<PriceEstimateOption[]>([]);
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [durationMin, setDurationMin] = useState<number | null>(null);
+  const [routeGeometry, setRouteGeometry] = useState<[number, number][] | null>(null);
   const [estimating, setEstimating] = useState(false);
   const [addressSheet, setAddressSheet] = useState<AddressSheetTarget>(null);
   const [cargoSheetOpen, setCargoSheetOpen] = useState(false);
@@ -64,6 +65,7 @@ export function OrderPage() {
       setOptions([]);
       setDistanceKm(null);
       setDurationMin(null);
+      setRouteGeometry(null);
       return;
     }
     let cancelled = false;
@@ -77,11 +79,13 @@ export function OrderPage() {
         setOptions(res.options);
         setDistanceKm(res.distance_km);
         setDurationMin(res.duration_min);
+        setRouteGeometry(res.route_geometry?.length ? res.route_geometry : null);
         setSelectedTruckTypeId((prev) => prev ?? res.options[0]?.truck_type_id ?? null);
       })
       .catch(() => {
         if (cancelled) return;
         setOptions([]);
+        setRouteGeometry(null);
       })
       .finally(() => {
         if (!cancelled) setEstimating(false);
@@ -138,7 +142,7 @@ export function OrderPage() {
   return (
     <div className={styles.page}>
       <div className={styles.mapLayer}>
-        <YandexMap origin={origin} destination={destination} />
+        <YandexMap origin={origin} destination={destination} route={routeGeometry} />
         {durationMin !== null && (
           <div className={styles.etaBadge}>
             <ClockIcon />

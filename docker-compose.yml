@@ -32,16 +32,40 @@ services:
       - redis_data:/data
 
   # 3. OSRM Router (Xarita serveri)
+  #
+  # Ma'lumot fayllari `osrm-data/` da (git'ga kirmaydi, ~1 GB). Nomi doim "uzbekistan"
+  # — sanasiz, shuning uchun xaritani yangilaganda bu faylni tahrirlash SHART EMAS
+  # (`scripts/update-osrm-map.sh` fayllarni shu nom bilan almashtiradi). Qaysi sana
+  # yuklanganini `osrm-data/VERSION` dan ko'rish mumkin.
   osrm:
     image: osrm/osrm-backend
     container_name: osrm_router
     platform: linux/amd64        # Apple Silicon Mac-lar uchun majburiy
     volumes:
-      - .:/data
+      # Faqat xarita papkasi va faqat o'qish uchun — ilgari butun loyiha (`.:/data`)
+      # ulangan edi, ya'ni .env (BOT_TOKEN, DB_PASSWORD) ham konteynerga ochiq edi.
+      - ./osrm-data:/data:ro
     ports:
       - "5001:5000"              # Tashqi portni 5001 qildik, AirPlay bilan urishmaydi!
-    command: osrm-routed --algorithm mld /data/uzbekistan-260710.osm.pbf
+    # MLD algoritmi .osrm fayllarini o'qiydi (.osm.pbf emas — u faqat manba).
+    command: osrm-routed --algorithm mld /data/uzbekistan.osrm
     restart: always
+    # `restart: always` faqat jarayon o'lsa qayta ishga tushiradi — osilib qolsa (javob
+    # bermay turaveradi) bilmaydi. Healthcheck aynan shuni ushlaydi va `service_healthy`
+    # bog'liqligini ishlashga imkon beradi.
+    # osrm/osrm-backend image'ida curl/wget/nc yo'q — faqat bash bor, shuning uchun
+    # HTTP so'rov bash'ning /dev/tcp imkoniyati orqali yuboriladi. Haqiqiy marshrut
+    # so'raladi (shunchaki port ochiqligi emas), ya'ni xarita to'g'ri yuklanganini ham tekshiradi.
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - 'exec 3<>/dev/tcp/127.0.0.1/5000 && printf "GET /route/v1/driving/69.24,41.31;69.28,41.33?overview=false HTTP/1.0\r\n\r\n" >&3 && grep -q ''"code":"Ok"'' <&3'
+      interval: 30s
+      timeout: 5s
+      start_period: 60s        # katta xarita sekin ochilsa ulgurishi uchun
+      retries: 3
 
   # 4. FastAPI Web dasturi
   web:
@@ -70,7 +94,9 @@ services:
       logistika-redis:
         condition: service_started
       osrm:
-        condition: service_started
+        # service_started emas: konteyner ko'tarilishi bilan OSRM hali marshrut
+        # bera olmasligi mumkin — healthcheck o'tguncha kutiladi.
+        condition: service_healthy
 
   # 5. Telegram Bot
   bot:
@@ -90,7 +116,9 @@ services:
       logistika-redis:
         condition: service_started
       osrm:
-        condition: service_started
+        # service_started emas: konteyner ko'tarilishi bilan OSRM hali marshrut
+        # bera olmasligi mumkin — healthcheck o'tguncha kutiladi.
+        condition: service_healthy
 
 # Barcha volume'lar bitta joyda jamlandi
 volumes:

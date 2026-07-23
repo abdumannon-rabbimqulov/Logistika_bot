@@ -16,7 +16,10 @@ env/
 ENV/
 deploy.sh
 Frontend_bot/
-uzbekistan-260710.osm.pbf
+# OSRM xarita ma'lumotlari (~1 GB) — git'da saqlanmaydi, `scripts/update-osrm-map.sh`
+# orqali qayta yuklab olinadi. Qaysi sana ishlatilayotgani VERSION faylida (u kuzatiladi).
+osrm-data/*
+!osrm-data/VERSION
 *.cells
 *.osrm
 *.osrm.*

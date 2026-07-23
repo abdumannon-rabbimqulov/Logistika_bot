@@ -16,9 +16,11 @@ interface MapPoint {
 interface Props {
   origin?: MapPoint | null;
   destination?: MapPoint | null;
+  /** OSRM marshrut chizig'i: [[latitude, longitude], ...] (backend `route_geometry`). */
+  route?: [number, number][] | null;
 }
 
-export function YandexMap({ origin, destination }: Props) {
+export function YandexMap({ origin, destination, route }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<YMap | null>(null);
   const [ready, setReady] = useState(false);
@@ -64,6 +66,13 @@ export function YandexMap({ origin, destination }: Props) {
       if (cancelled) return;
       map.geoObjects.removeAll();
 
+      // Marshrut chizig'i belgilardan oldin qo'shiladi — shunda belgilar chiziq ustida qoladi.
+      if (route && route.length >= 2) {
+        map.geoObjects.add(
+          new ymaps.Polyline(route, {}, { strokeColor: '#15803D', strokeWidth: 5, strokeOpacity: 0.8 }),
+        );
+      }
+
       const points: [number, number][] = [];
       if (origin) {
         points.push([origin.latitude, origin.longitude]);
@@ -78,16 +87,19 @@ export function YandexMap({ origin, destination }: Props) {
         );
       }
 
-      if (points.length === 2) {
-        map.setBounds(ymaps.util.bounds.fromPoints(points), { checkZoomRange: true, zoomMargin: 60 });
-      } else if (points.length === 1) {
-        map.setCenter(points[0], 13);
+      // Marshrut bo'lsa — butun chiziq ko'rinadigan qilib moslanadi (chiziq to'g'ri
+      // yo'nalishda emas, egri bo'lgani uchun faqat ikki nuqta bo'yicha moslash yetarli emas).
+      const fitPoints = route && route.length >= 2 ? route : points;
+      if (fitPoints.length >= 2) {
+        map.setBounds(ymaps.util.bounds.fromPoints(fitPoints), { checkZoomRange: true, zoomMargin: 60 });
+      } else if (fitPoints.length === 1) {
+        map.setCenter(fitPoints[0], 13);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [ready, origin, destination]);
+  }, [ready, origin, destination, route]);
 
   return (
     <div className={styles.wrap}>

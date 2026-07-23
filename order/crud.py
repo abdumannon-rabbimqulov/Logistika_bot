@@ -14,6 +14,7 @@ from driver.models import TruckType
 from order.models import Order, OrderRoutePostGIS, OrderStatus, OrderWaypoint
 from order.schemas import OrderCreate, PriceEstimateRequest, OrderUpdate, OrderWaypointCreate
 from services import billing, osrm_client, yandex_geocoder
+from utils.geo import simplify_polyline
 
 logger = logging.getLogger(__name__)
 
@@ -76,8 +77,10 @@ async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int)
     # avval mijozdan qo'lda qabul qilingan `price` shu yerda ishonchsiz manba edi.
     try:
         route = await osrm_client.get_route([(lat, lon) for _, lat, lon in resolved])
-    except osrm_client.OSRMRouteError as exc:
-        raise ValueError(f"Marshrutni hisoblab bo'lmadi, buyurtma yaratilmadi: {exc}") from exc
+    except osrm_client.OSRMNoRouteError as exc:
+        # Nuqtalar yo'ldan uzoq — mijoz boshqa manzil tanlashi kerak (422).
+        # OSRMUnavailableError esa ushlanmaydi: u infratuzilma nosozligi, router 503 qaytaradi.
+        raise ValueError(f"Bu manzillar orasida yo'l topilmadi, buyurtma yaratilmadi: {exc}") from exc
 
     distance_km = Decimal(str(route.distance_km))
     price = truck_type.calculate_price(distance_km)
@@ -239,8 +242,8 @@ async def estimate_price(db: AsyncSession, data: PriceEstimateRequest) -> dict:
 
     try:
         route = await osrm_client.get_route([(origin_lat, origin_lon), (dest_lat, dest_lon)])
-    except osrm_client.OSRMRouteError as exc:
-        raise ValueError(f"Marshrut hisoblab bo'lmadi: {exc}") from exc
+    except osrm_client.OSRMNoRouteError as exc:
+        raise ValueError(f"Bu manzillar orasida yo'l topilmadi: {exc}") from exc
 
     distance_km = Decimal(str(route.distance_km))
 
@@ -269,5 +272,8 @@ async def estimate_price(db: AsyncSession, data: PriceEstimateRequest) -> dict:
         "destination_longitude": dest_lon,
         "distance_km": distance_km,
         "duration_min": Decimal(str(route.duration_min)),
+        # To'liq geometriya bazaga saqlanadigan aniqlikda — xaritada ko'rsatish uchun
+        # shuncha nuqta shart emas, shuning uchun javob hajmi soddalashtirib kichraytiriladi.
+        "route_geometry": simplify_polyline(route.geometry),
         "options": options,
     }

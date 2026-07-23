@@ -10,11 +10,24 @@ from driver.crud import get_driver_by_user_id
 from order import crud, schemas
 from order.models import Order
 from services import dispatch as dispatch_service
-from services import yandex_geocoder
+from services import osrm_client, yandex_geocoder
 from users.auth import get_current_active_user, get_current_sender
 from users.models import User, UserRole
 
 router = APIRouter(prefix="/orders", tags=["Buyurtmalar (Orders)"])
+
+
+def _routing_unavailable() -> HTTPException:
+    """OSRM ishlamayotganda qaytariladigan javob.
+
+    503 (422 emas), chunki bu mijozning xatosi emas — u manzilni o'zgartirib qayta
+    urinsa ham natija bo'lmaydi. Xatoning ichki matni (OSRM manzili, httpx tafsilotlari)
+    mijozga berilmaydi — u faqat logga yoziladi (services/osrm_client.py).
+    """
+    return HTTPException(
+        status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Marshrut xizmati vaqtincha ishlamayapti, biroz kutib qayta urinib ko'ring",
+    )
 
 
 def _raise_dispatch_error(exc: dispatch_service.DispatchError) -> NoReturn:
@@ -50,6 +63,8 @@ async def create_order(
 ):
     try:
         order = await crud.create_order(db, data, customer_id=current_user.id)
+    except osrm_client.OSRMUnavailableError as exc:
+        raise _routing_unavailable() from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     return schemas.OrderDetailResponse.from_order(order)
@@ -113,6 +128,8 @@ async def estimate_price(
 ):
     try:
         return await crud.estimate_price(db, data)
+    except osrm_client.OSRMUnavailableError as exc:
+        raise _routing_unavailable() from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 

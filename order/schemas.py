@@ -254,6 +254,8 @@ class PriceEstimateResponse(BaseModel):
     destination_longitude: float
     distance_km: Decimal
     duration_min: Decimal
+    # OSRM marshrut chizig'i: [[latitude, longitude], ...] — mijozga xaritada ko'rsatish uchun
+    route_geometry: list[tuple[float, float]] = []
     options: list[TruckTypePriceOption]
 
 

@@ -1,0 +1,4 @@
+source: https://download.geofabrik.de/asia/uzbekistan-latest.osm.pbf
+snapshot: 2026-07-10 (uzbekistan-260710)
+processed: 2026-07-22
+algorithm: mld

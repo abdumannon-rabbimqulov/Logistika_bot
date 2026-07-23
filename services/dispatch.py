@@ -34,7 +34,7 @@ import order.crud as order_crud
 from driver.models import Driver
 from order.dispatch_models import DispatchAttempt, DispatchAttemptStatus, DispatchMatchType
 from order.models import Order, OrderStatus
-from services import live_location, notifications
+from services import live_location, navigation, notifications
 from utils.geo import calculate_distance_km
 
 logger = logging.getLogger(__name__)
@@ -146,6 +146,38 @@ def _offer_text(order: Order, attempt: DispatchAttempt) -> str:
         f"💰 Narx: {order.price} {order.currency}"
         f"{distance_note}\n\n"
         f"⏱ 60 soniya ichida javob bering"
+    )
+
+
+async def _send_navigation_links(order: Order, chat_id: int) -> None:
+    """Buyurtma qabul qilingandan keyin haydovchiga navigatsiya havolalarini yuboradi.
+
+    Marshrut bizning ilovada chizilmaydi — haydovchi tugmani bosib o'zi odatlangan
+    ilovasida (Yandex/Google) ochadi. Koordinata yo'q bo'lsa tugma ko'rsatilmaydi.
+    """
+    origin, destination = order.origin, order.destination
+    keyboard = notifications.url_keyboard(
+        [
+            [
+                ("🧭 Yuk olish joyiga (Yandex)", navigation.yandex_point_url(origin)),
+                ("🧭 Google", navigation.google_point_url(origin)),
+            ],
+            [
+                ("🗺 To'liq marshrut (Yandex)", navigation.yandex_route_url(origin, destination)),
+                ("🗺 Google", navigation.google_route_url(origin, destination)),
+            ],
+        ]
+    )
+    if keyboard is None:
+        return
+
+    origin_addr = origin.address if origin and origin.address else "?"
+    dest_addr = destination.address if destination and destination.address else "?"
+    await notifications.send_telegram_message(
+        chat_id,
+        f"📍 Yuk olish: {origin_addr}\n🏁 Yetkazish: {dest_addr}\n\n"
+        "Marshrutni quyidagi tugmalar orqali o'zingizga qulay ilovada oching:",
+        reply_markup=keyboard,
     )
 
 
