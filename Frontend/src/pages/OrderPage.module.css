@@ -37,13 +37,16 @@
   left: 16px;
   right: 16px;
   display: flex;
-  justify-content: space-between;
+  /* Faqat profil tugmasi qoldi — o'ng burchakda tursin. */
+  justify-content: flex-end;
   align-items: center;
 }
 
 .topBarSecondary {
   composes: topBar;
   top: 130px;
+  /* Orqaga (chapda) va almashtirish (o'ngda) — ikki chetga. */
+  justify-content: space-between;
 }
 
 .iconBtn {
@@ -55,6 +58,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* "Mening joylashuvim" tugmasi — o'ng chetdagi tugmalar ustuni davomida (profil, almashtirish, keyin bu). */
+.myLocationBtn {
+  composes: iconBtn;
+  position: absolute;
+  top: 186px;
+  right: 16px;
 }
 
 /* ===== Bottom sheet ===== */

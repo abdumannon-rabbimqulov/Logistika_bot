@@ -16,6 +16,16 @@ export function BackIcon({ size = 18, color = 'var(--color-gray-800)', strokeWid
   );
 }
 
+/** "Mening joylashuvim" (locate me) tugmasi — nishon/crosshair uslubidagi ikonka. */
+export function LocationIcon({ size = 20, color = 'var(--color-gray-800)', strokeWidth = 1.9 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+    </svg>
+  );
+}
+
 /** Manzillarni almashtirish (swap) tugmasi ikonkasi. */
 export function SwapIcon({ size = 18, color = 'var(--color-gray-800)', strokeWidth = 1.9 }: IconProps) {
   return (

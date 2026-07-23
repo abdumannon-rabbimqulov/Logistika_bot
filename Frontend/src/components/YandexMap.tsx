@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   loadYandexMaps,
   UZBEKISTAN_BOUNDS,
@@ -8,9 +8,19 @@ import {
 } from '../utils/yandexMaps';
 import styles from './YandexMap.module.css';
 
+// Bitta nuqtaga (masalan foydalanuvchi joylashuvi) markazlashganda ishlatiladigan zoom.
+// Yuqoriroq son = yaqinroq/kattaroq ko'rinish (ko'chalar ko'rinadigan darajada).
+const SINGLE_POINT_ZOOM = 15;
+const MY_LOCATION_ZOOM = 16;
+
 interface MapPoint {
   latitude: number;
   longitude: number;
+}
+
+export interface YandexMapHandle {
+  /** Xaritani berilgan nuqtaga markazlashtirib yaqinlashtiradi ("mening joylashuvim" tugmasi uchun). */
+  focusLocation: (latitude: number, longitude: number) => void;
 }
 
 interface Props {
@@ -20,11 +30,20 @@ interface Props {
   route?: [number, number][] | null;
 }
 
-export function YandexMap({ origin, destination, route }: Props) {
+export const YandexMap = forwardRef<YandexMapHandle, Props>(function YandexMap(
+  { origin, destination, route },
+  ref,
+) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<YMap | null>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
+
+  useImperativeHandle(ref, () => ({
+    focusLocation: (latitude, longitude) => {
+      mapRef.current?.setCenter([latitude, longitude], MY_LOCATION_ZOOM, { duration: 300 });
+    },
+  }), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,7 +112,7 @@ export function YandexMap({ origin, destination, route }: Props) {
       if (fitPoints.length >= 2) {
         map.setBounds(ymaps.util.bounds.fromPoints(fitPoints), { checkZoomRange: true, zoomMargin: 60 });
       } else if (fitPoints.length === 1) {
-        map.setCenter(fitPoints[0], 13);
+        map.setCenter(fitPoints[0], SINGLE_POINT_ZOOM);
       }
     });
     return () => {
@@ -107,4 +126,4 @@ export function YandexMap({ origin, destination, route }: Props) {
       {failed && <div className={styles.error}>Xarita yuklanmadi</div>}
     </div>
   );
-}
+});

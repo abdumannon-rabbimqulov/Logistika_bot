@@ -1,15 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { createOrder, estimatePrice, reverseGeocode } from '../api/orders';
 import { AddressSearchSheet } from '../components/AddressSearchSheet';
 import { type CargoDetails, CargoDetailsSheet } from '../components/CargoDetailsSheet';
-import { YandexMap } from '../components/YandexMap';
+import { YandexMap, type YandexMapHandle } from '../components/YandexMap';
 import {
   BackIcon,
-  CalendarIcon,
   CardIcon,
   ClockIcon,
   DestinationFlagIcon,
+  LocationIcon,
   PlusIcon,
   ProfileIcon,
   SearchIcon,
@@ -31,6 +31,7 @@ export function OrderPage() {
   const location = useLocation();
   const prefill = (location.state as OrderPrefillState | null) ?? null;
   const geolocation = useGeolocation();
+  const mapRef = useRef<YandexMapHandle>(null);
 
   const [origin, setOrigin] = useState<OrderPointPrefill | null>(prefill?.origin ?? null);
   const [destination, setDestination] = useState<OrderPointPrefill | null>(prefill?.destination ?? null);
@@ -100,6 +101,24 @@ export function OrderPage() {
     setDestination(origin);
   }
 
+  // "Mening joylashuvim" tugmasi — xaritani foydalanuvchi joylashuviga yaqinlashtiradi.
+  // Avval useGeolocation aniqlagan koordinata ishlatiladi; hali aniqlanmagan bo'lsa
+  // (yoki ruxsat endi berilgan bo'lsa) qaytadan so'raladi.
+  function handleMyLocation() {
+    const focus = (lat: number, lon: number) => mapRef.current?.focusLocation(lat, lon);
+    if (geolocation.coords) {
+      focus(geolocation.coords.latitude, geolocation.coords.longitude);
+    } else if (origin) {
+      focus(origin.latitude, origin.longitude);
+    } else if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => focus(pos.coords.latitude, pos.coords.longitude),
+        undefined,
+        { enableHighAccuracy: true, timeout: 8000 },
+      );
+    }
+  }
+
   function handleAddressSelected(suggestion: GeocodeSuggestion) {
     const point: OrderPointPrefill = { address: suggestion.address, latitude: suggestion.latitude, longitude: suggestion.longitude };
     if (addressSheet === 'origin') setOrigin(point);
@@ -142,19 +161,19 @@ export function OrderPage() {
   return (
     <div className={styles.page}>
       <div className={styles.mapLayer}>
-        <YandexMap origin={origin} destination={destination} route={routeGeometry} />
+        <YandexMap ref={mapRef} origin={origin} destination={destination} route={routeGeometry} />
         {durationMin !== null && (
           <div className={styles.etaBadge}>
             <ClockIcon />
             {formatEta(durationMin)} da yetib keladi
           </div>
         )}
+        <button className={styles.myLocationBtn} onClick={handleMyLocation} aria-label="Mening joylashuvim">
+          <LocationIcon />
+        </button>
       </div>
 
       <div className={styles.topBar}>
-        <button className={styles.iconBtn} aria-label="Yuklash vaqti (hozircha faqat hoziroq)">
-          <CalendarIcon />
-        </button>
         <button className={styles.iconBtn} onClick={() => navigate('/profile')} aria-label="Profil">
           <ProfileIcon color="var(--color-gray-800)" strokeWidth={1.9} />
         </button>

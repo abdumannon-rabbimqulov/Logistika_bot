@@ -1,7 +1,7 @@
 import math
 from typing import Optional, Sequence
 
-# Yer radiusi (km) — bir gradus kenglik ~111.32 km
+# Bir gradus kenglik (latitude) taxminan 111.32 km ga teng
 _KM_PER_DEGREE = 111.32
 
 

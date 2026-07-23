@@ -56,12 +56,14 @@ services:
     # osrm/osrm-backend image'ida curl/wget/nc yo'q — faqat bash bor, shuning uchun
     # HTTP so'rov bash'ning /dev/tcp imkoniyati orqali yuboriladi. Haqiqiy marshrut
     # so'raladi (shunchaki port ochiqligi emas), ya'ni xarita to'g'ri yuklanganini ham tekshiradi.
+    # MUHIM: HTTP/1.1 + "Connection: close" — OSRM aks holda ulanishni ~5s keep-alive
+    # bilan ochiq ushlab turadi va `grep` javob oxirini (EOF) kutib timeout'ga uchraydi.
     healthcheck:
       test:
         - CMD
         - bash
         - -c
-        - 'exec 3<>/dev/tcp/127.0.0.1/5000 && printf "GET /route/v1/driving/69.24,41.31;69.28,41.33?overview=false HTTP/1.0\r\n\r\n" >&3 && grep -q ''"code":"Ok"'' <&3'
+        - 'exec 3<>/dev/tcp/127.0.0.1/5000 && printf "GET /route/v1/driving/69.24,41.31;69.28,41.33?overview=false HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3 && grep -q ''"code":"Ok"'' <&3'
       interval: 30s
       timeout: 5s
       start_period: 60s        # katta xarita sekin ochilsa ulgurishi uchun

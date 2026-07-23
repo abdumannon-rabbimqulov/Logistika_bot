@@ -42,21 +42,23 @@ class RouteResult:
     geometry: list[tuple[float, float]]  # [(latitude, longitude), ...] — xaritada chizish uchun
 
 
-async def get_route(
-    coordinates: Sequence[tuple[float, float]], *, overview: str = "full"
-) -> RouteResult:
+async def get_route(coordinates: Sequence[tuple[float, float]]) -> RouteResult:
     """coordinates: ketma-ket (latitude, longitude) juftliklar ro'yxati (kamida 2 ta, pickup->delivery tartibida).
 
-    `overview="full"` — bazaga saqlash uchun to'liq aniqlikdagi geometriya.
-    `overview="simplified"` — xaritada ko'rsatish uchun soddalashtirilgan (bir necha marta
-    kam nuqta, ya'ni yengilroq JSON javob; ko'z bilan farqi bilinmaydi).
+    Har doim `overview=full` (to'liq aniqlikdagi geometriya) so'raladi: u bazaga
+    saqlanadigan `geometry_wkt` uchun kerak. Xaritada ko'rsatish uchun esa OSRM'ning
+    o'z `overview=simplified` rejimi juda qo'pol (uzoq yo'llarda burilishlarni "kesib"
+    o'tadi), shuning uchun to'liq geometriya olinib, chaqiruvchi tomonda
+    `utils.geo.simplify_polyline` bilan yetarli aniqlikda soddalashtiriladi.
     """
     if len(coordinates) < 2:
-        raise OSRMRouteError("Marshrut hisoblash uchun kamida 2 ta nuqta kerak")
+        # Ma'lumot muammosi (infratuzilma emas) — chaqiruvchi buni 422 sifatida
+        # ushlashi uchun bazaviy OSRMRouteError emas, OSRMNoRouteError tashlanadi.
+        raise OSRMNoRouteError("Marshrut hisoblash uchun kamida 2 ta nuqta kerak")
 
     coords_str = ";".join(f"{lon},{lat}" for lat, lon in coordinates)
     url = f"{OSRM_BASE_URL}/route/v1/driving/{coords_str}"
-    params = {"overview": overview, "geometries": "geojson"}
+    params = {"overview": "full", "geometries": "geojson"}
 
     try:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:

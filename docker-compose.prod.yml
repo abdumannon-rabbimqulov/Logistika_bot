@@ -16,12 +16,14 @@ services:
     # Tashqariga port ochilmaydi — faqat web/bot ichki tarmoq orqali murojaat qiladi.
     expose:
       - "5000"
+    # HTTP/1.1 + "Connection: close" — OSRM aks holda ulanishni ~5s keep-alive bilan
+    # ochiq ushlab turadi va healthcheck timeout'ga uchraydi (docker-compose.yml'da batafsil).
     healthcheck:
       test:
         - CMD
         - bash
         - -c
-        - 'exec 3<>/dev/tcp/127.0.0.1/5000 && printf "GET /route/v1/driving/69.24,41.31;69.28,41.33?overview=false HTTP/1.0\r\n\r\n" >&3 && grep -q ''"code":"Ok"'' <&3'
+        - 'exec 3<>/dev/tcp/127.0.0.1/5000 && printf "GET /route/v1/driving/69.24,41.31;69.28,41.33?overview=false HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3 && grep -q ''"code":"Ok"'' <&3'
       interval: 30s
       timeout: 5s
       start_period: 60s
