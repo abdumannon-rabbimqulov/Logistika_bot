@@ -1,0 +1,309 @@
+.page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-sunken);
+}
+
+.scroll {
+  flex: 1;
+  padding: 16px 18px 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.center {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+}
+
+.spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid var(--color-gray-200);
+  border-top-color: var(--color-accent);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Top bar ── */
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 38px;
+}
+
+.iconBtn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--color-bg);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.topTitle {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.statusPill {
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-tint);
+  color: var(--color-accent-pressed);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ── Yuk kartasi ── */
+.cargoCard {
+  background: var(--color-bg);
+  border-radius: var(--radius-xl);
+  padding: 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+.cargoName {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 19px;
+}
+
+.cargoMeta {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.metaChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--color-bg-sunken);
+  border-radius: var(--radius-pill);
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.priceRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
+}
+
+.priceLabel {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.price {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--color-accent-pressed);
+}
+
+/* ── Marshrut ── */
+.sectionTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-top: 4px;
+}
+
+.route {
+  background: var(--color-bg);
+  border-radius: var(--radius-xl);
+  padding: 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+.checkpoint {
+  display: flex;
+  gap: 12px;
+}
+
+.markerCol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.marker {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--color-gray-300);
+  background: var(--color-bg);
+  margin-top: 2px;
+}
+
+.marker_COMPLETED {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.marker_ARRIVED {
+  border-color: #F5A623;
+  background: #F5A623;
+}
+
+.marker_PENDING {
+  border-color: var(--color-gray-300);
+  background: var(--color-bg);
+}
+
+.marker_SKIPPED {
+  border-color: var(--color-gray-300);
+  background: var(--color-gray-200);
+}
+
+.connector {
+  width: 2px;
+  flex: 1;
+  min-height: 26px;
+  background: var(--color-gray-200);
+  margin: 3px 0;
+}
+
+.checkpointBody {
+  padding-bottom: 18px;
+  min-width: 0;
+}
+
+.checkpointType {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.checkpointAddress {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  margin-top: 2px;
+}
+
+.miniCall {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-accent-pressed);
+  text-decoration: none;
+}
+
+/* ── Mijoz kartasi ── */
+.customerCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--color-bg);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+.customerName {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.customerPhone {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+
+.callBtn {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  text-decoration: none;
+}
+
+/* ── Footer ── */
+.footer {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  width: 100%;
+  max-width: 480px;
+  padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
+  background: var(--color-bg);
+  border-top: 1px solid var(--color-border);
+}
+
+.advanceBtn {
+  width: 100%;
+  height: 54px;
+  border-radius: var(--radius-lg);
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  transition: opacity 0.2s ease, transform 0.1s ease;
+}
+
+.advanceBtn:active {
+  transform: scale(0.98);
+}
+
+.advanceBtn:disabled {
+  opacity: 0.6;
+}
+
+.doneNote {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  padding: 14px 0;
+}
+
+.errorBanner {
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.backLink {
+  color: var(--color-accent-pressed);
+  font-weight: 600;
+  font-size: 14px;
+}

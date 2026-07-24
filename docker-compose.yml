@@ -89,6 +89,10 @@ services:
       - "0.0.0.0"
       - --port
       - "8000"
+      # Kod (.:/app) mount qilingani uchun --reload: manba o'zgarsa jarayon avtomatik
+      # qayta yuklanadi. Busiz konteyner ishga tushgan paytdagi eski kodni xotirada
+      # ushlab qoladi (masalan route_geometry keyin qo'shilsa — javobga tushmay qoladi).
+      - --reload
     restart: always
     depends_on:
       db:

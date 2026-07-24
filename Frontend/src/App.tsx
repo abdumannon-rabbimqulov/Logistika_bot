@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { AdminApp } from './admin/AdminApp';
 import styles from './App.module.css';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { DriverGate } from './pages/DriverGate';
@@ -58,6 +59,9 @@ function AuthGate() {
 
     case 'driver':
       return <DriverGate />;
+
+    case 'admin':
+      return <AdminApp />;
 
     case 'unsupported':
       return (

@@ -1,0 +1,14 @@
+/* Mini App uchun #root 480px bilan cheklangan (index.css). Admin — DESKTOP panel,
+   shuning uchun admin rejimida bu cheklovni ochamiz (AdminApp <html data-admin> qo'yadi). */
+:root[data-admin] {
+  background: var(--color-bg-sunken);
+}
+
+:root[data-admin] #root {
+  max-width: none;
+  margin: 0;
+  box-shadow: none;
+  background: var(--color-bg-sunken);
+  min-height: 100vh;
+  min-height: 100dvh;
+}

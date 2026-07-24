@@ -1,9 +1,12 @@
 import { api } from './client';
 import type {
+  DispatchAttemptResponse,
   GeocodeSuggestion,
+  Order,
   OrderCreateInput,
   OrderDetail,
   OrderListItem,
+  OrderStatus,
   PriceEstimateLocation,
   PriceEstimateResponse,
   ReverseGeocodeResponse,
@@ -38,4 +41,25 @@ export function estimatePrice(
 
 export function bumpPrice(orderId: number, price: number): Promise<OrderDetail> {
   return api.post<OrderDetail>(`/orders/${orderId}/price-bump`, { price });
+}
+
+// ── Haydovchi dispatch oqimi ────────────────────────────────────────────────────────
+/** Haydovchining joriy faol taklifi (yo'q bo'lsa `null`). */
+export function getActiveDispatch(): Promise<DispatchAttemptResponse | null> {
+  return api.get<DispatchAttemptResponse | null>('/orders/dispatch/active');
+}
+
+/** Taklifni qabul qilish — buyurtma haydovchiga biriktiriladi, to'liq tafsilot qaytadi. */
+export function acceptDispatch(attemptId: number): Promise<OrderDetail> {
+  return api.post<OrderDetail>(`/orders/dispatch/${attemptId}/accept`);
+}
+
+/** Taklifni rad etish — navbat keyingi haydovchiga o'tadi (204). */
+export function rejectDispatch(attemptId: number): Promise<void> {
+  return api.post<void>(`/orders/dispatch/${attemptId}/reject`);
+}
+
+/** Buyurtma holatini yangilash (ACCEPTED→IN_PROGRESS→COMPLETED). */
+export function updateOrderStatus(orderId: number, status: OrderStatus): Promise<Order> {
+  return api.patch<Order>(`/orders/${orderId}/status`, { status });
 }

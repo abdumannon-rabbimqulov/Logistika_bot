@@ -90,8 +90,19 @@ export const YandexMap = forwardRef<YandexMapHandle, Props>(function YandexMap(
 
       // Marshrut chizig'i belgilardan oldin qo'shiladi — shunda belgilar chiziq ustida qoladi.
       if (route && route.length >= 2) {
+        // Premium ko'rinish uchun ikki qatlam: avval kengroq oq "casing" (marshrut xarita
+        // fonidan ajralib tursin), ustidan asosiy yashil chiziq. Uchlari yumaloq (round).
         map.geoObjects.add(
-          new ymaps.Polyline(route, {}, { strokeColor: '#15803D', strokeWidth: 5, strokeOpacity: 0.8 }),
+          new ymaps.Polyline(route, {}, {
+            strokeColor: '#FFFFFF', strokeWidth: 9, strokeOpacity: 0.9,
+            strokeLineCap: 'round', strokeLineJoin: 'round',
+          }),
+        );
+        map.geoObjects.add(
+          new ymaps.Polyline(route, {}, {
+            strokeColor: '#15803D', strokeWidth: 5, strokeOpacity: 1,
+            strokeLineCap: 'round', strokeLineJoin: 'round',
+          }),
         );
       }
 

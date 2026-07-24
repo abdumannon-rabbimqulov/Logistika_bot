@@ -1,43 +1,71 @@
 .page {
   min-height: 100vh;
   min-height: 100dvh;
-  padding: 60px 20px 40px;
+  background: var(--color-bg-sunken);
 }
 
-.title {
+.scroll {
+  padding: 54px 18px calc(var(--bottom-nav-height) + 24px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Header ── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hello {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.name {
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 22px;
   color: var(--color-text-primary);
 }
 
-.card {
-  margin-top: 20px;
+.statusOnline,
+.statusOffline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.statusOnline {
+  background: var(--color-accent-tint);
+  color: var(--color-accent-pressed);
+}
+
+.statusOffline {
+  background: var(--color-gray-200);
+  color: var(--color-gray-500);
+}
+
+.statusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ── Balans kartasi ── */
+.balanceCard {
   background: var(--color-dark-card);
   color: #fff;
   border-radius: var(--radius-xl);
   padding: 20px;
-}
-
-.name {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 17px;
-}
-
-.truck {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.6);
-  margin-top: 2px;
-}
-
-.balanceRow {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  flex-direction: column;
 }
 
 .balanceLabel {
@@ -48,17 +76,82 @@
 .balanceValue {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 20px;
+  font-size: 28px;
+  margin-top: 4px;
 }
 
+.balanceCurrency {
+  font-size: 15px;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.truck {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.section {
+  margin: 0;
+}
+
+/* ── Faol buyurtma kartasi ── */
+.activeCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--color-accent-pressed);
+  color: #fff;
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  text-align: left;
+}
+
+.activeInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.activeStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.activeDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.activeCargo {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.activeMeta {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* ── Liniyaga chiqish ── */
 .availabilityRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 16px;
+  background: var(--color-bg);
   padding: 16px;
   border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
 }
 
 .availabilityText {
@@ -70,7 +163,8 @@
 .availabilityHint {
   font-size: 12px;
   color: var(--color-text-secondary);
-  margin-top: 2px;
+  margin-top: 3px;
+  max-width: 220px;
 }
 
 .switch {
@@ -104,8 +198,8 @@
   transform: translateX(20px);
 }
 
+/* ── Bannerlar ── */
 .blockedBanner {
-  margin-top: 16px;
   padding: 14px;
   border-radius: var(--radius-lg);
   background: var(--color-danger-tint);
@@ -114,12 +208,58 @@
   line-height: 1.4;
 }
 
-.infoBanner {
-  margin-top: 16px;
-  padding: 14px;
+.errorBanner {
+  padding: 12px 14px;
   border-radius: var(--radius-lg);
-  background: var(--color-bg-sunken);
-  color: var(--color-text-secondary);
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* ── Kutish holati ── */
+.waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 30px 20px;
+  gap: 8px;
+}
+
+.waitingPulse {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--color-accent-tint);
+  position: relative;
+  margin-bottom: 4px;
+}
+
+.waitingPulse::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--color-accent);
+  opacity: 0.5;
+  animation: pulse 1.6s ease-out infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.5); opacity: 0.6; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.waitingText {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--color-text-primary);
+}
+
+.waitingHint {
   font-size: 12.5px;
-  line-height: 1.5;
+  color: var(--color-text-secondary);
+  max-width: 240px;
 }

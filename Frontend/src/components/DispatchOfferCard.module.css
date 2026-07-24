@@ -1,0 +1,204 @@
+.card {
+  background: linear-gradient(150deg, var(--color-accent) 0%, var(--color-accent-pressed) 100%);
+  color: #fff;
+  border-radius: var(--radius-xl);
+  padding: 18px;
+  box-shadow: 0 12px 30px rgba(21, 128, 61, 0.28);
+  animation: pop 0.25s ease;
+}
+
+@keyframes pop {
+  from { transform: scale(0.96); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.kicker {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.match {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+  margin-top: 2px;
+}
+
+/* ── Countdown halqa ── */
+.ring {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+}
+
+.ringTrack {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.25);
+  stroke-width: 4;
+}
+
+.ringProgress {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 4;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.25s linear;
+}
+
+.ringLabel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+}
+
+/* ── Yo'nalish ── */
+.route {
+  margin-top: 16px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-lg);
+  padding: 14px 14px 14px 12px;
+}
+
+.routeLine {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.routeText {
+  font-size: 13.5px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dotOrigin,
+.dotDest {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dotOrigin {
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25);
+}
+
+.dotDest {
+  background: var(--color-gray-900);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.2);
+}
+
+.routeConnector {
+  display: block;
+  width: 2px;
+  height: 14px;
+  margin: 2px 0 2px 16px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* ── Meta chiplar ── */
+.metaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.metaChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-pill);
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ── Narx ── */
+.priceRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.priceLabel {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 45%;
+}
+
+.price {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 24px;
+}
+
+.currency {
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+/* ── Tugmalar ── */
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.rejectBtn,
+.acceptBtn {
+  flex: 1;
+  height: 50px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 14px;
+  font-weight: 700;
+  transition: transform 0.1s ease, opacity 0.2s ease;
+}
+
+.rejectBtn {
+  flex: 0 0 42%;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--color-gray-700);
+}
+
+.acceptBtn {
+  background: var(--color-gray-900);
+  color: #fff;
+}
+
+.rejectBtn:active,
+.acceptBtn:active {
+  transform: scale(0.97);
+}
+
+.rejectBtn:disabled,
+.acceptBtn:disabled {
+  opacity: 0.6;
+}

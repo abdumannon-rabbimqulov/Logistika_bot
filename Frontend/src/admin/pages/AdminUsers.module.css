@@ -1,0 +1,70 @@
+.name {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.username {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+
+.roleChip {
+  display: inline-flex;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-gray-100);
+  color: var(--color-gray-700);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.active {
+  color: var(--color-accent-pressed);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.banned {
+  color: var(--color-danger);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.inactive {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.banBtn,
+.unbanBtn {
+  padding: 7px 13px;
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  font-weight: 600;
+  border: 1px solid var(--color-border);
+  transition: background 0.12s ease;
+  white-space: nowrap;
+}
+
+.banBtn {
+  color: var(--color-danger);
+  border-color: var(--color-danger-tint);
+  background: var(--color-danger-tint);
+}
+
+.banBtn:hover:not(:disabled) {
+  background: #FCC;
+}
+
+.unbanBtn {
+  color: var(--color-accent-pressed);
+  border-color: var(--color-accent-tint);
+  background: var(--color-accent-tint);
+}
+
+.banBtn:disabled,
+.unbanBtn:disabled {
+  opacity: 0.5;
+}

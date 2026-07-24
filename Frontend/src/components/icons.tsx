@@ -80,6 +80,16 @@ export function ClockIcon({ size = 14, color = 'var(--color-gray-500)', strokeWi
   );
 }
 
+export function RouteIcon({ size = 14, color = 'var(--color-accent)', strokeWidth = 2 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="6" cy="19" r="2.4" />
+      <circle cx="18" cy="5" r="2.4" />
+      <path d="M8.2 18.2c4-1 3-4 5-6s3.6-1.5 3.6-1.5" />
+    </svg>
+  );
+}
+
 export function CardIcon({ size = 19, color = 'var(--color-gray-700)', strokeWidth = 1.7 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
@@ -184,6 +194,94 @@ export function MessagesNavIcon({ size = 21, color = 'var(--color-gray-500)', st
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+    </svg>
+  );
+}
+
+export function EarningsNavIcon({ size = 21, color = 'var(--color-gray-500)', strokeWidth = 1.7 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+    </svg>
+  );
+}
+
+// ── Haydovchi kabineti ikonkalari ─────────────────────────────────────────
+
+export function PhoneIcon({ size = 18, color = '#fff', strokeWidth = 1.8 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.4 1.8.7 2.7a2 2 0 01-.5 2.1L8.1 9.8a16 16 0 006 6l1.3-1.3a2 2 0 012.1-.5c.9.3 1.8.6 2.7.7a2 2 0 011.7 2z" />
+    </svg>
+  );
+}
+
+export function WalletIcon({ size = 20, color = 'var(--color-gray-700)', strokeWidth = 1.7 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7a2 2 0 012-2h12a2 2 0 012 2v0H5a2 2 0 00-2 2z" />
+      <path d="M3 8v9a2 2 0 002 2h14a2 2 0 002-2v-6a2 2 0 00-2-2H5" />
+      <circle cx="16.5" cy="13.5" r="1.2" fill={color} stroke="none" />
+    </svg>
+  );
+}
+
+export function StarIcon({ size = 16, color = '#F5A623', strokeWidth = 1.6, filled = true }: IconProps & { filled?: boolean }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? color : 'none'} stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2.5l2.9 5.9 6.5.95-4.7 4.6 1.1 6.5L12 17.9l-5.8 3.05 1.1-6.5-4.7-4.6 6.5-.95z" />
+    </svg>
+  );
+}
+
+export function ShieldIcon({ size = 18, color = 'var(--color-accent)', strokeWidth = 1.7 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3l7 3v5c0 4.5-3 7.9-7 9-4-1.1-7-4.5-7-9V6z" />
+      <path d="M9 12l2 2 4-4" />
+    </svg>
+  );
+}
+
+export function DocIcon({ size = 18, color = 'var(--color-gray-700)', strokeWidth = 1.7 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z" />
+      <path d="M14 3v5h5M9 13h6M9 17h6" />
+    </svg>
+  );
+}
+
+export function UserLineIcon({ size = 18, color = 'var(--color-gray-700)', strokeWidth = 1.7 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 20c0-3.5 3.1-6 7-6s7 2.5 7 6" />
+    </svg>
+  );
+}
+
+export function CheckIcon({ size = 18, color = '#fff', strokeWidth = 2.2 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12.5l4.5 4.5L19 6.5" />
+    </svg>
+  );
+}
+
+export function CloseIcon({ size = 18, color = 'var(--color-gray-700)', strokeWidth = 2.2 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+
+export function WeightIcon({ size = 15, color = 'var(--color-gray-500)', strokeWidth = 1.7 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="6" r="2.2" />
+      <path d="M8.5 8h7l2.5 12H6z" />
     </svg>
   );
 }

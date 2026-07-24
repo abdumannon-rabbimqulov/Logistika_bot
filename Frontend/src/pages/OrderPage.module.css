@@ -14,20 +14,32 @@
   overflow: hidden;
 }
 
-.etaBadge {
+.routeBadge {
   position: absolute;
   left: 16px;
   top: 190px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   background: var(--color-bg);
   border-radius: var(--radius-pill);
-  padding: 7px 14px;
-  box-shadow: var(--shadow-sm);
+  padding: 8px 16px;
+  box-shadow: var(--shadow-md);
   font: var(--text-label-sm);
   color: var(--color-text-primary);
   white-space: nowrap;
+}
+
+.routeBadgePart {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.routeBadgeSep {
+  width: 1px;
+  height: 14px;
+  background: var(--color-gray-200);
 }
 
 /* ===== Top bars ===== */

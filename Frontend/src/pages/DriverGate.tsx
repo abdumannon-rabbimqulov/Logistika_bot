@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { getMyDriverCabinetOrNull } from '../api/drivers';
 import type { DriverCabinet } from '../types/api';
 import styles from '../App.module.css';
-import { DriverHomePage } from './DriverHomePage';
+import { DriverApp } from './DriverApp';
 import { DriverProfileSetupPage } from './DriverProfileSetupPage';
 
 /** role === 'driver' bo'lganda: profil hali yo'q bo'lsa setup forma, bo'lsa kabinet. */
@@ -35,5 +35,5 @@ export function DriverGate() {
     return <DriverProfileSetupPage onCreated={load} />;
   }
 
-  return <DriverHomePage cabinet={cabinet} onUpdated={setCabinet} />;
+  return <DriverApp initialCabinet={cabinet} />;
 }

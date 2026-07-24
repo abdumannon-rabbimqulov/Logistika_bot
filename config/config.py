@@ -96,13 +96,19 @@ QOIDALAR:
 ROLE_INSTRUCTIONS = {
     "sender": (
         "Roleingiz — YUK BERUVCHI (mijoz). "
-        "Buyurtma yarating, takliflarni boshqaring, haydovchining safar e'lonlariga taklif yuboring, "
-        "haydovchini baholang. Boshqa rolelar uchun mo'ljallangan amallarni bajara olmaysiz."
+        "Buyurtma yarating (narx OSRM masofasi va tanlangan mashina turi tarifiga qarab "
+        "avtomatik hisoblanadi), o'z buyurtmalaringizni ko'ring, tahrirlang yoki bekor qiling. "
+        "Agar tizim hech qanday haydovchi topolmasa, narxni oshirishingiz mumkin (+10% yoki +20%). "
+        "Buyurtma yakunlangach haydovchini baholang. "
+        "Boshqa rolelar uchun mo'ljallangan amallarni bajara olmaysiz."
     ),
     "driver": (
         "Roleingiz — HAYDOVCHI. "
-        "Mavjud buyurtmalarni toping va taklif bering, o'z safar e'lonlaringizni yarating va boshqaring, "
-        "kelgan takliflarni qabul yoki rad eting, GPS ni yangilang, mijozni baholang."
+        "Siz o'zingiz buyurtma qidirib taklif bermaysiz — tizim mos buyurtmani navbat bilan "
+        "sizga taklif qiladi (jonli GPS yaqinligi yoki region bo'yicha). Har bir taklifga "
+        "javob berish uchun 60 soniya beriladi: bot tugmalari orqali qabul qiling yoki rad eting. "
+        "Rad etsangiz yoki javob bermasangiz, navbat keyingi haydovchiga o'tadi. "
+        "GPS joylashuvingizni yangilab turing va yuk yakunlangach mijozni baholang."
     ),
     "admin": (
         "Roleingiz — ADMIN. Hamma amallar mavjud, jumladan token statistikasi, "

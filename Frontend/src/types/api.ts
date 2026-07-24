@@ -187,6 +187,114 @@ export interface OrderCreateInput {
   waypoints: OrderWaypointInput[];
 }
 
+// ── Avtomatik dispatch (haydovchiga navbat bilan yuboriladigan taklif) ──────────────
+export type DispatchMatchType = 'gps' | 'region';
+export type DispatchAttemptStatus = 'pending' | 'accepted' | 'rejected' | 'expired' | 'cancelled';
+
+// GET /orders/dispatch/active javobidagi `order` xulosasi (order/schemas.py DispatchOrderSummary).
+export interface DispatchOrderSummary {
+  cargo_name: string;
+  weight: number;
+  price: number;
+  currency: string;
+  origin_address: string | null;
+  destination_address: string | null;
+}
+
+// GET /orders/dispatch/active — null yoki joriy faol taklif (order/schemas.py DispatchAttemptResponse).
+export interface DispatchAttemptResponse {
+  id: number;
+  order_id: number;
+  driver_id: number;
+  round_number: number;
+  match_type: DispatchMatchType;
+  distance_km: number | null;
+  status: DispatchAttemptStatus;
+  sent_at: string;
+  expires_at: string;
+  order: DispatchOrderSummary | null;
+}
+
+// ── Admin panel (Admin_panel/schemas.py) ────────────────────────────────────────────
+export interface OrdersByDay {
+  date: string; // YYYY-MM-DD
+  count: number;
+}
+
+export interface AdminDashboardStats {
+  users_total: number;
+  users_today: number;
+  drivers_total: number;
+  drivers_online: number;
+  drivers_live_gps: number;
+  orders_total: number;
+  orders_today: number;
+  orders_by_status: Record<string, number>;
+  orders_last_7_days: OrdersByDay[];
+}
+
+export interface AdminUserListItem {
+  id: number;
+  username: string | null;
+  full_name: string;
+  email: string | null;
+  phone_number: string | null;
+  role: string | null;
+  language: string;
+  is_active: boolean;
+  is_banned: boolean;
+  balance: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminUserList {
+  total: number;
+  items: AdminUserListItem[];
+}
+
+export interface AdminUserUpdate {
+  role?: UserRole;
+  is_banned?: boolean;
+  is_active?: boolean;
+  language?: string;
+  full_name?: string;
+}
+
+export interface DriverLocationItem {
+  driver_id: number;
+  user_id: number | null;
+  full_name: string | null;
+  truck_number: string | null;
+  truck_type_id: number | null;
+  lat: number;
+  lon: number;
+  ts: string;
+  expires_at: string | null;
+}
+
+export interface CommissionSettings {
+  commission_percent: number;
+  updated_at: string;
+}
+
+// POST/PATCH /drivers/truck-types uchun kirish (driver/schemas.py TruckTypeCreate/Update)
+export interface TruckTypeInput {
+  name: string;
+  max_weight: number;
+  max_volume: number;
+  length?: number | null;
+  width?: number | null;
+  height?: number | null;
+  pallet_capacity?: number | null;
+  base_price: number;
+  price_per_km: number;
+  min_price?: number | null;
+  image_url?: string | null;
+  description?: string | null;
+  is_active?: boolean;
+}
+
 export interface GeocodeSuggestion {
   address: string;
   latitude: number;

@@ -3,14 +3,16 @@ from __future__ import annotations
 from typing import List, NoReturn, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.config import ADMIN_IDS, get_db
 from driver.crud import get_driver_by_user_id
 from order import crud, schemas
-from order.models import Order
+from order.dispatch_models import DispatchAttempt, DispatchAttemptStatus
+from order.models import Order, OrderStatus
 from services import dispatch as dispatch_service
-from services import osrm_client, yandex_geocoder
+from services import notifications, osrm_client, yandex_geocoder
 from users.auth import get_current_active_user, get_current_sender
 from users.models import User, UserRole
 
@@ -223,7 +225,22 @@ async def get_active_dispatch(
     if not driver:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Haydovchi profili topilmadi")
     attempt = await dispatch_service.get_active_attempt(db, driver.id)
-    return schemas.DispatchAttemptResponse.model_validate(attempt) if attempt else None
+    if not attempt:
+        return None
+    response = schemas.DispatchAttemptResponse.model_validate(attempt)
+    # Taklif kartasi (yo'nalish/og'irlik/narx) uchun buyurtma xulosasini biriktiramiz —
+    # pending paytida haydovchi buyurtmani to'g'ridan-to'g'ri o'qiy olmaydi (403).
+    order = await crud.get_order(db, attempt.order_id)
+    if order:
+        response.order = schemas.DispatchOrderSummary(
+            cargo_name=order.cargo_name,
+            weight=order.weight,
+            price=order.price,
+            currency=order.currency,
+            origin_address=order.origin.address if order.origin else None,
+            destination_address=order.destination.address if order.destination else None,
+        )
+    return response
 
 
 @router.post("/dispatch/{attempt_id}/accept", response_model=schemas.OrderDetailResponse,
@@ -286,4 +303,42 @@ async def delete_order(
     order = await _require_order_access(db, order_id, current_user)
     if not _is_admin(current_user) and order.customer_id != current_user.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Faqat buyurtma egasi o'chira oladi")
+
+    # Kim o'chirmoqda: buyurtma egasi ("sender") yoki admin.
+    deleted_by = "sender" if order.customer_id == current_user.id else "admin"
+
+    # MUHIM: order (va cascade orqali waypoint/route/attempt) o'chirilishidan OLDIN
+    # xabar berish uchun kerakli ma'lumotni o'qib olamiz — o'chirilgandan keyin bu
+    # ma'lumotlarga kirib bo'lmaydi.
+    cargo_name = order.cargo_name
+    assigned_driver_id = order.driver_id
+
+    pending_attempt: DispatchAttempt | None = None
+    if assigned_driver_id is None and order.status == OrderStatus.PENDING:
+        result = await db.execute(
+            select(DispatchAttempt)
+            .where(
+                DispatchAttempt.order_id == order.id,
+                DispatchAttempt.status == DispatchAttemptStatus.PENDING,
+            )
+            .order_by(DispatchAttempt.sent_at.desc())
+        )
+        pending_attempt = result.scalars().first()
+
+    if assigned_driver_id is not None:
+        # ACCEPTED/IN_PROGRESS — biriktirilgan haydovchiga bekor qilingani haqida xabar.
+        await notifications.notify_drivers_order_deleted(
+            db, assigned_driver_id, cargo_name, deleted_by=deleted_by
+        )
+    elif pending_attempt is not None:
+        # PENDING — faol taklif yuborilgan haydovchining bot xabarini tahrirlab,
+        # attemptni CANCELLED holatiga o'tkazamiz (cascade baribir o'chiradi, lekin
+        # driverga xabar berish uchun o'chirishdan OLDIN bajaramiz).
+        await notifications.edit_telegram_message(
+            pending_attempt.bot_chat_id,
+            pending_attempt.bot_message_id,
+            "Bu buyurtma bekor qilindi",
+        )
+        pending_attempt.status = DispatchAttemptStatus.CANCELLED
+
     await crud.delete_order(db, order)

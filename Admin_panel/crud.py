@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from driver.models import Driver
-from order.models import Order
+from order.models import Order, OrderStatus
 from users.models import User, UserRole
 from Admin_panel.schemas import (
     AdminDashboardStats,
@@ -99,6 +99,50 @@ async def update_user_admin(db: AsyncSession, user: User, data: AdminUserUpdate)
 # ORDERS
 # ════════════════════════════════════════════════════════════
 
+
+
+async def list_orders_admin(
+    db: AsyncSession,
+    *,
+    status: Optional[str] = None,
+    customer_id: Optional[int] = None,
+    driver_id: Optional[int] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    skip: int = 0,
+    limit: int = 50,
+) -> Tuple[List[Order], int]:
+    """Admin buyurtmalar ro'yxati (filtrlar + sahifalash). (rows, total) qaytaradi.
+
+    `waypoints` selectinload bilan oldindan yuklanadi — OrderResponse serializatsiyasi
+    (waypoints ro'yxatini o'z ichiga oladi) async lazy-load xatosiga uchramasligi uchun.
+    """
+    base = select(Order)
+    if status:
+        # OrderStatus enum qiymati ("PENDING" ...) — yaroqsiz qiymat kelsa bo'sh natija.
+        try:
+            base = base.where(Order.status == OrderStatus(status))
+        except ValueError:
+            base = base.where(Order.status == status)
+    if customer_id is not None:
+        base = base.where(Order.customer_id == customer_id)
+    if driver_id is not None:
+        base = base.where(Order.driver_id == driver_id)
+    if date_from is not None:
+        base = base.where(Order.created_at >= datetime.combine(date_from, datetime.min.time()))
+    if date_to is not None:
+        base = base.where(Order.created_at <= datetime.combine(date_to, datetime.max.time()))
+
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+
+    stmt = (
+        base.options(selectinload(Order.waypoints))
+        .order_by(desc(Order.created_at))
+        .offset(max(skip, 0))
+        .limit(min(max(limit, 1), 200))
+    )
+    rows = (await db.execute(stmt)).scalars().unique().all()
+    return list(rows), int(total)
 
 
 async def update_order_admin(db: AsyncSession, order: Order, data: AdminOrderUpdate) -> Order:

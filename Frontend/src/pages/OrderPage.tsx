@@ -12,6 +12,7 @@ import {
   LocationIcon,
   PlusIcon,
   ProfileIcon,
+  RouteIcon,
   SearchIcon,
   SettingsIcon,
   SwapIcon,
@@ -163,9 +164,16 @@ export function OrderPage() {
       <div className={styles.mapLayer}>
         <YandexMap ref={mapRef} origin={origin} destination={destination} route={routeGeometry} />
         {durationMin !== null && (
-          <div className={styles.etaBadge}>
-            <ClockIcon />
-            {formatEta(durationMin)} da yetib keladi
+          <div className={styles.routeBadge}>
+            <span className={styles.routeBadgePart}>
+              <RouteIcon />
+              {distanceKm !== null ? `${Math.round(distanceKm)} km` : '—'}
+            </span>
+            <span className={styles.routeBadgeSep} />
+            <span className={styles.routeBadgePart}>
+              <ClockIcon />
+              {formatEta(durationMin)}
+            </span>
           </div>
         )}
         <button className={styles.myLocationBtn} onClick={handleMyLocation} aria-label="Mening joylashuvim">

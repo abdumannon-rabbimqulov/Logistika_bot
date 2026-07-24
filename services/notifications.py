@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Iterable, Literal, Optional
+from typing import Literal, Optional
 
 DeletedBy = Literal["admin", "sender"]
 from urllib import error, parse, request
@@ -123,32 +123,28 @@ async def edit_telegram_message(
 def order_deleted_message(cargo_name: str, deleted_by: DeletedBy) -> str:
     if deleted_by == "sender":
         return (
-            f"Siz taklif bergan '{cargo_name}' buyurtmasi "
+            f"Sizga biriktirilgan '{cargo_name}' buyurtmasi "
             f"mijoz tomonidan bekor qilindi (o'chirildi)."
         )
     return (
-        f"Siz taklif bergan '{cargo_name}' buyurtmasi admin tomonidan o'chirildi."
+        f"Sizga biriktirilgan '{cargo_name}' buyurtmasi admin tomonidan o'chirildi."
     )
 
 
 async def notify_drivers_order_deleted(
     db: AsyncSession,
-    driver_ids: Iterable[int],
+    driver_id: int,
     cargo_name: str,
     *,
     deleted_by: DeletedBy = "admin",
 ) -> None:
-    """Buyurtmaga taklif bergan haydovchilarga (Telegram user_id) xabar yuboradi."""
-    unique_driver_ids = {int(d) for d in driver_ids}
-    if not unique_driver_ids:
+    """Buyurtmaga biriktirilgan haydovchiga (Telegram user_id) bekor qilingani haqida xabar yuboradi."""
+    result = await db.execute(
+        select(Driver.user_id).where(Driver.id == int(driver_id))
+    )
+    chat_id = result.scalar_one_or_none()
+    if chat_id is None:
         return
 
     message = order_deleted_message(cargo_name, deleted_by)
-
-    result = await db.execute(
-        select(Driver.user_id).where(Driver.id.in_(unique_driver_ids))
-    )
-    chat_ids = {int(uid) for uid in result.scalars().all() if uid is not None}
-
-    for chat_id in chat_ids:
-        await send_telegram_message(chat_id, message)
+    await send_telegram_message(int(chat_id), message)

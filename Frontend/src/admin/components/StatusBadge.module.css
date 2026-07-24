@@ -1,0 +1,34 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.green {
+  background: var(--color-accent-tint);
+  color: var(--color-accent-pressed);
+}
+
+.amber {
+  background: #FEF3C7;
+  color: #B45309;
+}
+
+.blue {
+  background: #DBEAFE;
+  color: #1D4ED8;
+}
+
+.red {
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
+}
+
+.neutral {
+  background: var(--color-gray-200);
+  color: var(--color-gray-700);
+}

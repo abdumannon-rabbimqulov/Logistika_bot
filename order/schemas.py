@@ -263,6 +263,24 @@ class PriceEstimateResponse(BaseModel):
 #  Avtomatik dispatch (docs/DISPATCH_SYSTEM_PLAN.md)
 # ============================================================
 
+class DispatchOrderSummary(BaseModel):
+    """Taklif kartasida ko'rsatish uchun buyurtma xulosasi (WebApp).
+
+    Pending dispatch paytida haydovchi hali biriktirilmagani uchun `GET /orders/{id}`
+    orqali buyurtmani o'qiy olmaydi (403) — shu sabab taklif javobiga shu yengil
+    xulosa qo'shiladi (yo'nalish/og'irlik/narx). Batafsil ma'lumot qabul qilingach
+    `POST /dispatch/{id}/accept` javobidagi to'liq OrderDetailResponse'dan olinadi.
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    cargo_name: str
+    weight: Decimal
+    price: Decimal
+    currency: str
+    origin_address: Optional[str] = None
+    destination_address: Optional[str] = None
+
+
 class DispatchAttemptResponse(BaseModel):
     """Haydovchiga yuborilgan joriy taklif (WebApp `GET /orders/dispatch/active` uchun)."""
     model_config = ConfigDict(from_attributes=True)
@@ -276,6 +294,8 @@ class DispatchAttemptResponse(BaseModel):
     status: DispatchAttemptStatus
     sent_at: datetime
     expires_at: datetime
+    # Taklif kartasi uchun buyurtma xulosasi — /dispatch/active endpointida to'ldiriladi.
+    order: Optional[DispatchOrderSummary] = None
 
 
 class PriceBumpRequest(BaseModel):
