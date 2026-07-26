@@ -82,8 +82,19 @@
   transition: background 0.15s ease;
 }
 
-.primaryBtn:hover {
+.primaryBtn:hover:not(:disabled) {
   background: var(--color-accent-pressed);
+}
+
+/* O'chirilgan holat ko'rinib tursin — modal tugmalari shart bajarilmaguncha bloklanadi */
+.primaryBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ghostBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .ghostBtn {

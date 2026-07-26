@@ -17,7 +17,6 @@ export function DriverProfileSetupPage({ onCreated }: Props) {
   const [truckTypeId, setTruckTypeId] = useState<number | null>(null);
   const [truckNumber, setTruckNumber] = useState('');
   const [truckYear, setTruckYear] = useState('');
-  const [city, setCity] = useState('');
   const [region, setRegion] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,10 +39,6 @@ export function DriverProfileSetupPage({ onCreated }: Props) {
       setError("Davlat raqamini kiriting");
       return;
     }
-    if (!city.trim()) {
-      setError('Shahringizni kiriting');
-      return;
-    }
     setSubmitting(true);
     setError(null);
     try {
@@ -51,7 +46,7 @@ export function DriverProfileSetupPage({ onCreated }: Props) {
         truck_type_id: truckTypeId,
         truck_number: truckNumber.trim(),
         truck_year: truckYear ? Number(truckYear) : undefined,
-        current_city: city.trim(),
+        // Shahar so'ralmaydi — joylashuv liniyaga chiqqanda jonli GPS orqali aniqlanadi.
         current_region: region.trim() || undefined,
       });
       onCreated();
@@ -89,15 +84,9 @@ export function DriverProfileSetupPage({ onCreated }: Props) {
         </div>
       </div>
 
-      <div className={styles.row}>
-        <div className={styles.field}>
-          <label className={styles.label}>Shahar</label>
-          <input className={styles.input} value={city} onChange={(e) => setCity(e.target.value)} placeholder="Toshkent" />
-        </div>
-        <div className={styles.field}>
-          <label className={styles.label}>Viloyat (ixtiyoriy)</label>
-          <input className={styles.input} value={region} onChange={(e) => setRegion(e.target.value)} placeholder="Toshkent viloyati" />
-        </div>
+      <div className={styles.field}>
+        <label className={styles.label}>Viloyat (ixtiyoriy)</label>
+        <input className={styles.input} value={region} onChange={(e) => setRegion(e.target.value)} placeholder="Toshkent viloyati" />
       </div>
 
       {error && <div className={styles.error}>{error}</div>}

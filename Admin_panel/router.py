@@ -24,6 +24,7 @@ from Admin_panel import crud as admin_crud
 from Admin_panel import schemas as admin_schemas
 from Admin_panel.validation import is_admin
 from config.config import ADMIN_IDS, async_session, get_db
+from order import crud as order_crud
 from order import schemas as order_schemas
 from services import billing, live_location
 from users import crud as user_crud
@@ -144,6 +145,39 @@ async def admin_list_orders(
     return rows
 
 
+@router.patch(
+    "/orders/{order_id}",
+    response_model=order_schemas.OrderResponse,
+    summary="Buyurtmani tahrirlash / statusini o'zgartirish (admin)",
+)
+async def admin_update_order(
+    order_id: int,
+    data: admin_schemas.AdminOrderUpdate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(is_admin),
+):
+    """Qisman yangilash: so'rovda kelgan maydonlar qo'llaniladi.
+
+    Avval oddiy maydonlar (narx, yuk nomi...), keyin status — shu tartibda, chunki
+    COMPLETED ga o'tishda komissiya YANGI narxdan hisoblanishi kerak.
+    """
+    order = await order_crud.get_order(db, order_id)
+    if not order:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Buyurtma topilmadi.")
+
+    await admin_crud.update_order_admin(db, order, data)
+
+    if data.status is not None and data.status != order.status:
+        # Komissiya, completed_at va admin ogohlantirishlari shu funksiya ichida.
+        await order_crud.update_order_status(db, order, data.status)
+
+    logger.info("Admin #%s buyurtma #%s ni yangiladi: %s", admin.id, order_id, data.model_dump(exclude_unset=True))
+
+    # `waypoints`/`route` bilan qayta yuklab qaytaramiz: yuqoridagi commit/refresh'lar
+    # bu bog'lanishlarni expire qilgan bo'lishi mumkin (sinxron serializatsiya = MissingGreenlet).
+    return await order_crud.get_order(db, order_id)
+
+
 # ════════════════════════════════════════════════════════════
 # DRIVERS (blok / blokdan chiqarish)
 # ════════════════════════════════════════════════════════════
@@ -254,6 +288,96 @@ async def admin_block_driver(
     return _driver_item(driver, user)
 
 
+@router.get(
+    "/drivers/monitor",
+    response_model=List[admin_schemas.DriverMonitorItem],
+    summary="Xarita monitoringi: barcha haydovchilar joylashuvi, holati va joriy yuki",
+)
+async def admin_drivers_monitor(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(is_admin),
+    only_with_location: bool = Query(True, description="Faqat koordinatasi bor haydovchilar"),
+):
+    """Xarita uchun bitta so'rovda hamma narsa: joylashuv (jonli yoki oxirgi ma'lum),
+    onlayn/oflayn, bo'sh/yukli va yukli bo'lsa buyurtma tafsilotlari.
+
+    Joylashuv manbai: avval Redis'dagi jonli translyatsiya (`live`), bo'lmasa DB'dagi
+    oxirgi ma'lum nuqta (`last_known` — driver/router.py WS handleri yozadi).
+    """
+    live_by_driver: dict[int, dict] = {}
+    try:
+        for entry in await live_location.get_all_online_drivers():
+            try:
+                live_by_driver[int(entry["driver_id"])] = entry
+            except (KeyError, TypeError, ValueError):
+                continue
+    except Exception:
+        logger.exception("Jonli lokatsiyalarni olishda xato (monitor)")
+
+    rows = await admin_crud.list_drivers_for_monitor(db)
+
+    items: List[admin_schemas.DriverMonitorItem] = []
+    for driver, user, truck_type_name, order in rows:
+        live = live_by_driver.get(driver.id)
+        if live:
+            latitude, longitude = live.get("lat"), live.get("lon")
+            source, located_at = "live", live.get("ts")
+        else:
+            latitude, longitude = driver.last_latitude, driver.last_longitude
+            source = "last_known" if latitude is not None and longitude is not None else None
+            located_at = driver.last_location_at
+
+        if only_with_location and (latitude is None or longitude is None):
+            continue
+
+        active_order = None
+        if order is not None:
+            waypoints = list(order.waypoints)
+            active_order = admin_schemas.MonitorActiveOrder(
+                id=order.id,
+                cargo_name=order.cargo_name,
+                weight=order.weight,
+                volume=order.volume,
+                price=order.price,
+                currency=order.currency,
+                status=order.status.value,
+                origin_address=order.origin.address if order.origin else None,
+                destination_address=order.destination.address if order.destination else None,
+                current_waypoint_address=(
+                    order.current_waypoint.address if order.current_waypoint else None
+                ),
+                total_waypoints=len(waypoints),
+                completed_waypoints=sum(
+                    1 for wp in waypoints if wp.status.value in ("COMPLETED", "SKIPPED")
+                ),
+            )
+
+        items.append(
+            admin_schemas.DriverMonitorItem(
+                driver_id=driver.id,
+                user_id=user.id,
+                full_name=user.full_name,
+                phone_number=user.phone_number,
+                truck_type_name=truck_type_name,
+                truck_number=driver.truck_number,
+                is_available=driver.is_available,
+                is_blocked=driver.is_blocked,
+                block_reason=driver.block_reason,
+                rating=driver.rating,
+                total_trips=driver.total_trips,
+                online=live is not None,
+                busy=order is not None,
+                latitude=latitude,
+                longitude=longitude,
+                location_source=source,
+                location_at=located_at,
+                active_order=active_order,
+            )
+        )
+
+    return items
+
+
 @router.get("/drivers/locations", response_model=List[admin_schemas.DriverLocationItem])
 async def admin_list_driver_locations(_: User = Depends(is_admin)):
     items = await live_location.get_all_online_drivers()
@@ -272,6 +396,22 @@ async def admin_get_driver_location(
     if not item:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Live lokatsiya yo'q.")
     return item
+
+
+# DIQQAT: bu marshrut `/drivers/locations` dan KEYIN turishi shart — aks holda "locations"
+# so'zi `{driver_id}` sifatida o'qilib, 422 qaytardi.
+@router.get(
+    "/drivers/{driver_id}",
+    response_model=admin_schemas.AdminDriverListItem,
+    summary="Bitta haydovchi ma'lumoti (buyurtmaga biriktirishdan oldin tekshirish uchun)",
+)
+async def admin_get_driver(
+    driver_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(is_admin),
+):
+    driver, user = await _get_driver_or_404(db, driver_id)
+    return _driver_item(driver, user)
 
 
 # ════════════════════════════════════════════════════════════

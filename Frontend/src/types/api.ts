@@ -8,7 +8,8 @@ export interface DriverCreateInput {
   truck_type_id: number;
   truck_number: string;
   truck_year?: number;
-  current_city: string;
+  /** Ixtiyoriy — ilovada so'ralmaydi, joylashuv jonli GPS orqali aniqlanadi. */
+  current_city?: string;
   current_region?: string;
   phone_number?: string;
 }
@@ -266,6 +267,45 @@ export interface AdminUserUpdate {
   full_name?: string;
 }
 
+/** GET /system/drivers/monitor — xarita monitoringi (Admin_panel MonitorActiveOrder) */
+export interface MonitorActiveOrder {
+  id: number;
+  cargo_name: string;
+  weight: number;
+  volume: number | null;
+  price: number;
+  currency: string;
+  status: OrderStatus;
+  origin_address: string | null;
+  destination_address: string | null;
+  current_waypoint_address: string | null;
+  total_waypoints: number;
+  completed_waypoints: number;
+}
+
+export interface DriverMonitorItem {
+  driver_id: number;
+  user_id: number;
+  full_name: string | null;
+  phone_number: string | null;
+  truck_type_name: string | null;
+  truck_number: string;
+  is_available: boolean;
+  is_blocked: boolean;
+  block_reason: string | null;
+  rating: number;
+  total_trips: number;
+  /** Hozir jonli GPS translyatsiya qilyapti (Redis'da yozuvi bor) */
+  online: boolean;
+  /** Faol (ACCEPTED/IN_PROGRESS) buyurtmasi bor — "yukli" */
+  busy: boolean;
+  latitude: number | null;
+  longitude: number | null;
+  location_source: 'live' | 'last_known' | null;
+  location_at: string | null;
+  active_order: MonitorActiveOrder | null;
+}
+
 export interface DriverLocationItem {
   driver_id: number;
   user_id: number | null;
@@ -306,6 +346,35 @@ export interface AdminDriverListItem {
 export interface AdminDriverList {
   total: number;
   items: AdminDriverListItem[];
+}
+
+/** POST /orders/{id}/assign-driver javobidagi haydovchi bloki */
+export interface AssignedDriverInfo {
+  driver_id: number;
+  user_id: number;
+  full_name: string | null;
+  phone_number: string | null;
+  truck_number: string;
+  truck_type_id: number;
+  is_available: boolean;
+  is_blocked: boolean;
+  verification_status: string;
+  rating: number;
+  total_trips: number;
+}
+
+export interface OrderAssignDriverResponse {
+  order: OrderDetail;
+  driver: AssignedDriverInfo;
+}
+
+/** PATCH /system/orders/{id} — admin moderatsiyasi (Admin_panel AdminOrderUpdate) */
+export interface AdminOrderUpdate {
+  status?: OrderStatus;
+  cargo_name?: string;
+  weight?: number;
+  price?: number;
+  currency?: string;
 }
 
 /** Balans harakati (GET /system/users/{id}/balance/transactions) */

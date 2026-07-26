@@ -6,7 +6,9 @@ import { acceptDispatch, getActiveDispatch, listMyOrders, rejectDispatch } from 
 import { DispatchOfferCard } from '../components/DispatchOfferCard';
 import { DriverBottomNav } from '../components/DriverBottomNav';
 import { GoOnlineSheet, type GoOnlineResult } from '../components/GoOnlineSheet';
+import { YandexMap } from '../components/YandexMap';
 import { ChevronRightIcon } from '../components/icons';
+import { useLiveLocation } from '../hooks/useLiveLocation';
 import type { DispatchAttemptResponse, OrderListItem } from '../types/api';
 import { formatPrice, statusLabel } from '../utils/format';
 import { useDriverCabinet } from './DriverCabinetContext';
@@ -33,6 +35,10 @@ export function DriverHomePage() {
 
   const busyRef = useRef(false);
   const pollingRef = useRef(false);
+
+  // Jonli joylashuv: xaritadagi ko'k nuqta. Liniyadagi holatda koordinata
+  // `/drivers/ws/location` orqali backendga ham uzatiladi (admin jonli xaritasi).
+  const { coords, error: geoError } = useLiveLocation({ broadcast: cabinet.is_available });
 
   // Faol (ACCEPTED/IN_PROGRESS) buyurtmani aniqlash — bosh sahifada tez o'tish uchun.
   const loadActiveOrder = useCallback(async () => {
@@ -87,8 +93,9 @@ export function DriverHomePage() {
     try {
       const updated = await updateDriverAvailability({
         is_available: true,
-        current_city: result.currentCity,
-        current_region: result.currentRegion,
+        // `current_region` faqat kiritilgan bo'lsa yuboriladi — backend `exclude_unset`
+        // bilan ishlaydi, shuning uchun bo'sh qiymat eski qiymatni o'chirmaydi.
+        ...(result.currentRegion ? { current_region: result.currentRegion } : {}),
         available_from_date: result.availableFromDate,
       });
       setCabinet(updated);
@@ -150,41 +157,41 @@ export function DriverHomePage() {
   const isFutureAvailability =
     Boolean(cabinet.available_from_date) && new Date(cabinet.available_from_date!) > new Date();
 
+  const onlineHint = !cabinet.is_available
+    ? "O'chirilgan — buyurtma takliflari kelmaydi"
+    : isFutureAvailability
+      ? `${formatAvailableFrom(cabinet.available_from_date!)} dan yuk qabul qilasiz`
+      : 'Yoqilgan — takliflarni qabul qilyapsiz';
+
   return (
     <div className={styles.page}>
-      <div className={styles.scroll}>
-        <div className={styles.header}>
-          <div>
-            <div className={styles.hello}>Salom,</div>
-            <div className={styles.name}>{cabinet.name}</div>
-          </div>
-          <div className={cabinet.is_available ? styles.statusOnline : styles.statusOffline}>
-            <span className={styles.statusDot} />
-            {cabinet.is_available ? 'Liniyada' : 'Oflayn'}
-          </div>
-        </div>
+      {/* Bosh sahifa — xarita. Qolgan hamma narsa uning ustida "suzadi". */}
+      <div className={styles.mapLayer}>
+        <YandexMap userLocation={coords} followUser />
+      </div>
 
-        <div className={styles.balanceCard}>
-          <span className={styles.balanceLabel}>Balans</span>
-          <span className={styles.balanceValue}>
-            {formatPrice(cabinet.balance_amount)} <span className={styles.balanceCurrency}>{cabinet.currency}</span>
-          </span>
-          <div className={styles.truck}>
-            {cabinet.truck_type_name ?? ''} · {cabinet.truck_number}
-            {cabinet.truck_year ? ` · ${cabinet.truck_year}` : ''}
-          </div>
+      {/* Yuqori qatlam: holat chipi */}
+      <div className={styles.topBar}>
+        <div className={cabinet.is_available ? styles.statusOnline : styles.statusOffline}>
+          <span className={styles.statusDot} />
+          {cabinet.is_available ? 'Liniyada' : 'Oflayn'}
         </div>
+        {!coords && <div className={styles.geoChip}>Joylashuv aniqlanmoqda...</div>}
+      </div>
+
+      {/* Pastki suzuvchi qatlam: taklif / faol buyurtma / liniyaga chiqish */}
+      <div className={styles.floatLayer}>
+        {geoError && <div className={styles.geoWarn}>{geoError}</div>}
+        {error && <div className={styles.errorBanner}>{error}</div>}
 
         {attempt && (
-          <div className={styles.section}>
-            <DispatchOfferCard
-              attempt={attempt}
-              onAccept={handleAccept}
-              onReject={handleReject}
-              onExpire={() => setAttempt(null)}
-              busy={offerBusy}
-            />
-          </div>
+          <DispatchOfferCard
+            attempt={attempt}
+            onAccept={handleAccept}
+            onReject={handleReject}
+            onExpire={() => setAttempt(null)}
+            busy={offerBusy}
+          />
         )}
 
         {activeOrder && (
@@ -195,10 +202,19 @@ export function DriverHomePage() {
                 {statusLabel(activeOrder.status)}
               </div>
               <div className={styles.activeCargo}>{activeOrder.cargo_name}</div>
-              <div className={styles.activeMeta}>{formatPrice(activeOrder.price)} {activeOrder.currency}</div>
+              <div className={styles.activeMeta}>
+                {formatPrice(activeOrder.price)} {activeOrder.currency}
+              </div>
             </div>
             <ChevronRightIcon color="#fff" />
           </button>
+        )}
+
+        {!attempt && cabinet.is_available && !activeOrder && (
+          <div className={styles.searching}>
+            <span className={styles.searchingPulse} />
+            Buyurtma qidirilmoqda...
+          </div>
         )}
 
         {cabinet.is_blocked ? (
@@ -209,12 +225,7 @@ export function DriverHomePage() {
           <div className={styles.availabilityRow}>
             <div>
               <div className={styles.availabilityText}>Liniyaga chiqish</div>
-              <div className={styles.availabilityHint}>
-                {!cabinet.is_available && "O'chirilgan — buyurtma takliflari kelmaydi"}
-                {cabinet.is_available && !isFutureAvailability && 'Yoqilgan — takliflarni qabul qilyapsiz'}
-                {cabinet.is_available && isFutureAvailability &&
-                  `${formatAvailableFrom(cabinet.available_from_date!)} dan yuk qabul qilasiz`}
-              </div>
+              <div className={styles.availabilityHint}>{onlineHint}</div>
             </div>
             <button
               className={cabinet.is_available ? styles.switchOn : styles.switch}
@@ -224,16 +235,6 @@ export function DriverHomePage() {
             >
               <span className={cabinet.is_available ? styles.switchKnobOn : styles.switchKnob} />
             </button>
-          </div>
-        )}
-
-        {error && <div className={styles.errorBanner}>{error}</div>}
-
-        {!attempt && cabinet.is_available && !activeOrder && (
-          <div className={styles.waiting}>
-            <div className={styles.waitingPulse} />
-            <div className={styles.waitingText}>Buyurtma qidirilmoqda...</div>
-            <div className={styles.waitingHint}>Sizga mos yuk topilishi bilan bu yerda taklif chiqadi.</div>
           </div>
         )}
       </div>

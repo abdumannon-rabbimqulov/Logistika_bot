@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from order.models import OrderStatus
 from users.models import UserRole
 
 
@@ -38,11 +39,20 @@ class AdminUserList(BaseModel):
 
 
 class AdminUserUpdate(BaseModel):
+    """PATCH /system/users/{user_id} — qisman yangilash.
+
+    Barcha maydonlar ixtiyoriy: so'rovda nechtasi kelsa, o'shalari yangilanadi.
+    Sxemada yo'q maydonlar (masalan `balance`) jim e'tiborsiz qoldiriladi —
+    admin panel ro'yxatdagi butun obyektni qaytarib yuborsa ham xato bo'lmasin.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
     role: Optional[UserRole] = None
     is_banned: Optional[bool] = None
     is_active: Optional[bool] = None
     language: Optional[str] = Field(None, min_length=2, max_length=10)
-    full_name: Optional[str] = Field(None, max_length=128)
+    full_name: Optional[str] = Field(None, min_length=1, max_length=128)
 
     @field_validator("role", mode="before")
     @classmethod
@@ -58,12 +68,24 @@ class AdminUserUpdate(BaseModel):
 
 
 class AdminOrderUpdate(BaseModel):
-    status: Optional[str] = None
-    cargo_name: Optional[str] = None
-    weight: Optional[Decimal] = None
-    price: Optional[Decimal] = None
-    currency: Optional[str] = None
-    description: Optional[str] = None
+    """PATCH /system/orders/{order_id} — qisman yangilash (admin moderatsiyasi).
+
+    `status` boshqa maydonlardan farqli ravishda `order_crud.update_order_status`
+    orqali qo'llaniladi (komissiya yechish va `completed_at` o'sha yerda).
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    status: Optional[OrderStatus] = None
+    cargo_name: Optional[str] = Field(None, min_length=1, max_length=200)
+    weight: Optional[Decimal] = Field(None, gt=0, description="Yuk og'irligi, tonna")
+    price: Optional[Decimal] = Field(None, gt=0, description="Narx, UZS")
+    currency: Optional[str] = Field(None, min_length=2, max_length=10)
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def upper_status(cls, v: Any) -> Any:
+        return v.upper() if isinstance(v, str) else v
 
 
 # ════════════════════════════════════════════════════════════
@@ -165,6 +187,52 @@ class DriverUnblockRequest(BaseModel):
 # ════════════════════════════════════════════════════════════
 # DRIVER LIVE LOCATION
 # ════════════════════════════════════════════════════════════
+
+
+class MonitorActiveOrder(BaseModel):
+    """Haydovchi bajarayotgan buyurtma — xaritadagi kartochka uchun."""
+
+    id: int
+    cargo_name: str
+    weight: Decimal
+    volume: Optional[Decimal] = None
+    price: Decimal
+    currency: str
+    status: str
+    origin_address: Optional[str] = None
+    destination_address: Optional[str] = None
+    current_waypoint_address: Optional[str] = None
+    total_waypoints: int = 0
+    completed_waypoints: int = 0
+
+
+class DriverMonitorItem(BaseModel):
+    """`GET /system/drivers/monitor` — xaritadagi bitta haydovchi (joylashuv + yuk holati)."""
+
+    driver_id: int
+    user_id: int
+    full_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    truck_type_name: Optional[str] = None
+    truck_number: str
+    is_available: bool
+    is_blocked: bool
+    block_reason: Optional[str] = None
+    rating: Decimal
+    total_trips: int
+
+    # Xaritadagi marker rangi shu ikki maydonga qarab tanlanadi:
+    #   busy=True  -> yuk bilan (ko'k), online & busy=False -> bo'sh (yashil), online=False -> kulrang
+    online: bool = False
+    busy: bool = False
+
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    # "live" — hozir translyatsiya qilyapti (Redis), "last_known" — DB'dagi oxirgi nuqta
+    location_source: Optional[str] = None
+    location_at: Optional[datetime] = None
+
+    active_order: Optional[MonitorActiveOrder] = None
 
 
 class DriverLocationItem(BaseModel):

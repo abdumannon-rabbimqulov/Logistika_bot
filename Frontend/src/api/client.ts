@@ -8,6 +8,11 @@ const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/ap
 const ACCESS_KEY = 'yuk_access_token';
 const REFRESH_KEY = 'yuk_refresh_token';
 
+/** API bazasi — `api` wrapper'idan tashqarida (masalan multipart yuklashda) kerak bo'ladi. */
+export function apiBaseUrl(): string {
+  return BASE_URL;
+}
+
 export function getAccessToken(): string | null {
   return localStorage.getItem(ACCESS_KEY);
 }

@@ -1,6 +1,8 @@
 import logging
 import os
+import time
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 import aiofiles
@@ -16,14 +18,22 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from Admin_panel.validation import is_admin
-from config.config import STATIC_PATH, UPLOAD_DIR, async_session, get_db
+from config.config import (
+    LIVE_LOC_DB_THROTTLE_SEC,
+    LIVE_LOC_DEFAULT_PERIOD_SEC,
+    STATIC_PATH,
+    UPLOAD_DIR,
+    async_session,
+    get_db,
+)
 from driver import crud, schemas
 from driver.models import Driver
 from driver.profile import build_driver_profile
-from services import live_location
+from services import billing, live_location
 from users import crud as users_crud
 from users.auth import get_current_user, verify_token
 from users.models import User
@@ -157,6 +167,22 @@ async def get_my_driver_profile(
     return await build_driver_profile(db, current_user, driver)
 
 
+@router.get(
+    "/me/balance/transactions",
+    response_model=List[schemas.BalanceTransactionItem],
+    summary="Mening balans tarixim (komissiya yechilishi va to'ldirishlar)",
+)
+async def list_my_balance_transactions(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """Haydovchi kabinetidagi (Profil sahifasi) balans tarixi — faqat o'z yozuvlari."""
+    await _require_driver(db, current_user)
+    return await billing.list_balance_transactions(db, current_user.id, skip=skip, limit=limit)
+
+
 @router.patch("/me", response_model=schemas.DriverProfileResponse, summary="Profilni tahrirlash")
 async def update_my_driver_profile(
     data: schemas.DriverUpdate,
@@ -254,6 +280,28 @@ async def websocket_driver_location(
                     truck_type_id=driver.truck_type_id,
                     live_period=1800,
                 )
+
+                # Redis'dagi jonli yozuv qisqa umrli (LIVE_LOC_TTL_SEC). Haydovchi
+                # ilovani yopgach ham dispatch uni "oxirgi ma'lum joylashuvi" bo'yicha
+                # topa olishi uchun koordinata DB'ga ham yoziladi — har xabarda emas,
+                # LIVE_LOC_DB_THROTTLE_SEC oralig'ida bir marta (yozuvlar sonini kamaytiradi).
+                now_ts = time.monotonic()
+                if now_ts - LAST_DB_WRITE.get(driver_id, 0.0) >= LIVE_LOC_DB_THROTTLE_SEC:
+                    LAST_DB_WRITE[driver_id] = now_ts
+                    await db.execute(
+                        update(Driver)
+                        .where(Driver.id == driver_id)
+                        .values(
+                            last_latitude=lat,
+                            last_longitude=lon,
+                            last_location_at=datetime.now(timezone.utc),
+                            is_live_location_active=True,
+                            live_location_expires=datetime.now(timezone.utc)
+                            + timedelta(seconds=LIVE_LOC_DEFAULT_PERIOD_SEC),
+                        )
+                    )
+                    await db.commit()
+
                 await websocket.send_json({"status": "acknowledged"})
 
     except WebSocketDisconnect:

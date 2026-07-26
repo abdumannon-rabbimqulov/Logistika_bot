@@ -134,7 +134,23 @@ class OrderStatusUpdate(BaseModel):
 
 class OrderAssignDriver(BaseModel):
     """Haydovchini buyurtmaga biriktirish"""
+    driver_id: int = Field(..., gt=0)
+
+
+class AssignedDriverInfo(BaseModel):
+    """Biriktirilgan haydovchi haqida qisqa ma'lumot (admin panel javobda ko'rsatadi)."""
+
     driver_id: int
+    user_id: int
+    full_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    truck_number: str
+    truck_type_id: int
+    is_available: bool
+    is_blocked: bool
+    verification_status: str
+    rating: Decimal
+    total_trips: int
 
 
 class OrderResponse(OrderBase):
@@ -194,6 +210,13 @@ class OrderDetailResponse(OrderResponse):
             OrderWaypointResponse.model_validate(order.current_waypoint) if order.current_waypoint else None
         )
         return base
+
+
+class OrderAssignDriverResponse(BaseModel):
+    """`POST /orders/{id}/assign-driver` javobi: yangilangan buyurtma + haydovchi holati."""
+
+    order: OrderDetailResponse
+    driver: AssignedDriverInfo
 
 
 # ============================================================

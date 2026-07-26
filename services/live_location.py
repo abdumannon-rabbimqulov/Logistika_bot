@@ -28,6 +28,22 @@ async def close_redis() -> None:
         await redis_client.close()
         redis_client = None
 
+async def claim_notice_slot(key: str, ttl_seconds: int) -> bool:
+    """Takroriy bildirishnomalarni cheklash uchun: `True` — hozir yuborish mumkin.
+
+    Redis'da `SET key 1 NX EX ttl` — kalit band bo'lsa `False` qaytadi, ya'ni shu
+    haydovchiga yaqinda allaqachon xabar yuborilgan (spamning oldini oladi).
+    Redis ishlamay qolsa `False` qaytadi — bildirishnoma yuborilmaydi, lekin
+    dispatch oqimi buzilmaydi.
+    """
+    try:
+        r = get_redis()
+        return bool(await r.set(key, "1", nx=True, ex=ttl_seconds))
+    except Exception:
+        logger.exception("Bildirishnoma cheklovini tekshirib bo'lmadi: %s", key)
+        return False
+
+
 def _current_utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 

@@ -9,7 +9,7 @@ from sqlalchemy import desc, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from driver.models import Driver
+from driver.models import Driver, TruckType
 from order.models import Order, OrderStatus
 from users.models import User, UserRole
 from Admin_panel.schemas import (
@@ -88,7 +88,18 @@ async def list_users(
 
 
 async def update_user_admin(db: AsyncSession, user: User, data: AdminUserUpdate) -> User:
-    payload = data.model_dump(exclude_unset=True)
+    """Qisman yangilash: faqat so'rovda kelgan maydonlar yoziladi.
+
+    `exclude_unset` — umuman yuborilmagan maydonlarni chetlab o'tadi, `exclude_none` esa
+    ochiqcha `null` yuborilgan holatni: bu ustunlarning hech biri NULL bo'la olmaydi
+    (`users.full_name`, `role`, `language`, `is_active`, `is_banned`), shuning uchun
+    `{"role": null}` kabi so'rov ilgari IntegrityError bilan 500 qaytarardi.
+    """
+    payload = data.model_dump(exclude_unset=True, exclude_none=True)
+    if not payload:
+        # Bo'sh so'rov — keraksiz UPDATE (va updated_at surilishi) qilinmaydi.
+        return user
+
     for k, v in payload.items():
         setattr(user, k, v)
     await db.commit()
@@ -139,6 +150,48 @@ async def list_drivers_admin(
     )
     rows = (await db.execute(stmt)).all()
     return [(row[0], row[1]) for row in rows], int(total)
+
+
+async def list_drivers_for_monitor(
+    db: AsyncSession,
+) -> List[Tuple[Driver, User, Optional[str], Optional[Order]]]:
+    """Xarita monitoringi uchun: (driver, user, truck_type_name, faol_buyurtma).
+
+    Faol buyurtma — ACCEPTED yoki IN_PROGRESS holatidagi buyurtma (haydovchi "yukli"
+    hisoblanadi). `waypoints` oldindan yuklanadi: manzillar javobda ishlatiladi va
+    lazy-load sinxron serializatsiyada MissingGreenlet berardi.
+    """
+    result = await db.execute(
+        select(Driver, User, TruckType.name)
+        .join(User, Driver.user_id == User.id)
+        .outerjoin(TruckType, Driver.truck_type_id == TruckType.id)
+        .where(Driver.is_blocked.is_(False))
+        .order_by(Driver.id)
+    )
+    base_rows = result.all()
+    if not base_rows:
+        return []
+
+    driver_ids = [row[0].id for row in base_rows]
+    orders_result = await db.execute(
+        select(Order)
+        .options(selectinload(Order.waypoints))
+        .where(
+            Order.driver_id.in_(driver_ids),
+            Order.status.in_([OrderStatus.ACCEPTED, OrderStatus.IN_PROGRESS]),
+        )
+        .order_by(desc(Order.created_at))
+    )
+    # Bir haydovchida bir vaqtda bitta faol buyurtma bo'ladi; ehtiyot uchun eng yangisi olinadi.
+    active_by_driver: dict[int, Order] = {}
+    for order in orders_result.scalars().unique().all():
+        if order.driver_id is not None:
+            active_by_driver.setdefault(order.driver_id, order)
+
+    return [
+        (driver, user, truck_type_name, active_by_driver.get(driver.id))
+        for driver, user, truck_type_name in base_rows
+    ]
 
 
 async def get_driver_with_user(db: AsyncSession, driver_id: int) -> Optional[Tuple[Driver, User]]:
@@ -221,10 +274,23 @@ async def list_orders_admin(
 
 
 async def update_order_admin(db: AsyncSession, order: Order, data: AdminOrderUpdate) -> Order:
-    payload = data.model_dump(exclude_unset=True)
+    """Buyurtmaning oddiy maydonlarini yangilaydi (status BU YERDA emas).
+
+    `status` ataylab chetlab o'tiladi: uni to'g'ridan-to'g'ri yozish COMPLETED
+    o'tishida komissiya yechilmasligiga va `completed_at` bo'sh qolishiga olib kelardi.
+    Router uni `order_crud.update_order_status` orqali qo'llaydi.
+    """
+    payload = data.model_dump(exclude_unset=True, exclude_none=True)
+    payload.pop("status", None)
+    if not payload:
+        return order
+
     for k, v in payload.items():
         setattr(order, k, v)
     await db.commit()
+    # Diqqat: refresh() barcha atributlarni expire qiladi (yuklangan `waypoints` ham).
+    # Shu sababli router javob uchun orderni `order_crud.get_order` bilan qayta yuklaydi —
+    # aks holda serializatsiya paytida lazy-load MissingGreenlet beradi.
     await db.refresh(order)
     return order
 

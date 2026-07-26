@@ -29,16 +29,24 @@ interface Props {
   destination?: MapPoint | null;
   /** OSRM marshrut chizig'i: [[latitude, longitude], ...] (backend `route_geometry`). */
   route?: [number, number][] | null;
+  /** Foydalanuvchining jonli joylashuvi — ko'k nuqta bilan ko'rsatiladi. */
+  userLocation?: MapPoint | null;
+  /** `userLocation` birinchi marta kelganda xarita o'sha nuqtaga markazlashsin
+   *  (bosh sahifadagi xarita uchun; buyurtma sahifalarida marshrut ustuvor). */
+  followUser?: boolean;
 }
 
 export const YandexMap = forwardRef<YandexMapHandle, Props>(function YandexMap(
-  { origin, destination, route },
+  { origin, destination, route, userLocation, followUser = false },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<YMap | null>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
+  // Xarita foydalanuvchi nuqtasiga faqat BIR marta markazlashadi — keyin uni
+  // qo'lda surganida har yangi koordinatada sakrab ketmasligi uchun.
+  const centeredOnUserRef = useRef(false);
 
   useImperativeHandle(ref, () => ({
     focusLocation: (latitude, longitude) => {
@@ -120,6 +128,18 @@ export const YandexMap = forwardRef<YandexMapHandle, Props>(function YandexMap(
         );
       }
 
+      // Foydalanuvchi (haydovchi) joylashuvi — ko'k "jonli nuqta". Marshrut belgilaridan
+      // ajralib turishi uchun boshqa rang va o'lcham.
+      if (userLocation) {
+        map.geoObjects.add(
+          new ymaps.Placemark(
+            [userLocation.latitude, userLocation.longitude],
+            { hintContent: 'Sizning joylashuvingiz' },
+            { preset: 'islands#circleIcon', iconColor: '#1D4ED8', zIndex: 1000 },
+          ),
+        );
+      }
+
       // Marshrut bo'lsa — butun chiziq ko'rinadigan qilib moslanadi (chiziq to'g'ri
       // yo'nalishda emas, egri bo'lgani uchun faqat ikki nuqta bo'yicha moslash yetarli emas).
       const fitPoints = route && route.length >= 2 ? route : points;
@@ -127,12 +147,15 @@ export const YandexMap = forwardRef<YandexMapHandle, Props>(function YandexMap(
         map.setBounds(ymaps.util.bounds.fromPoints(fitPoints), { checkZoomRange: true, zoomMargin: 60 });
       } else if (fitPoints.length === 1) {
         map.setCenter(fitPoints[0], SINGLE_POINT_ZOOM);
+      } else if (followUser && userLocation && !centeredOnUserRef.current) {
+        centeredOnUserRef.current = true;
+        map.setCenter([userLocation.latitude, userLocation.longitude], MY_LOCATION_ZOOM, { duration: 300 });
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [ready, origin, destination, route]);
+  }, [ready, origin, destination, route, userLocation, followUser]);
 
   return (
     <div className={styles.wrap}>

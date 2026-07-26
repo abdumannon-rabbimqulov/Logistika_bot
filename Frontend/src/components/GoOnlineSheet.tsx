@@ -1,6 +1,4 @@
-import { useEffect, useState } from 'react';
-import { reverseGeocode } from '../api/orders';
-import { useGeolocation } from '../hooks/useGeolocation';
+import { useState } from 'react';
 import { BottomSheetModal } from './BottomSheetModal';
 import styles from './GoOnlineSheet.module.css';
 
@@ -12,7 +10,7 @@ const DATE_OPTIONS = [
 ];
 
 export interface GoOnlineResult {
-  currentCity: string;
+  /** Ixtiyoriy — kiritilmasa yuborilmaydi (haydovchi joyi jonli GPS orqali aniqlanadi). */
   currentRegion?: string;
   availableFromDate: string | null; // ISO (YYYY-MM-DD) yoki hoziroq bo'lsa null
 }
@@ -30,39 +28,16 @@ function isoDateInDays(days: number): string | null {
   return d.toISOString().slice(0, 10);
 }
 
-// Liniyaga chiqishda haydovchi qayerdaligini (dispatch moslashtiruvchisi shundan
-// foydalanadi — services/dispatch.py Tier B) va qachondan yuk qabul qilishini
-// (hoziroq yoki kelajakdagi sana — masalan hozir boshqa buyurtmada bo'lsa ham) belgilaydi.
+// Liniyaga chiqishda haydovchi qachondan yuk qabul qilishini belgilaydi (hoziroq yoki
+// kelajakdagi sana — masalan hozir boshqa buyurtmada bo'lsa ham). Joylashuv endi qo'lda
+// kiritilmaydi: u jonli GPS orqali aniqlanadi (services/dispatch.py Tier A). Viloyat —
+// ixtiyoriy qo'shimcha (GPS o'chiq bo'lganda Tier B matn moslashuvi uchun).
 export function GoOnlineSheet({ onSubmit, onClose, submitting }: Props) {
-  const geolocation = useGeolocation();
-  const [city, setCity] = useState('');
   const [region, setRegion] = useState('');
   const [selectedDays, setSelectedDays] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [detecting, setDetecting] = useState(false);
-
-  useEffect(() => {
-    if (!geolocation.coords || city) return;
-    setDetecting(true);
-    reverseGeocode(geolocation.coords.latitude, geolocation.coords.longitude)
-      .then((res) => {
-        if (res.address) setCity(res.address);
-      })
-      .catch(() => {
-        // aniqlanmasa — qo'lda kiritadi
-      })
-      .finally(() => setDetecting(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [geolocation.coords]);
 
   function handleSubmit() {
-    if (!city.trim()) {
-      setError('Shahringizni kiriting');
-      return;
-    }
-    setError(null);
     onSubmit({
-      currentCity: city.trim(),
       currentRegion: region.trim() || undefined,
       availableFromDate: isoDateInDays(selectedDays),
     });
@@ -71,14 +46,12 @@ export function GoOnlineSheet({ onSubmit, onClose, submitting }: Props) {
   return (
     <BottomSheetModal title="Liniyaga chiqish" onClose={onClose}>
       <div className={styles.field}>
-        <label className={styles.label}>Hozir qayerdasiz? (shahar)</label>
-        <input className={styles.input} value={city} onChange={(e) => setCity(e.target.value)} placeholder="Toshkent" />
-        {detecting && <div className={styles.hint}>Joylashuv aniqlanmoqda...</div>}
-      </div>
-
-      <div className={styles.field}>
         <label className={styles.label}>Viloyat (ixtiyoriy)</label>
         <input className={styles.input} value={region} onChange={(e) => setRegion(e.target.value)} placeholder="Toshkent viloyati" />
+        <div className={styles.hint}>
+          Joylashuvingiz jonli GPS orqali avtomatik aniqlanadi. Viloyatni kiritsangiz, GPS
+          o'chiq bo'lganda ham shu hudud bo'yicha yuk taklif qilinadi.
+        </div>
       </div>
 
       <div className={styles.field}>
@@ -98,8 +71,6 @@ export function GoOnlineSheet({ onSubmit, onClose, submitting }: Props) {
           Hozir boshqa buyurtmada bo'lsangiz ham, kelajakdagi sana uchun oldindan liniyaga kirishingiz mumkin.
         </div>
       </div>
-
-      {error && <div className={styles.error}>{error}</div>}
 
       <button className={styles.submitBtn} disabled={submitting} onClick={handleSubmit}>
         {submitting ? 'Yuborilmoqda...' : 'Liniyaga chiqish'}

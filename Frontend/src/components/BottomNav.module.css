@@ -20,6 +20,15 @@
   align-items: center;
   gap: 4px;
   flex: 1;
+  /* NavLink <a> qaytaradi — brauzerning standart tagchizig'i faol/nofaol barcha
+     bandlarda chiqib, "active indicator" kabi ko'rinardi. Minimalist ko'rinish uchun
+     faol holat faqat ikonka va matn rangi bilan belgilanadi. */
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.item:focus-visible {
+  outline: none;
 }
 
 .label {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ApiError } from '../../api/client';
-import { deleteTruckType, listTruckTypes } from '../../api/truckTypes';
+import { deleteTruckType, listTruckTypes, staticFileUrl } from '../../api/truckTypes';
 import type { TruckType } from '../../types/api';
 import { formatPrice } from '../../utils/format';
 import { DataTable, type Column } from '../components/DataTable';
@@ -9,6 +9,14 @@ import { TruckTypeFormModal } from '../components/TruckTypeFormModal';
 import { EditIcon, PlusIconAdmin, TrashIcon } from '../icons';
 import shared from '../shared.module.css';
 import styles from './AdminTruckTypes.module.css';
+
+/** Rasm ko'rsatkichi — URL yaroqsiz bo'lsa (masalan eski/qo'lda yozilgan qiymat)
+ *  brauzerning "buzilgan rasm" ikonkasi o'rniga bo'sh joy ko'rsatiladi. */
+function Thumb({ url }: { url: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (!url || failed) return <div className={styles.thumbEmpty} />;
+  return <img className={styles.thumb} src={staticFileUrl(url)} alt="" onError={() => setFailed(true)} />;
+}
 
 export function AdminTruckTypes() {
   const [items, setItems] = useState<TruckType[] | null>(null);
@@ -59,9 +67,12 @@ export function AdminTruckTypes() {
       key: 'name',
       header: 'Nomi',
       render: (t) => (
-        <div>
-          <div className={styles.name}>{t.name}</div>
-          {!t.is_active && <span className={styles.inactive}>Nofaol</span>}
+        <div className={styles.nameCell}>
+          <Thumb url={t.image_url} />
+          <div>
+            <div className={styles.name}>{t.name}</div>
+            {!t.is_active && <span className={styles.inactive}>Nofaol</span>}
+          </div>
         </div>
       ),
     },

@@ -7,7 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.config import ADMIN_IDS, get_db
-from driver.crud import get_driver_by_user_id
+from driver.crud import get_driver, get_driver_by_user_id
+from users.crud import get_user_by_id
 from order import crud, schemas
 from order.dispatch_models import DispatchAttempt, DispatchAttemptStatus
 from order.models import Order, OrderStatus
@@ -187,7 +188,7 @@ async def update_order_status(
     return await crud.update_order_status(db, order, data.status)
 
 
-@router.post("/{order_id}/assign-driver", response_model=schemas.OrderResponse,
+@router.post("/{order_id}/assign-driver", response_model=schemas.OrderAssignDriverResponse,
              summary="Buyurtmaga qo'lda haydovchi biriktirish (faqat admin — favqulodda holat)")
 async def assign_driver_to_order(
     order_id: int,
@@ -195,11 +196,16 @@ async def assign_driver_to_order(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    # Oddiy oqimda haydovchi buyurtmani `POST /orders/dispatch/{attempt_id}/accept` orqali,
-    # navbat bilan kelgan taklifni qabul qilib oladi (services/dispatch.py). Bu endpoint
-    # endi faqat admin uchun — masalan avtomatik dispatch ishlamay qolgan holatlarda qo'lda
-    # tuzatish uchun. Avval driverlar bu yerdan o'zini to'g'ridan-to'g'ri biriktira olardi —
-    # bu ochiq ro'yxatda lock yo'q edi va poyga sharoitiga (race condition) olib kelardi.
+    """Buyurtma topilmasa yoki haydovchi topilmasa — 404; allaqachon biriktirilgan yoki
+    haydovchi bloklangan bo'lsa — 409. Muvaffaqiyatda yangilangan buyurtma va haydovchi
+    holati qaytadi (admin panel javobni to'g'ridan-to'g'ri ko'rsatadi).
+
+    Oddiy oqimda haydovchi buyurtmani `POST /orders/dispatch/{attempt_id}/accept` orqali,
+    navbat bilan kelgan taklifni qabul qilib oladi (services/dispatch.py). Bu endpoint
+    faqat admin uchun — masalan avtomatik dispatch ishlamay qolgan holatlarda qo'lda
+    tuzatish uchun. Avval driverlar bu yerdan o'zini to'g'ridan-to'g'ri biriktira olardi —
+    bu ochiq ro'yxatda lock yo'q edi va poyga sharoitiga (race condition) olib kelardi.
+    """
     if not _is_admin(current_user):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Ruxsat yo'q")
 
@@ -207,10 +213,37 @@ async def assign_driver_to_order(
     if not order:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Buyurtma topilmadi")
 
-    updated = await crud.assign_driver(db, order, data.driver_id)
-    if updated is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail="Buyurtmaga allaqachon haydovchi biriktirilgan")
-    return updated
+    driver = await get_driver(db, data.driver_id)
+    if not driver:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Haydovchi topilmadi (id={data.driver_id})")
+
+    driver_user = await get_user_by_id(db, driver.user_id)
+
+    try:
+        # Bekor qilish/bildirishnomalar `accept_attempt` bilan bir xil bo'lishi uchun
+        # dispatch xizmatida (services/dispatch.py) — bu yerda takrorlanmaydi.
+        await dispatch_service.assign_driver_manually(db, order, driver)
+    except dispatch_service.DispatchError as exc:
+        _raise_dispatch_error(exc)
+
+    # `waypoints`/`route` bilan qayta yuklaymiz — javob sinxron serializatsiya qilinadi.
+    refreshed = await crud.get_order(db, order_id) or order
+    return schemas.OrderAssignDriverResponse(
+        order=schemas.OrderDetailResponse.from_order(refreshed),
+        driver=schemas.AssignedDriverInfo(
+            driver_id=driver.id,
+            user_id=driver.user_id,
+            full_name=driver_user.full_name if driver_user else None,
+            phone_number=driver_user.phone_number if driver_user else None,
+            truck_number=driver.truck_number,
+            truck_type_id=driver.truck_type_id,
+            is_available=driver.is_available,
+            is_blocked=driver.is_blocked,
+            verification_status=driver.verification_status.value,
+            rating=driver.rating,
+            total_trips=driver.total_trips,
+        ),
+    )
 
 
 @router.get("/dispatch/active", response_model=Optional[schemas.DispatchAttemptResponse],

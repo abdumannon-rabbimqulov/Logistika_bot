@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { ApiError } from '../../api/client';
-import { listUsers, updateUser } from '../../api/admin';
+import { deactivateUser, listUsers, updateUser } from '../../api/admin';
 import type { AdminUserListItem } from '../../types/api';
+import { BalanceModal } from '../components/BalanceModal';
 import { DataTable, type Column } from '../components/DataTable';
+import { Modal } from '../components/Modal';
 import { Pagination } from '../components/Pagination';
+import { UserEditModal } from '../components/UserEditModal';
 import { SearchIconAdmin } from '../icons';
 import shared from '../shared.module.css';
 import styles from './AdminUsers.module.css';
@@ -27,6 +30,9 @@ export function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [editTarget, setEditTarget] = useState<AdminUserListItem | null>(null);
+  const [balanceTarget, setBalanceTarget] = useState<AdminUserListItem | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<AdminUserListItem | null>(null);
 
   // Qidiruvni debounce qilamiz (har harfda so'rov yubormaslik uchun)
   useEffect(() => {
@@ -54,16 +60,35 @@ export function AdminUsers() {
     };
   }, [debounced, skip]);
 
+  function applyUpdated(updated: AdminUserListItem) {
+    setData((prev) => ({
+      ...prev,
+      items: prev.items.map((u) => (u.id === updated.id ? updated : u)),
+    }));
+  }
+
   async function toggleBan(user: AdminUserListItem) {
     setBusyId(user.id);
     try {
-      const updated = await updateUser(user.id, { is_banned: !user.is_banned });
-      setData((prev) => ({
-        ...prev,
-        items: prev.items.map((u) => (u.id === updated.id ? updated : u)),
-      }));
+      applyUpdated(await updateUser(user.id, { is_banned: !user.is_banned }));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "O'zgartirib bo'lmadi");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function confirmDeactivate() {
+    if (!deactivateTarget) return;
+    setBusyId(deactivateTarget.id);
+    setError(null);
+    try {
+      await deactivateUser(deactivateTarget.id);
+      // 204 — javob tanasi yo'q, shuning uchun qatorni lokal yangilaymiz
+      applyUpdated({ ...deactivateTarget, is_active: false });
+      setDeactivateTarget(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Nofaol qilib bo'lmadi");
     } finally {
       setBusyId(null);
     }
@@ -100,17 +125,39 @@ export function AdminUsers() {
         ),
     },
     {
+      key: 'balance',
+      header: 'Balans',
+      render: (u) => (
+        <span className={Number(u.balance) < 0 ? styles.debt : undefined}>
+          {new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 0 }).format(Number(u.balance))} UZS
+        </span>
+      ),
+    },
+    {
       key: 'actions',
       header: '',
       align: 'right',
       render: (u) => (
-        <button
-          className={u.is_banned ? styles.unbanBtn : styles.banBtn}
-          disabled={busyId === u.id}
-          onClick={() => toggleBan(u)}
-        >
-          {busyId === u.id ? '...' : u.is_banned ? 'Blokdan chiqarish' : 'Bloklash'}
-        </button>
+        <div className={styles.actions}>
+          <button className={styles.ghostAction} onClick={() => setEditTarget(u)}>
+            Tahrirlash
+          </button>
+          <button className={styles.ghostAction} onClick={() => setBalanceTarget(u)}>
+            Balans
+          </button>
+          <button
+            className={u.is_banned ? styles.unbanBtn : styles.banBtn}
+            disabled={busyId === u.id}
+            onClick={() => toggleBan(u)}
+          >
+            {busyId === u.id ? '...' : u.is_banned ? 'Blokdan chiqarish' : 'Bloklash'}
+          </button>
+          {u.is_active && (
+            <button className={styles.banBtn} onClick={() => setDeactivateTarget(u)}>
+              Nofaol qilish
+            </button>
+          )}
+        </div>
       ),
     },
   ];
@@ -148,6 +195,47 @@ export function AdminUsers() {
         />
         <Pagination skip={skip} limit={PAGE_SIZE} count={data.items.length} total={data.total} onChange={setSkip} />
       </div>
+
+      {editTarget && (
+        <UserEditModal user={editTarget} onClose={() => setEditTarget(null)} onSaved={applyUpdated} />
+      )}
+
+      {balanceTarget && (
+        <BalanceModal
+          userId={balanceTarget.id}
+          userName={balanceTarget.full_name || `Foydalanuvchi #${balanceTarget.id}`}
+          initialBalance={Number(balanceTarget.balance)}
+          onClose={() => setBalanceTarget(null)}
+          onChanged={(newBalance) => applyUpdated({ ...balanceTarget, balance: newBalance })}
+        />
+      )}
+
+      {deactivateTarget && (
+        <Modal
+          title="Akkauntni nofaol qilish"
+          onClose={() => setDeactivateTarget(null)}
+          footer={
+            <>
+              <button className={shared.ghostBtn} onClick={() => setDeactivateTarget(null)}>
+                Bekor qilish
+              </button>
+              <button
+                className={styles.dangerBtn}
+                disabled={busyId === deactivateTarget.id}
+                onClick={confirmDeactivate}
+              >
+                {busyId === deactivateTarget.id ? '...' : 'Nofaol qilish'}
+              </button>
+            </>
+          }
+        >
+          <div className={styles.confirmText}>
+            <strong>{deactivateTarget.full_name || `#${deactivateTarget.id}`}</strong> akkaunti nofaol
+            qilinadi — u tizimga kira olmaydi. Ma’lumotlari o‘chirilmaydi, keyin “Tahrirlash” orqali
+            qayta faollashtirish mumkin.
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

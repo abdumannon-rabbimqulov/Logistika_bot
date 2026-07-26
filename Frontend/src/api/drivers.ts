@@ -1,5 +1,11 @@
 import { ApiError, api } from './client';
-import type { DriverCabinet, DriverCreateInput, DriverProfile, GoOnlineInput } from '../types/api';
+import type {
+  BalanceTransaction,
+  DriverCabinet,
+  DriverCreateInput,
+  DriverProfile,
+  GoOnlineInput,
+} from '../types/api';
 
 export function createDriverProfile(data: DriverCreateInput): Promise<DriverProfile> {
   return api.post<DriverProfile>('/drivers/profile', data);
@@ -17,4 +23,14 @@ export async function getMyDriverCabinetOrNull(): Promise<DriverCabinet | null> 
 
 export function updateDriverAvailability(data: GoOnlineInput): Promise<DriverCabinet> {
   return api.patch<DriverCabinet>('/drivers/me', data);
+}
+
+/** Profil sahifasidagi balans tarixi — komissiya yechilishi va to'ldirishlar. */
+export function listMyBalanceTransactions(
+  params: { skip?: number; limit?: number } = {},
+): Promise<BalanceTransaction[]> {
+  return api.get<BalanceTransaction[]>('/drivers/me/balance/transactions', {
+    skip: params.skip,
+    limit: params.limit,
+  });
 }

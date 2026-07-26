@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ApiError } from '../../api/client';
-import { blockDriver, listDrivers, unblockDriver } from '../../api/admin';
-import type { AdminDriverListItem } from '../../types/api';
+import { blockDriver, getDriverLocation, listDrivers, unblockDriver } from '../../api/admin';
+import type { AdminDriverListItem, DriverLocationItem } from '../../types/api';
 import { DataTable, type Column } from '../components/DataTable';
 import { Modal } from '../components/Modal';
 import { Pagination } from '../components/Pagination';
@@ -32,6 +32,11 @@ export function DriverBlocksPanel() {
   const [note, setNote] = useState('');
   const [blockTarget, setBlockTarget] = useState<AdminDriverListItem | null>(null);
   const [blockReason, setBlockReason] = useState('');
+  // Jonli lokatsiya: bitta haydovchi bo'yicha (GET /system/drivers/{id}/location)
+  const [locationTarget, setLocationTarget] = useState<AdminDriverListItem | null>(null);
+  const [location, setLocation] = useState<DriverLocationItem | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -100,6 +105,27 @@ export function DriverBlocksPanel() {
     }
   }
 
+  async function openLocation(driver: AdminDriverListItem) {
+    setLocationTarget(driver);
+    setLocation(null);
+    setLocationError(null);
+    setLocationLoading(true);
+    try {
+      setLocation(await getDriverLocation(driver.driver_id));
+    } catch (err) {
+      // 404 — haydovchi jonli translyatsiyani yoqmagan (bu xato emas, oddiy holat)
+      setLocationError(
+        err instanceof ApiError && err.status === 404
+          ? 'Bu haydovchi hozir jonli lokatsiya yubormayapti'
+          : err instanceof ApiError
+            ? err.message
+            : 'Lokatsiya olinmadi',
+      );
+    } finally {
+      setLocationLoading(false);
+    }
+  }
+
   async function submitBlock() {
     if (!blockTarget || blockReason.trim().length < 3) return;
     setBusyId(blockTarget.driver_id);
@@ -158,31 +184,37 @@ export function DriverBlocksPanel() {
       key: 'actions',
       header: '',
       align: 'right',
-      render: (d) =>
-        d.is_blocked ? (
-          <button
-            className={styles.unblockBtn}
-            disabled={busyId === d.driver_id}
-            onClick={() => {
-              setUnblockTarget(d);
-              setTopUp(d.balance < 0 ? String(Math.abs(d.balance)) : '');
-              setNote('');
-            }}
-          >
-            {busyId === d.driver_id ? '...' : 'Blokdan chiqarish'}
+      render: (d) => (
+        <div className={styles.actions}>
+          <button className={styles.ghostAction} onClick={() => openLocation(d)}>
+            Joylashuvi
           </button>
-        ) : (
-          <button
-            className={styles.blockBtn}
-            disabled={busyId === d.driver_id}
-            onClick={() => {
-              setBlockTarget(d);
-              setBlockReason('');
-            }}
-          >
-            Bloklash
-          </button>
-        ),
+          {d.is_blocked ? (
+            <button
+              className={styles.unblockBtn}
+              disabled={busyId === d.driver_id}
+              onClick={() => {
+                setUnblockTarget(d);
+                setTopUp(d.balance < 0 ? String(Math.abs(d.balance)) : '');
+                setNote('');
+              }}
+            >
+              {busyId === d.driver_id ? '...' : 'Blokdan chiqarish'}
+            </button>
+          ) : (
+            <button
+              className={styles.blockBtn}
+              disabled={busyId === d.driver_id}
+              onClick={() => {
+                setBlockTarget(d);
+                setBlockReason('');
+              }}
+            >
+              Bloklash
+            </button>
+          )}
+        </div>
+      ),
     },
   ];
 
@@ -312,6 +344,40 @@ export function DriverBlocksPanel() {
             <div className={styles.warning}>
               Bloklangan haydovchi liniyaga chiqa olmaydi va buyurtma qabul qila olmaydi.
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {locationTarget && (
+        <Modal
+          title={`${locationTarget.full_name ?? `Haydovchi #${locationTarget.driver_id}`} — joylashuvi`}
+          onClose={() => setLocationTarget(null)}
+        >
+          <div className={styles.modalBody}>
+            {locationLoading && <div className={styles.muted}>Yuklanmoqda...</div>}
+            {locationError && <div className={styles.warning}>{locationError}</div>}
+            {location && (
+              <>
+                <div className={styles.balanceRow}>
+                  <span>Koordinata</span>
+                  <strong>
+                    {location.lat.toFixed(5)}, {location.lon.toFixed(5)}
+                  </strong>
+                </div>
+                <div className={styles.balanceRow}>
+                  <span>Yangilangan</span>
+                  <strong>{new Date(location.ts).toLocaleString('uz-UZ')}</strong>
+                </div>
+                <a
+                  className={styles.mapLink}
+                  href={`https://yandex.uz/maps/?pt=${location.lon},${location.lat}&z=15&l=map`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Yandex xaritada ochish →
+                </a>
+              </>
+            )}
           </div>
         </Modal>
       )}

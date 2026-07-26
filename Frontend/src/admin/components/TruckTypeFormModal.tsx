@@ -1,6 +1,11 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ApiError } from '../../api/client';
-import { createTruckType, updateTruckType } from '../../api/truckTypes';
+import {
+  createTruckType,
+  staticFileUrl,
+  updateTruckType,
+  uploadTruckTypeImage,
+} from '../../api/truckTypes';
 import type { TruckType, TruckTypeInput } from '../../types/api';
 import { Modal } from './Modal';
 import styles from './TruckTypeFormModal.module.css';
@@ -56,10 +61,28 @@ function toNumOrNull(v: string): number | null {
 export function TruckTypeFormModal({ editing, onClose, onSaved }: Props) {
   const [form, setForm] = useState(initialState(editing));
   const [submitting, setSubmitting] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [previewFailed, setPreviewFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
+    if (key === 'image_url') setPreviewFailed(false);
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleFile(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    setUploading(true);
+    try {
+      set('image_url', await uploadTruckTypeImage(file));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Rasm yuklab bo'lmadi");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
   }
 
   async function handleSubmit() {
@@ -166,6 +189,56 @@ export function TruckTypeFormModal({ editing, onClose, onSaved }: Props) {
         <div className={styles.field}>
           <label className={styles.label}>Balandlik (m)</label>
           <input className={styles.input} type="number" inputMode="decimal" value={form.height} onChange={(e) => set('height', e.target.value)} />
+        </div>
+      </div>
+
+      <div className={styles.field}>
+        <label className={styles.label}>Palletlar soni</label>
+        <input className={styles.input} type="number" inputMode="numeric" value={form.pallet_capacity} onChange={(e) => set('pallet_capacity', e.target.value)} />
+      </div>
+
+      {/* RASM — fayl yuklanadi (POST /drivers/truck-types/image) yoki URL qo'lda kiritiladi */}
+      <div className={styles.field}>
+        <label className={styles.label}>Rasm</label>
+        <div className={styles.imageRow}>
+          {form.image_url && !previewFailed ? (
+            <img
+              className={styles.imagePreview}
+              src={staticFileUrl(form.image_url)}
+              alt=""
+              onError={() => setPreviewFailed(true)}
+            />
+          ) : (
+            <div className={styles.imagePlaceholder}>{form.image_url ? 'ochilmadi' : 'rasm yo‘q'}</div>
+          )}
+          <div className={styles.imageControls}>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              className={styles.fileInput}
+              onChange={(e) => handleFile(e.target.files?.[0])}
+            />
+            <button
+              type="button"
+              className={styles.uploadBtn}
+              disabled={uploading}
+              onClick={() => fileRef.current?.click()}
+            >
+              {uploading ? 'Yuklanmoqda...' : 'Rasm yuklash'}
+            </button>
+            <input
+              className={styles.input}
+              value={form.image_url}
+              onChange={(e) => set('image_url', e.target.value)}
+              placeholder="yoki URL kiriting"
+            />
+            {form.image_url && (
+              <button type="button" className={styles.clearBtn} onClick={() => set('image_url', '')}>
+                Rasmni olib tashlash
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

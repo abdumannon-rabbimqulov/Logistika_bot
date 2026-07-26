@@ -3,14 +3,17 @@ import type {
   AdminDashboardStats,
   AdminDriverList,
   AdminDriverListItem,
+  AdminOrderUpdate,
   AdminUserList,
   AdminUserListItem,
   AdminUserUpdate,
   BalanceTransaction,
   CommissionSettings,
   DriverLocationItem,
+  DriverMonitorItem,
   DriverUnblockPayload,
   Order,
+  OrderAssignDriverResponse,
 } from '../types/api';
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
@@ -39,8 +42,17 @@ export function listUsers(params: ListUsersParams = {}): Promise<AdminUserList> 
   });
 }
 
+export function getUser(userId: number): Promise<AdminUserListItem> {
+  return api.get<AdminUserListItem>(`/system/users/${userId}`);
+}
+
 export function updateUser(userId: number, data: AdminUserUpdate): Promise<AdminUserListItem> {
   return api.patch<AdminUserListItem>(`/system/users/${userId}`, data);
+}
+
+/** DELETE /system/users/{id} — o'chirmaydi, akkauntni nofaol qiladi (is_active=false). */
+export function deactivateUser(userId: number): Promise<void> {
+  return api.delete<void>(`/system/users/${userId}`);
 }
 
 // ── Buyurtmalar (admin moderatsiya) ─────────────────────────────────────────────
@@ -62,6 +74,12 @@ export function listAdminOrders(params: ListAdminOrdersParams = {}): Promise<Ord
   });
 }
 
+/** PATCH /system/orders/{id} — admin moderatsiyasi (narx, yuk nomi, og'irlik, status).
+ *  Status COMPLETED ga o'zgartirilsa backend komissiyani avtomatik yechadi. */
+export function updateAdminOrder(orderId: number, data: AdminOrderUpdate): Promise<Order> {
+  return api.patch<Order>(`/system/orders/${orderId}`, data);
+}
+
 // ── Haydovchilar: balans va bloklar ─────────────────────────────────────────────
 export interface ListDriversParams {
   /** true — faqat bloklanganlar (qarz uchun avtomatik + qo'lda bloklanganlar) */
@@ -77,6 +95,23 @@ export function listDrivers(params: ListDriversParams = {}): Promise<AdminDriver
     search: params.search,
     skip: params.skip,
     limit: params.limit,
+  });
+}
+
+/** Bitta haydovchi — buyurtmaga biriktirishdan oldin ma'lumotini ko'rsatish uchun.
+ *  Topilmasa 404 (ApiError). */
+export function getDriver(driverId: number): Promise<AdminDriverListItem> {
+  return api.get<AdminDriverListItem>(`/system/drivers/${driverId}`);
+}
+
+/** POST /orders/{id}/assign-driver — admin qo'lda haydovchi biriktiradi.
+ *  404 — buyurtma yoki haydovchi topilmadi; 409 — allaqachon biriktirilgan / haydovchi bloklangan. */
+export function assignDriverToOrder(
+  orderId: number,
+  driverId: number,
+): Promise<OrderAssignDriverResponse> {
+  return api.post<OrderAssignDriverResponse>(`/orders/${orderId}/assign-driver`, {
+    driver_id: driverId,
   });
 }
 
@@ -111,9 +146,21 @@ export function listBalanceTransactions(
   });
 }
 
+/** GET /system/drivers/monitor — xarita uchun: joylashuv + onlayn/yukli holat + joriy buyurtma. */
+export function listDriverMonitor(onlyWithLocation = true): Promise<DriverMonitorItem[]> {
+  return api.get<DriverMonitorItem[]>('/system/drivers/monitor', {
+    only_with_location: onlyWithLocation,
+  });
+}
+
 // ── Haydovchi jonli lokatsiyalari ────────────────────────────────────────────────
 export function listDriverLocations(): Promise<DriverLocationItem[]> {
   return api.get<DriverLocationItem[]>('/system/drivers/locations');
+}
+
+/** Bitta haydovchining jonli lokatsiyasi. Translyatsiya o'chiq bo'lsa 404 (ApiError). */
+export function getDriverLocation(driverId: number): Promise<DriverLocationItem> {
+  return api.get<DriverLocationItem>(`/system/drivers/${driverId}/location`);
 }
 
 /** WS /system/drivers/locations/stream — real-time lokatsiya oqimi manzilini quradi.

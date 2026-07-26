@@ -1,4 +1,5 @@
 import { ChevronRightIcon, DocIcon, ShieldIcon, StarIcon, UserLineIcon } from '../components/icons';
+import { BalanceCard } from '../components/BalanceCard';
 import { DriverBottomNav } from '../components/DriverBottomNav';
 import { useDriverCabinet } from './DriverCabinetContext';
 import styles from './DriverProfilePage.module.css';
@@ -24,6 +25,10 @@ export function DriverProfilePage() {
             </div>
           </div>
         </div>
+
+        {/* Balans va harakatlar tarixi (ilgari bosh sahifada edi) */}
+        <div className={styles.sectionTitle}>Balans</div>
+        <BalanceCard balance={cabinet.balance_amount} currency={cabinet.currency} />
 
         {/* Mashina kartasi */}
         <div className={styles.sectionTitle}>Transport</div>

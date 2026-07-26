@@ -28,6 +28,8 @@ export interface YMaps {
 
 export interface YMap {
   geoObjects: { add(obj: unknown): unknown; remove(obj: unknown): unknown; removeAll(): unknown };
+  /** Xarita opsiyalari — masalan Yandex POI (do'kon/kafe) balonlarini o'chirish uchun. */
+  options: { set(key: string, value: unknown): void };
   container: { fitToViewport(): void };
   setBounds(bounds: [[number, number], [number, number]], options?: Record<string, unknown>): unknown;
   setCenter(center: [number, number], zoom?: number, options?: Record<string, unknown>): unknown;

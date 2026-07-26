@@ -43,6 +43,13 @@ logger = logging.getLogger(__name__)
 MAX_ROUNDS = 5
 RESPONSE_TIMEOUT_SEC = 60
 
+# Jonli GPS o'chgan bo'lsa, DB'dagi oxirgi koordinata shu muddat ichida yozilgan bo'lsa
+# hali ham ishonchli deb qaraladi (haydovchi ilovani yopgan, lekin uzoqqa ketmagan).
+LAST_LOCATION_MAX_AGE_SEC = 6 * 60 * 60  # 6 soat
+
+# Joylashuvsiz haydovchiga ogohlantirish yuborish oralig'i (spam bo'lmasligi uchun).
+WARN_THROTTLE_SEC = 12 * 60 * 60  # 12 soat
+
 
 class DispatchError(Exception):
     """Dispatch amalini bajarib bo'lmadi (foydalanuvchiga ko'rsatiladigan sabab bilan)."""
@@ -113,8 +120,8 @@ async def _find_next_candidate(
                 if driver:
                     return driver, DispatchMatchType.GPS, Decimal(str(round(dist, 2)))
 
-    # Tier B — GPS live emas: region/shahar matn moslik bo'yicha fallback,
-    # ishonchlilik balli (reliability_score) bo'yicha saralanadi.
+    # Barcha "yaroqli" haydovchilar (turi, mavjudligi, hujjatlari bo'yicha) — quyidagi
+    # ikki bosqich uchun bir marta o'qiladi.
     query = select(Driver).where(
         Driver.truck_type_id == order.required_truck_type_id,
         Driver.is_available.is_(True),
@@ -125,12 +132,92 @@ async def _find_next_candidate(
     if exclude_driver_ids:
         query = query.where(Driver.id.notin_(exclude_driver_ids))
     query = query.order_by(Driver.reliability_score.desc())
-    result = await db.execute(query)
-    for driver in result.scalars().all():
+    eligible_drivers = list((await db.execute(query)).scalars().all())
+
+    # Tier A2 — jonli GPS o'chiq, lekin DB'dagi OXIRGI ma'lum koordinata yangi bo'lsa,
+    # shu bo'yicha eng yaqini tanlanadi (haydovchi ilovani yopgan, ammo yaqinda
+    # translyatsiya qilgan holat). driver/router.py WS handleri bu ustunlarni yozadi.
+    if pickup_lat is not None and pickup_lon is not None:
+        fresh_after = datetime.now(timezone.utc) - timedelta(seconds=LAST_LOCATION_MAX_AGE_SEC)
+        by_last_location: list[tuple[Driver, float]] = []
+        for driver in eligible_drivers:
+            if driver.last_latitude is None or driver.last_longitude is None:
+                continue
+            if driver.last_location_at is None or driver.last_location_at < fresh_after:
+                continue
+            dist = calculate_distance_km(pickup_lat, pickup_lon, driver.last_latitude, driver.last_longitude)
+            if dist is not None:
+                by_last_location.append((driver, dist))
+
+        if by_last_location:
+            by_last_location.sort(key=lambda pair: pair[1])
+            driver, dist = by_last_location[0]
+            # Match turi GPS: moslashtirish koordinata bo'yicha bo'ldi (jonli emas, oxirgi
+            # ma'lum nuqta) — enum'ga yangi qiymat qo'shish migratsiya talab qilardi.
+            return driver, DispatchMatchType.GPS, Decimal(str(round(dist, 2)))
+
+    # Tier B — koordinata umuman yo'q: region/shahar matn moslik bo'yicha fallback,
+    # ishonchlilik balli (reliability_score) bo'yicha saralangan holda.
+    for driver in eligible_drivers:
         if _region_matches(pickup_address, driver.current_city) or _region_matches(pickup_address, driver.current_region):
             return driver, DispatchMatchType.REGION, None
 
     return None
+
+
+async def _warn_unlocatable_drivers(db: AsyncSession, order: Order) -> None:
+    """Joylashuvi umuman aniqlanmaydigan haydovchilarni Telegram orqali ogohlantiradi.
+
+    Bunday haydovchi hech qachon taklif ololmaydi: jonli GPS o'chiq, oxirgi ma'lum
+    koordinatasi yo'q (yoki eskirgan) va viloyat/shahar ham ko'rsatilmagan. Buyurtmaga
+    nomzod topilmaganda chaqiriladi — ya'ni ular tufayli yuk qidiruvsiz qolgan paytda.
+
+    Bir haydovchiga `WARN_THROTTLE_SEC` ichida faqat bitta xabar yuboriladi.
+    """
+    result = await db.execute(
+        select(Driver).where(
+            Driver.truck_type_id == order.required_truck_type_id,
+            Driver.is_available.is_(True),
+            Driver.is_blocked.is_(False),
+            Driver.docs_verified.is_(True),
+        )
+    )
+    drivers = list(result.scalars().all())
+    if not drivers:
+        return
+
+    online_ids = set()
+    try:
+        online_ids = {int(e["driver_id"]) for e in await live_location.get_all_online_drivers() if e.get("driver_id")}
+    except Exception:
+        logger.exception("Online haydovchilar ro'yxatini olishda xato (ogohlantirish uchun)")
+
+    fresh_after = datetime.now(timezone.utc) - timedelta(seconds=LAST_LOCATION_MAX_AGE_SEC)
+
+    for driver in drivers:
+        if driver.id in online_ids:
+            continue  # jonli GPS bor — ogohlantirish kerak emas
+        has_recent_point = (
+            driver.last_latitude is not None
+            and driver.last_longitude is not None
+            and driver.last_location_at is not None
+            and driver.last_location_at >= fresh_after
+        )
+        has_region = bool((driver.current_region or "").strip() or (driver.current_city or "").strip())
+        if has_recent_point or has_region:
+            continue
+
+        if not await live_location.claim_notice_slot(f"dispatch_geo_warn:{driver.id}", WARN_THROTTLE_SEC):
+            continue
+
+        await notifications.send_telegram_message(
+            driver.user_id,
+            "📍 Sizga mos yuk chiqdi, lekin joylashuvingiz aniqlanmadi — shuning uchun "
+            "taklif yuborilmadi.\n\n"
+            "Ilovada GPS'ni yoqing (bosh sahifadagi xarita) yoki \"Liniyaga chiqish\" "
+            "oynasida viloyatingizni ko'rsating — shundan keyin yuklar sizga ham taklif qilinadi.",
+        )
+        logger.info("Driver #%s joylashuvsiz — Telegram orqali ogohlantirildi", driver.id)
 
 
 def _offer_text(order: Order, attempt: DispatchAttempt) -> str:
@@ -203,6 +290,13 @@ async def _dispatch_next(db: AsyncSession, order: Order) -> None:
     exclude = await _previously_attempted_driver_ids(db, order.id)
     candidate = await _find_next_candidate(db, order, exclude)
     if candidate is None:
+        # Nomzod topilmadi — joylashuvi umuman aniqlanmagan (GPS ham, viloyat ham yo'q)
+        # haydovchilarga sabab tushuntiriladi, aks holda ular "nega yuk kelmayapti"
+        # degan savolda qolardi. Xato bo'lsa ham asosiy oqim to'xtamaydi.
+        try:
+            await _warn_unlocatable_drivers(db, order)
+        except Exception:
+            logger.exception("Joylashuvsiz haydovchilarni ogohlantirishda xato (order #%s)", order.id)
         await _request_price_bump(db, order)
         return
 
@@ -353,6 +447,45 @@ async def accept_attempt(db: AsyncSession, attempt_id: int, *, acting_user_id: i
     await _send_navigation_links(order, driver.user_id)
     await _notify_sender_driver_found(db, order, driver)
     return order
+
+
+async def assign_driver_manually(db: AsyncSession, order: Order, driver: Driver) -> Order:
+    """Admin qo'lda haydovchi biriktiradi (dispatch navbatidan tashqari).
+
+    `accept_attempt` bilan bir xil yon ta'sirlar: order ACCEPTED bo'ladi, shu order
+    uchun ochiq qolgan takliflar bekor qilinadi, haydovchiga navigatsiya havolalari
+    va senderga "haydovchi topildi" xabari yuboriladi. Shu sababli mantiq bu yerda —
+    router'da takrorlanmaydi.
+    """
+    if driver.is_blocked:
+        raise DispatchError(
+            "Haydovchi bloklangan — biriktirib bo'lmaydi. Sababi: " + (driver.block_reason or "noma'lum"),
+            status_code=409,
+        )
+    if order.status in (OrderStatus.COMPLETED, OrderStatus.CANCELLED):
+        raise DispatchError("Yakunlangan yoki bekor qilingan buyurtmaga haydovchi biriktirilmaydi", status_code=409)
+
+    # Atomik: `WHERE driver_id IS NULL` — bir vaqtda kelgan ikkinchi so'rov None oladi.
+    updated = await order_crud.assign_driver(db, order, driver.id)
+    if updated is None:
+        raise DispatchError("Buyurtmaga allaqachon haydovchi biriktirilgan", status_code=409)
+
+    # Ochiq qolgan takliflar yopiladi — aks holda boshqa haydovchi ham "qabul qildim"
+    # deb bosishi va 409 olishi mumkin edi (foydalanuvchi uchun chalkash).
+    await db.execute(
+        update(DispatchAttempt)
+        .where(DispatchAttempt.order_id == order.id, DispatchAttempt.status == DispatchAttemptStatus.PENDING)
+        .values(status=DispatchAttemptStatus.CANCELLED)
+    )
+    await db.commit()
+
+    await notifications.send_telegram_message(
+        driver.user_id,
+        f"📦 Sizga admin tomonidan '{order.cargo_name}' buyurtmasi biriktirildi.",
+    )
+    await _send_navigation_links(order, driver.user_id)
+    await _notify_sender_driver_found(db, order, driver)
+    return updated
 
 
 async def reject_attempt(db: AsyncSession, attempt_id: int, *, acting_user_id: int) -> None:

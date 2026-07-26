@@ -64,8 +64,10 @@ class DriverBase(BaseModel):
     truck_type_id: int = Field(..., description="Yuk mashinasi turi ID si")
     truck_number: str = Field(..., min_length=3, max_length=20, description="Davlat raqami (60A123BC)")
     truck_year: Optional[int] = Field(None, ge=1980, le=2030, description="Ishlab chiqarilgan yil")
-    current_city: str = Field(..., min_length=2, max_length=100, description="Hozirgi shahar")
-    current_region: Optional[str] = Field(None, max_length=100, description="Viloyat / Region")
+    # Shahar endi ilovada so'ralmaydi (haydovchi joyi jonli GPS orqali aniqlanadi),
+    # lekin ustun va moslashtiruvda saqlanib qoldi — eski yozuvlar va bot/admin uchun.
+    current_city: Optional[str] = Field(None, max_length=300, description="Hozirgi shahar (ixtiyoriy)")
+    current_region: Optional[str] = Field(None, max_length=100, description="Viloyat / Region (ixtiyoriy)")
 
 
 class DriverCreate(DriverBase):
@@ -140,6 +142,28 @@ class DriverProfileResponse(BaseModel):
     total_trips: int
     on_time_percent: Decimal
     is_blocked: bool = False
+
+
+class BalanceTransactionItem(BaseModel):
+    """Haydovchining o'z balans harakati (kabinetdagi tarix uchun).
+
+    Admin sxemasidan farqli — `created_by_admin_id` kabi ichki maydonlar berilmaydi.
+    """
+
+    id: int
+    type: str
+    amount: Decimal = Field(..., description="Manfiy = yechildi (komissiya), musbat = to'ldirildi")
+    balance_after: Decimal
+    order_id: Optional[int] = None
+    note: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def enum_to_value(cls, v):
+        return v.value if hasattr(v, "value") else v
 
 
 class DriverTripScope(CaseInsensitiveSchemaEnum):

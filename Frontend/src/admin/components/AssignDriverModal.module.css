@@ -1,0 +1,150 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 460px;
+}
+
+.orderLine {
+  font-size: 13.5px;
+  color: var(--color-text-primary);
+}
+
+.muted {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.warnInline {
+  margin-left: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-danger);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-gray-700);
+}
+
+.input {
+  height: 42px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.error {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-danger);
+}
+
+.card {
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-gray-50);
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.badgeOk,
+.badgeBlocked {
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.badgeOk {
+  background: var(--color-accent-tint);
+  color: var(--color-accent-pressed);
+}
+
+.badgeBlocked {
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.row dt {
+  color: var(--color-text-secondary);
+}
+
+.row dd {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-align: right;
+}
+
+.debt {
+  color: var(--color-danger);
+}
+
+.blockNote {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-danger-tint);
+  color: #7a1710;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.confirmBox {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--color-accent-tint);
+  color: var(--color-accent-pressed);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}

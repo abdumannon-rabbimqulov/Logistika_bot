@@ -1,0 +1,38 @@
+.editBtn {
+  padding: 7px 13px;
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  font-weight: 600;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-gray-700);
+  white-space: nowrap;
+  transition: background 0.12s ease;
+}
+
+.editBtn:hover {
+  background: var(--color-gray-50);
+}
+
+.actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.assignBtn {
+  padding: 7px 13px;
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  font-weight: 600;
+  border: 1px solid var(--color-accent-tint);
+  background: var(--color-accent-tint);
+  color: var(--color-accent-pressed);
+  white-space: nowrap;
+  transition: background 0.12s ease;
+}
+
+.assignBtn:hover {
+  background: #C8F2D6;
+}

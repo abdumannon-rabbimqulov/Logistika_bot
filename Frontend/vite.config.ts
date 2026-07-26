@@ -29,6 +29,17 @@ export default defineConfig({
       '/api': {
         target: API_TARGET,
         changeOrigin: true,
+        // WebSocket'lar ham shu prefiks ostida: haydovchining jonli GPS oqimi
+        // (`/api/drivers/ws/location`) va admin xaritasi (`/api/system/drivers/locations/stream`).
+        // `ws: true` bo'lmasa upgrade so'rovi oddiy HTTP sifatida uzatilib, ulanish uzilardi.
+        ws: true,
+      },
+      // Backend yuklangan fayllarni `/static/uploads/...` ostida beradi (masalan admin
+      // panelda yuklangan transport turi rasmi). Bu proxy bo'lmasa dev serverda rasm
+      // o'rniga SPA index.html qaytardi.
+      '/static': {
+        target: API_TARGET,
+        changeOrigin: true,
       },
     },
     // ngrok tunnelida HMR 443-port (wss) orqali ulanadi; oddiy local dev'da default qoladi.

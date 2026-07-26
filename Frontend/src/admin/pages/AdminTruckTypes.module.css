@@ -63,3 +63,28 @@
 .cancelBtn:disabled {
   opacity: 0.6;
 }
+
+.nameCell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-gray-50);
+  flex-shrink: 0;
+}
+
+.thumbEmpty {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--color-gray-300);
+  background: var(--color-gray-50);
+  flex-shrink: 0;
+}

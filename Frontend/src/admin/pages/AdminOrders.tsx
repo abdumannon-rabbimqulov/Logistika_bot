@@ -3,10 +3,13 @@ import { ApiError } from '../../api/client';
 import { listAdminOrders } from '../../api/admin';
 import type { Order, OrderStatus } from '../../types/api';
 import { formatPrice } from '../../utils/format';
+import { AssignDriverModal } from '../components/AssignDriverModal';
 import { DataTable, type Column } from '../components/DataTable';
+import { OrderEditModal } from '../components/OrderEditModal';
 import { Pagination } from '../components/Pagination';
 import { StatusBadge } from '../components/StatusBadge';
 import shared from '../shared.module.css';
+import styles from './AdminOrders.module.css';
 
 const PAGE_SIZE = 20;
 
@@ -28,26 +31,48 @@ function routeOf(order: Order): string {
   return `${from} → ${to}`;
 }
 
-const COLUMNS: Column<Order>[] = [
-  { key: 'id', header: 'ID', width: '70px', render: (o) => `#${o.id}` },
-  { key: 'route', header: "Yo'nalish", render: (o) => <span title={routeOf(o)}>{routeOf(o)}</span> },
-  { key: 'cargo_name', header: 'Yuk', render: (o) => o.cargo_name },
-  { key: 'driver_id', header: 'Haydovchi', render: (o) => (o.driver_id ? `#${o.driver_id}` : '—') },
-  {
-    key: 'price',
-    header: 'Narx',
-    align: 'right',
-    render: (o) => `${formatPrice(Number(o.price))} ${o.currency}`,
-  },
-  { key: 'status', header: 'Holat', render: (o) => <StatusBadge status={o.status as OrderStatus} /> },
-];
-
 export function AdminOrders() {
   const [status, setStatus] = useState('');
   const [skip, setSkip] = useState(0);
   const [rows, setRows] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editTarget, setEditTarget] = useState<Order | null>(null);
+  const [assignTarget, setAssignTarget] = useState<Order | null>(null);
+  // Biriktirilgandan keyin ro'yxatni qayta yuklash uchun (re-fetch)
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const columns: Column<Order>[] = [
+    { key: 'id', header: 'ID', width: '70px', render: (o) => `#${o.id}` },
+    { key: 'route', header: "Yo'nalish", render: (o) => <span title={routeOf(o)}>{routeOf(o)}</span> },
+    { key: 'cargo_name', header: 'Yuk', render: (o) => o.cargo_name },
+    { key: 'driver_id', header: 'Haydovchi', render: (o) => (o.driver_id ? `#${o.driver_id}` : '—') },
+    {
+      key: 'price',
+      header: 'Narx',
+      align: 'right',
+      render: (o) => `${formatPrice(Number(o.price))} ${o.currency}`,
+    },
+    { key: 'status', header: 'Holat', render: (o) => <StatusBadge status={o.status as OrderStatus} /> },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      render: (o) => (
+        <div className={styles.actions}>
+          {/* Yakunlangan/bekor qilingan buyurtmaga haydovchi biriktirilmaydi (backend 409) */}
+          {o.driver_id == null && o.status !== 'COMPLETED' && o.status !== 'CANCELLED' && (
+            <button className={styles.assignBtn} onClick={() => setAssignTarget(o)}>
+              Haydovchi biriktirish
+            </button>
+          )}
+          <button className={styles.editBtn} onClick={() => setEditTarget(o)}>
+            Tahrirlash
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   useEffect(() => {
     let cancelled = false;
@@ -64,7 +89,7 @@ export function AdminOrders() {
     return () => {
       cancelled = true;
     };
-  }, [status, skip]);
+  }, [status, skip, reloadKey]);
 
   return (
     <div className={shared.page}>
@@ -94,7 +119,7 @@ export function AdminOrders() {
 
       <div>
         <DataTable
-          columns={COLUMNS}
+          columns={columns}
           rows={rows}
           rowKey={(o) => o.id}
           loading={loading}
@@ -103,6 +128,24 @@ export function AdminOrders() {
         />
         <Pagination skip={skip} limit={PAGE_SIZE} count={rows.length} onChange={setSkip} />
       </div>
+
+      {assignTarget && (
+        <AssignDriverModal
+          order={assignTarget}
+          onClose={() => setAssignTarget(null)}
+          onAssigned={() => setReloadKey((k) => k + 1)}
+        />
+      )}
+
+      {editTarget && (
+        <OrderEditModal
+          order={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={(updated) =>
+            setRows((prev) => prev.map((o) => (o.id === updated.id ? { ...o, ...updated } : o)))
+          }
+        />
+      )}
     </div>
   );
 }
