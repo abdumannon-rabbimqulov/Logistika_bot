@@ -1,0 +1,27 @@
+# ── Ishlab chiqish (development) uchun yengil image ─────────────────────────
+#
+# Bu faylda nginx/build bosqichi YO'Q: konteyner ichida Vite dev serveri ishlaydi,
+# kod esa host'dan volume orqali ulanadi (docker-compose.yml `frontend` xizmati).
+# Shu sababli faylni saqlash bilanoq HMR (hot reload) brauzerda aks etadi —
+# `docker compose up --build` qayta-qayta kerak bo'lmaydi.
+#
+# Ishlab chiqarish (production) uchun esa `Dockerfile` (nginx + `npm run build`) ishlatiladi.
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Bog'liqliklar alohida qatlamda: faqat package*.json o'zgarganda qayta o'rnatiladi.
+# `npm ci` — lock fayl bo'yicha aniq versiyalar (takrorlanadigan build).
+COPY package*.json ./
+RUN npm ci
+
+# Manba kod bind-mount orqali keladi (docker-compose.yml: `./Frontend:/app`).
+# COPY qilinmasligi ataylab: image ichidagi nusxa host'dagi fayllarni "yashirib"
+# chalkashtirmasin. Faqat `node_modules` image ichida qoladi (anonim volume bilan
+# himoyalangan) — host'da `npm install` qilinmagan bo'lsa ham ishlaydi.
+
+EXPOSE 5173
+
+# `--host 0.0.0.0` — konteyner tashqarisidan (brauzerdan) kirish uchun shart.
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]

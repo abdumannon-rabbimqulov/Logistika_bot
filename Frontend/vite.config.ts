@@ -11,6 +11,14 @@ const API_TARGET = process.env.VITE_DEV_API_TARGET || 'http://localhost:8000'
 // buni YOQMASLIK kerak — aks holda brauzer wss://localhost:443 ga urinib, HMR buziladi.
 const TUNNEL = process.env.VITE_TUNNEL === '1'
 
+// Docker konteynerida (bind-mount) fayl o'zgarishlari inotify orqali yetib kelmaydi —
+// ayniqsa macOS/Windows host'ida. Shu sababli `CHOKIDAR_USEPOLLING=true` bo'lganda
+// kuzatuvchi polling rejimiga o'tadi (docker-compose.yml `frontend` xizmati shu
+// o'zgaruvchini beradi). Lokal `npm run dev` da esa polling YOQILMAYDI — u ortiqcha
+// CPU sarflaydi va nativ hodisalar allaqachon ishlaydi.
+const USE_POLLING =
+  process.env.CHOKIDAR_USEPOLLING === 'true' || process.env.WATCHPACK_POLLING === 'true'
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
@@ -42,6 +50,8 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    // Docker'da fayl hodisalari uchun polling (yuqoridagi izohga qarang).
+    watch: USE_POLLING ? { usePolling: true, interval: 300 } : undefined,
     // ngrok tunnelida HMR 443-port (wss) orqali ulanadi; oddiy local dev'da default qoladi.
     hmr: TUNNEL ? { protocol: 'wss', clientPort: 443 } : undefined,
   },
