@@ -23,3 +23,5 @@ osrm-data/*
 *.cells
 *.osrm
 *.osrm.*
+# Lokal compose override (dev uchun --reload va h.k.) — serverga tushmasligi kerak.
+docker-compose.override.yml

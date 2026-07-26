@@ -89,10 +89,10 @@ services:
       - "0.0.0.0"
       - --port
       - "8000"
-      # Kod (.:/app) mount qilingani uchun --reload: manba o'zgarsa jarayon avtomatik
-      # qayta yuklanadi. Busiz konteyner ishga tushgan paytdagi eski kodni xotirada
-      # ushlab qoladi (masalan route_geometry keyin qo'shilsa — javobga tushmay qoladi).
-      - --reload
+      # DIQQAT: bu yerda --reload YO'Q. Reloader qo'shimcha kuzatuvchi jarayon ochadi va
+      # har qayta yuklanishda jarayon ichidagi asyncio tasklari (dispatch taymerlari —
+      # services/dispatch.py `_expire_after_timeout`) yo'qoladi. Lokal ishlab chiqish
+      # uchun `docker-compose.override.yml` da --reload qo'shilgan (u avtomatik qo'llanadi).
     restart: always
     depends_on:
       db:

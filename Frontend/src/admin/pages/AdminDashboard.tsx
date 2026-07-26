@@ -36,7 +36,6 @@ const ORDER_COLUMNS: Column<Order>[] = [
 export function AdminDashboard() {
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [recent, setRecent] = useState<Order[]>([]);
-  const [turnover, setTurnover] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,18 +43,14 @@ export function AdminDashboard() {
     let cancelled = false;
     // allSettled: biror endpoint yiqilsa ham qolganlari ko'rinadi (masalan stats ishlab,
     // buyurtmalar ro'yxati vaqtincha ishlamasa — dashboard butunlay bo'sh qolmaydi).
-    Promise.allSettled([
-      getDashboardStats(),
-      listAdminOrders({ limit: 8 }),
-      listAdminOrders({ status: 'COMPLETED', limit: 200 }),
-    ])
-      .then(([statsRes, recentRes, completedRes]) => {
+    // Aylanma endi alohida so'ralmaydi: u stats.revenue_total ichida DB tomonda SUM
+    // bilan hisoblanadi (ilgari sahifalangan ro'yxat qo'shilardi va 200 tadan oshgach
+    // noto'g'ri natija berardi).
+    Promise.allSettled([getDashboardStats(), listAdminOrders({ limit: 8 })])
+      .then(([statsRes, recentRes]) => {
         if (cancelled) return;
         if (statsRes.status === 'fulfilled') setStats(statsRes.value);
         if (recentRes.status === 'fulfilled') setRecent(recentRes.value);
-        if (completedRes.status === 'fulfilled') {
-          setTurnover(completedRes.value.reduce((sum, o) => sum + Number(o.price), 0));
-        }
         if (statsRes.status === 'rejected') {
           const err = statsRes.reason;
           setError(err instanceof ApiError ? err.message : "Ma'lumot yuklanmadi");
@@ -94,8 +89,8 @@ export function AdminDashboard() {
         />
         <KpiCard
           label="Aylanma (yakunlangan)"
-          value={turnover != null ? `${formatPrice(turnover)}` : '—'}
-          sub="UZS · so'nggi buyurtmalar"
+          value={stats ? formatPrice(Number(stats.revenue_total)) : '—'}
+          sub="UZS · jami yakunlangan buyurtmalar"
           accent
           loading={loading}
         />

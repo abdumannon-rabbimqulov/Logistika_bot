@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { getMe, loginWithInitData, loginWithPassword } from '../api/auth';
+import { getMe, loginWithInitData, loginWithPassword, logout as logoutRequest } from '../api/auth';
 import { clearTokens, getAccessToken, getRefreshToken, setTokens, setUnauthorizedHandler } from '../api/client';
 import { getInitData } from '../telegram';
 import type { UserRole } from '../types/api';
@@ -21,6 +21,7 @@ interface AuthState {
   retry: () => void;
   refreshRole: () => Promise<void>;
   loginWithPhone: (phone: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -113,9 +114,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus(statusForRole(login.role));
   }, []);
 
+  // Profildan "Chiqish" tugmasi chaqiradi — backendga logout so'rovi (refresh token bekor
+  // qilinadi) yuboriladi, natijasidan qat'iy nazar tokenlar tozalanadi va qayta autentifikatsiya
+  // effekti ishga tushadi (init_data yoki local-login oqimiga tushadi).
+  const logout = useCallback(async () => {
+    try {
+      await logoutRequest();
+    } catch {
+      // token allaqachon yaroqsiz bo'lishi mumkin — baribir lokal holatni tozalaymiz
+    }
+    clearTokens();
+    setRole(null);
+    setUserId(null);
+    setStatus('loading');
+    setAttempt((n) => n + 1);
+  }, []);
+
   const value = useMemo<AuthState>(
-    () => ({ status, role, userId, errorMessage, retry, refreshRole, loginWithPhone }),
-    [status, role, userId, errorMessage, retry, refreshRole, loginWithPhone],
+    () => ({ status, role, userId, errorMessage, retry, refreshRole, loginWithPhone, logout }),
+    [status, role, userId, errorMessage, retry, refreshRole, loginWithPhone, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

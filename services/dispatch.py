@@ -28,6 +28,7 @@ from typing import Optional
 
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 import driver.crud as driver_crud
 import order.crud as order_crud
@@ -294,20 +295,27 @@ async def accept_attempt(db: AsyncSession, attempt_id: int, *, acting_user_id: i
             status_code=403,
         )
 
+    now = datetime.now(timezone.utc)
     result = await db.execute(
         update(DispatchAttempt)
         .where(
             DispatchAttempt.id == attempt_id,
             DispatchAttempt.status == DispatchAttemptStatus.PENDING,
             DispatchAttempt.driver_id == driver.id,
+            # Muddati o'tgan taklifni qabul qilib bo'lmaydi — sweep/timer task hali
+            # ishlamagan bo'lsa ham (0 qator yangilanadi va quyida 409 qaytadi).
+            DispatchAttempt.expires_at > now,
         )
-        .values(status=DispatchAttemptStatus.ACCEPTED, responded_at=datetime.now(timezone.utc))
+        .values(status=DispatchAttemptStatus.ACCEPTED, responded_at=now)
         .returning(DispatchAttempt.order_id, DispatchAttempt.bot_chat_id, DispatchAttempt.bot_message_id)
     )
     row = result.first()
     if row is None:
         await db.rollback()
-        raise DispatchError("Bu taklif sizga tegishli emas yoki allaqachon javob berilgan", status_code=409)
+        raise DispatchError(
+            "Bu taklif sizga tegishli emas, muddati tugagan yoki allaqachon javob berilgan",
+            status_code=409,
+        )
     await db.commit()
 
     order = await order_crud.get_order(db, row.order_id)
@@ -373,9 +381,23 @@ async def reject_attempt(db: AsyncSession, attempt_id: int, *, acting_user_id: i
 
 
 async def get_active_attempt(db: AsyncSession, driver_id: int) -> Optional[DispatchAttempt]:
+    """Haydovchining hozir javob kutayotgan taklifi (muddati o'tmagan).
+
+    `order` va `order.waypoints` oldindan (eager) yuklanadi: chaqiruvchi (order/router.py
+    `GET /orders/dispatch/active`) taklif kartasi uchun yo'nalish/narx xulosasini shu
+    obyektlardan o'qiydi — async kontekstda lazy-load `MissingGreenlet` bilan yiqiladi.
+
+    `expires_at > now` sharti muhim: muddati o'tgan-u hali sweep qilinmagan attempt
+    qaytsa, WebApp kartasi 0 soniya bilan qayta-qayta miltillaydi.
+    """
     result = await db.execute(
         select(DispatchAttempt)
-        .where(DispatchAttempt.driver_id == driver_id, DispatchAttempt.status == DispatchAttemptStatus.PENDING)
+        .options(selectinload(DispatchAttempt.order).selectinload(Order.waypoints))
+        .where(
+            DispatchAttempt.driver_id == driver_id,
+            DispatchAttempt.status == DispatchAttemptStatus.PENDING,
+            DispatchAttempt.expires_at > datetime.now(timezone.utc),
+        )
         .order_by(DispatchAttempt.sent_at.desc())
     )
     return result.scalars().first()

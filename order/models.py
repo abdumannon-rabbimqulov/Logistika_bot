@@ -90,6 +90,11 @@ class Order(Base):
         nullable=False,
     )
 
+    # Buyurtma COMPLETED holatiga o'tgan payt. `created_at`dan farqli — daromad hisoboti
+    # (haydovchi kabinetidagi haftalik statistika) aynan shu vaqt bo'yicha guruhlanadi:
+    # 10 kun oldin yaratilib bugun yakunlangan yuk "shu hafta" daromadiga tushishi kerak.
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     created_at : Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(), nullable=False

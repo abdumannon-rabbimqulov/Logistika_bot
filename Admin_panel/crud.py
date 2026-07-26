@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import List, Optional, Tuple
 
-from sqlalchemy import desc, func, or_, select
+from sqlalchemy import desc, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -119,11 +120,14 @@ async def list_orders_admin(
     """
     base = select(Order)
     if status:
-        # OrderStatus enum qiymati ("PENDING" ...) — yaroqsiz qiymat kelsa bo'sh natija.
+        # OrderStatus enum qiymati ("PENDING" ...). Kichik/aralash harf bilan kelsa ham
+        # qabul qilamiz. Yaroqsiz qiymatda xom satrni enum ustuniga bind qilib bo'lmaydi —
+        # SQLAlchemy execute paytida LookupError tashlaydi (500). Shu sabab ochiqcha
+        # "hech nima mos kelmasin" sharti qo'yiladi va bo'sh natija qaytadi.
         try:
-            base = base.where(Order.status == OrderStatus(status))
+            base = base.where(Order.status == OrderStatus(status.upper()))
         except ValueError:
-            base = base.where(Order.status == status)
+            base = base.where(false())
     if customer_id is not None:
         base = base.where(Order.customer_id == customer_id)
     if driver_id is not None:
@@ -189,6 +193,16 @@ async def dashboard_stats(db: AsyncSession) -> AdminDashboardStats:
         )
     ).scalar_one()
 
+    # Umumiy aylanma — DB tomonda SUM bilan. Buni frontendda sahifalangan ro'yxatni
+    # qo'shib hisoblab bo'lmaydi: /system/orders limiti 200 ta bilan cheklangan.
+    revenue_total = (
+        await db.execute(
+            select(func.coalesce(func.sum(Order.price), 0)).where(
+                Order.status == OrderStatus.COMPLETED
+            )
+        )
+    ).scalar_one()
+
     by_status_rows = (
         await db.execute(select(Order.status, func.count(Order.id)).group_by(Order.status))
     ).all()
@@ -222,6 +236,7 @@ async def dashboard_stats(db: AsyncSession) -> AdminDashboardStats:
         drivers_live_gps=int(drivers_live_gps),
         orders_total=int(orders_total),
         orders_today=int(orders_today),
+        revenue_total=Decimal(str(revenue_total or 0)),
         orders_by_status=orders_by_status,
         orders_last_7_days=last_7,
     )

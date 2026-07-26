@@ -61,7 +61,11 @@ export function DriverHomePage() {
       pollingRef.current = true;
       try {
         const next = await getActiveDispatch();
-        if (!cancelled && !busyRef.current) setAttempt(next);
+        // Qo'shimcha himoya: backend endi muddati o'tgan taklifni qaytarmaydi
+        // (services/dispatch.py get_active_attempt), lekin soatlar farqi yoki kechikkan
+        // javob sabab o'tib ketgani kelsa — kartani ko'rsatmaymiz (0 soniyalik miltillash).
+        const fresh = next && new Date(next.expires_at).getTime() > Date.now() ? next : null;
+        if (!cancelled && !busyRef.current) setAttempt(fresh);
       } catch {
         // jim — keyingi urinishda qayta so'raladi
       } finally {

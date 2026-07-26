@@ -152,6 +152,7 @@ class OrderResponse(OrderBase):
     dispatch_round: int = 0
     price_bump_requested_at: Optional[datetime] = None
     overload_warning: Optional[str] = None
+    completed_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     waypoints: list[OrderWaypointResponse] = []
@@ -171,6 +172,9 @@ class OrderListItem(BaseModel):
     driver_id: Optional[int] = None
     overload_warning: Optional[str] = None
     created_at: datetime
+    # Yakunlangan buyurtmalar uchun to'ldiriladi — haydovchi daromadi shu sana bo'yicha
+    # guruhlanadi (created_at emas: yuk boshqa haftada yaratilgan bo'lishi mumkin).
+    completed_at: Optional[datetime] = None
 
 
 class OrderDetailResponse(OrderResponse):

@@ -36,3 +36,7 @@ export function updateMe(data: Partial<Pick<UserProfile, 'full_name' | 'phone_nu
 export function selectRole(role: Extract<UserRole, 'sender' | 'driver'>): Promise<UserProfile> {
   return api.post<UserProfile>('/auth/select-role', { role });
 }
+
+export function logout(): Promise<void> {
+  return api.post<void>('/auth/logout');
+}

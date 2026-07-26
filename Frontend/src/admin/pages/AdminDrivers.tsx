@@ -32,6 +32,15 @@ export function AdminDrivers() {
     });
   }
 
+  function remove(driverId: number) {
+    setDrivers((prev) => {
+      if (!prev.has(driverId)) return prev;
+      const next = new Map(prev);
+      next.delete(driverId);
+      return next;
+    });
+  }
+
   useEffect(() => {
     let cancelled = false;
     let ws: WebSocket | null = null;
@@ -70,7 +79,13 @@ export function AdminDrivers() {
           if (msg.event === 'snapshot' && Array.isArray(msg.items)) {
             setDrivers(new Map((msg.items as DriverLocationItem[]).map((it) => [it.driver_id, it])));
           } else if (msg.event === 'update' && msg.item) {
-            upsert([msg.item as DriverLocationItem]);
+            const item = msg.item as DriverLocationItem;
+            // services/live_location.py `stop_driver_location` translyatsiya to'xtaganda
+            // shu kanalga {stopped: true, lat: 0, lon: 0} yuboradi (ism/raqamsiz). Uni
+            // upsert qilish haydovchini "0.00000, 0.00000" da abadiy qoldirardi —
+            // o'rniga ro'yxatdan olib tashlaymiz.
+            if (item.stopped) remove(item.driver_id);
+            else upsert([item]);
           }
         } catch {
           // yaroqsiz xabar — e'tiborsiz qoldiramiz

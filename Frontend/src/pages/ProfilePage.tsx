@@ -1,18 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getMe, updateMe } from '../api/auth';
 import { ApiError } from '../api/client';
+import { listMyOrders } from '../api/orders';
+import { useAuth } from '../auth/AuthProvider';
 import { BottomNav } from '../components/BottomNav';
-import type { UserProfile } from '../types/api';
+import { ChevronRightIcon, PhoneIcon, UserLineIcon, WalletIcon } from '../components/icons';
+import type { OrderListItem, UserProfile } from '../types/api';
 import { formatPrice } from '../utils/format';
 import styles from './ProfilePage.module.css';
 
 export function ProfilePage() {
+  const { logout } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [orders, setOrders] = useState<OrderListItem[] | null>(null);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     getMe()
@@ -24,7 +31,23 @@ export function ProfilePage() {
       .catch(() => {
         // profil yuklanmasa forma bo'sh qoladi, saqlash tugmasi baribir mavjud
       });
+
+    listMyOrders()
+      .then(setOrders)
+      .catch(() => setOrders([]));
   }, []);
+
+  const stats = useMemo(() => {
+    const list = orders ?? [];
+    const completed = list.filter((o) => o.status === 'COMPLETED');
+    const totalSpent = completed.reduce((sum, o) => sum + Number(o.price), 0);
+    return { total: list.length, completedCount: completed.length, totalSpent };
+  }, [orders]);
+
+  const initials = (profile?.full_name ?? '').trim().charAt(0).toUpperCase() || 'S';
+  const memberSince = profile
+    ? new Date(profile.created_at).toLocaleDateString('uz-UZ', { month: 'long', year: 'numeric' })
+    : null;
 
   async function handleSave() {
     setSaving(true);
@@ -34,6 +57,7 @@ export function ProfilePage() {
       const updated = await updateMe({ full_name: fullName, phone_number: phone });
       setProfile(updated);
       setSaved(true);
+      setEditing(false);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Saqlanmadi');
     } finally {
@@ -41,34 +65,102 @@ export function ProfilePage() {
     }
   }
 
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setLoggingOut(false);
+    }
+  }
+
   return (
     <div className={styles.page}>
-      <div className={styles.topBar}>
+      <div className={styles.scroll}>
         <div className={styles.title}>Profil</div>
-      </div>
 
-      {profile && (
-        <div className={styles.section}>
-          <div className={styles.balanceCard}>
-            <div className={styles.balanceLabel}>Balans</div>
-            <div className={styles.balanceValue}>{formatPrice(profile.balance)} UZS</div>
+        {/* Bosh karta: avatar, ism, a'zolik sanasi */}
+        <div className={styles.headerCard}>
+          <div className={styles.avatar}>{initials}</div>
+          <div className={styles.headerInfo}>
+            <div className={styles.name}>{profile?.full_name || 'Foydalanuvchi'}</div>
+            <div className={styles.memberSince}>{memberSince ? `${memberSince} dan beri` : '—'}</div>
           </div>
         </div>
-      )}
 
-      <div className={styles.section}>
-        <div className={styles.field}>
-          <label className={styles.label}>Ism familiya</label>
-          <input className={styles.input} value={fullName} onChange={(e) => setFullName(e.target.value)} />
+        {/* Balans kartasi */}
+        <div className={styles.balanceCard}>
+          <div className={styles.balanceLabel}>Balans</div>
+          <div className={styles.balanceValue}>{formatPrice(profile?.balance ?? 0)} UZS</div>
         </div>
-        <div className={styles.field}>
-          <label className={styles.label}>Telefon raqami</label>
-          <input className={styles.input} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+998 XX XXX XX XX" />
+
+        {/* Statistika plitkalari */}
+        <div className={styles.statsRow}>
+          <div className={styles.statTile}>
+            <div className={styles.statValue}>{orders === null ? '—' : stats.total}</div>
+            <div className={styles.statLabel}>Jami buyurtma</div>
+          </div>
+          <div className={styles.statTile}>
+            <div className={styles.statValue}>{orders === null ? '—' : stats.completedCount}</div>
+            <div className={styles.statLabel}>Yakunlangan</div>
+          </div>
+          <div className={styles.statTile}>
+            <div className={styles.statValue}>{orders === null ? '—' : formatPrice(stats.totalSpent)}</div>
+            <div className={styles.statLabel}>Jami sarflangan</div>
+          </div>
         </div>
-        {error && <div className={styles.savedHint} style={{ color: 'var(--color-danger)' }}>{error}</div>}
+
+        {/* Shaxsiy ma'lumotlar */}
+        <div className={styles.sectionTitle}>Shaxsiy ma'lumotlar</div>
+        {!editing ? (
+          <div className={styles.rows}>
+            <div className={styles.row}>
+              <span className={styles.rowIcon}><UserLineIcon /></span>
+              <span className={styles.rowText}>
+                <span className={styles.rowTitle}>Ism familiya</span>
+                <span className={styles.rowSub}>{profile?.full_name || "Kiritilmagan"}</span>
+              </span>
+            </div>
+            <div className={styles.row}>
+              <span className={styles.rowIcon}><PhoneIcon color="var(--color-gray-700)" /></span>
+              <span className={styles.rowText}>
+                <span className={styles.rowTitle}>Telefon raqami</span>
+                <span className={styles.rowSub}>{profile?.phone_number || "Kiritilmagan"}</span>
+              </span>
+            </div>
+            <button className={styles.editRow} onClick={() => setEditing(true)}>
+              <span className={styles.rowIcon}><WalletIcon /></span>
+              <span className={styles.rowText}>
+                <span className={styles.rowTitle}>Ma'lumotlarni tahrirlash</span>
+              </span>
+              <ChevronRightIcon />
+            </button>
+          </div>
+        ) : (
+          <div className={styles.editCard}>
+            <div className={styles.field}>
+              <label className={styles.label}>Ism familiya</label>
+              <input className={styles.input} value={fullName} onChange={(e) => setFullName(e.target.value)} />
+            </div>
+            <div className={styles.field}>
+              <label className={styles.label}>Telefon raqami</label>
+              <input className={styles.input} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+998 XX XXX XX XX" />
+            </div>
+            {error && <div className={styles.errorHint}>{error}</div>}
+            <div className={styles.editActions}>
+              <button className={styles.cancelBtn} onClick={() => setEditing(false)} disabled={saving}>
+                Bekor qilish
+              </button>
+              <button className={styles.saveBtn} disabled={saving} onClick={handleSave}>
+                {saving ? 'Saqlanmoqda...' : 'Saqlash'}
+              </button>
+            </div>
+          </div>
+        )}
         {saved && <div className={styles.savedHint}>Saqlandi</div>}
-        <button className={styles.saveBtn} disabled={saving} onClick={handleSave}>
-          {saving ? 'Saqlanmoqda...' : 'Saqlash'}
+
+        <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
+          {loggingOut ? 'Chiqilmoqda...' : 'Chiqish'}
         </button>
       </div>
 

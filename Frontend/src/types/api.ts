@@ -147,6 +147,8 @@ export interface OrderListItem {
   driver_id: number | null;
   overload_warning: string | null;
   created_at: string;
+  /** COMPLETED bo'lganda to'ldiriladi — daromad hisoboti shu sana bo'yicha guruhlanadi. */
+  completed_at: string | null;
 }
 
 export interface Order {
@@ -167,6 +169,7 @@ export interface Order {
   dispatch_round: number;
   price_bump_requested_at: string | null;
   overload_warning: string | null;
+  completed_at: string | null;
   created_at: string;
   updated_at: string;
   waypoints: OrderWaypoint[];
@@ -229,6 +232,8 @@ export interface AdminDashboardStats {
   drivers_live_gps: number;
   orders_total: number;
   orders_today: number;
+  /** Yakunlangan buyurtmalar bo'yicha umumiy aylanma (DB tomonda SUM bilan hisoblanadi). */
+  revenue_total: number;
   orders_by_status: Record<string, number>;
   orders_last_7_days: OrdersByDay[];
 }
@@ -271,6 +276,8 @@ export interface DriverLocationItem {
   lon: number;
   ts: string;
   expires_at: string | null;
+  /** WS "update" xabarida keladi: haydovchi jonli translyatsiyani to'xtatdi (ro'yxatdan olib tashlanadi). */
+  stopped?: boolean;
 }
 
 export interface CommissionSettings {

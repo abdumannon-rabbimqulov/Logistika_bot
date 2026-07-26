@@ -15,6 +15,15 @@ interface DayBucket {
   total: number;
 }
 
+// Buyurtma daromadi YAKUNLANGAN sana bo'yicha hisoblanadi (created_at emas): 10 kun
+// oldin yaratilib bugun yakunlangan yuk aynan shu haftaga tegishli. Eski yozuvlarda
+// completed_at NULL bo'lishi mumkin — ular haftalik hisobga qo'shilmaydi.
+function completionDate(order: OrderListItem): Date | null {
+  if (!order.completed_at) return null;
+  const d = new Date(order.completed_at);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 // Oxirgi 7 kunni (bugundan orqaga) Dushanba-boshli hafta indeksiga joylaydi.
 function buildWeek(completed: OrderListItem[]): { buckets: DayBucket[]; weekTotal: number; weekCount: number } {
   const now = new Date();
@@ -32,8 +41,9 @@ function buildWeek(completed: OrderListItem[]): { buckets: DayBucket[]; weekTota
   let weekTotal = 0;
   let weekCount = 0;
   for (const order of completed) {
-    const created = new Date(order.created_at);
-    const dayIndex = Math.floor((created.getTime() - start.getTime()) / 86_400_000);
+    const done = completionDate(order);
+    if (!done) continue;
+    const dayIndex = Math.floor((done.getTime() - start.getTime()) / 86_400_000);
     if (dayIndex >= 0 && dayIndex < 7) {
       buckets[dayIndex].total += Number(order.price);
       weekTotal += Number(order.price);
@@ -57,7 +67,15 @@ export function DriverEarningsPage() {
       });
   }, []);
 
-  const completed = useMemo(() => (orders ?? []).filter((o) => o.status === 'COMPLETED'), [orders]);
+  // Yakunlangan buyurtmalar — eng oxirgi yakunlangani birinchi bo'lib ("Oxirgi to'lovlar"
+  // ro'yxati uchun). completed_at yo'q eski yozuvlar oxiriga tushadi.
+  const completed = useMemo(
+    () =>
+      (orders ?? [])
+        .filter((o) => o.status === 'COMPLETED')
+        .sort((a, b) => (completionDate(b)?.getTime() ?? 0) - (completionDate(a)?.getTime() ?? 0)),
+    [orders],
+  );
   const { buckets, weekTotal, weekCount } = useMemo(() => buildWeek(completed), [completed]);
   const maxBucket = Math.max(1, ...buckets.map((b) => b.total));
   const recent = completed.slice(0, 8);
@@ -122,7 +140,10 @@ export function DriverEarningsPage() {
                 <div className={styles.payInfo}>
                   <div className={styles.payCargo}>{order.cargo_name}</div>
                   <div className={styles.payDate}>
-                    {new Date(order.created_at).toLocaleDateString('uz-UZ', { day: 'numeric', month: 'long' })}
+                    {(completionDate(order) ?? new Date(order.created_at)).toLocaleDateString('uz-UZ', {
+                      day: 'numeric',
+                      month: 'long',
+                    })}
                   </div>
                 </div>
                 <div className={styles.payAmount}>+{formatPrice(order.price)} {order.currency}</div>

@@ -84,6 +84,9 @@ class AdminDashboardStats(BaseModel):
     drivers_live_gps: int
     orders_total: int
     orders_today: int
+    # Yakunlangan (COMPLETED) buyurtmalar bo'yicha umumiy aylanma — DB tomonda SUM bilan
+    # hisoblanadi (sahifalangan ro'yxatni frontendda qo'shish noto'g'ri natija berardi).
+    revenue_total: Decimal = Decimal("0")
     orders_by_status: Dict[str, int]
     orders_last_7_days: List[OrdersByDay]
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional, Sequence
 
@@ -184,8 +185,12 @@ async def update_order(db: AsyncSession, order: Order, data: OrderUpdate) -> Ord
 async def update_order_status(db: AsyncSession, order: Order, new_status: OrderStatus) -> Order:
     was_completed = order.status == OrderStatus.COMPLETED
     order.status = new_status
+    # Yakunlanish vaqti bir marta — birinchi COMPLETED o'tishida yoziladi (qayta COMPLETED
+    # qilish sanani surib yubormasligi uchun). Daromad hisoboti shu ustunga tayanadi.
+    if new_status == OrderStatus.COMPLETED and not was_completed:
+        order.completed_at = datetime.now(timezone.utc)
     await db.commit()
-    await db.refresh(order, attribute_names=["status", "updated_at"])
+    await db.refresh(order, attribute_names=["status", "completed_at", "updated_at"])
 
     # Komissiya faqat PENDING/ACCEPTED/IN_PROGRESS -> COMPLETED o'tishida bir marta yechiladi
     # (allaqachon COMPLETED bo'lgan orderni qayta COMPLETED qilish qayta hisoblamaydi).

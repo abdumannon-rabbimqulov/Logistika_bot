@@ -227,12 +227,17 @@ async def get_active_dispatch(
     attempt = await dispatch_service.get_active_attempt(db, driver.id)
     if not attempt:
         return None
-    response = schemas.DispatchAttemptResponse.model_validate(attempt)
-    # Taklif kartasi (yo'nalish/og'irlik/narx) uchun buyurtma xulosasini biriktiramiz —
-    # pending paytida haydovchi buyurtmani to'g'ridan-to'g'ri o'qiy olmaydi (403).
-    order = await crud.get_order(db, attempt.order_id)
-    if order:
-        response.order = schemas.DispatchOrderSummary(
+
+    # DIQQAT: `DispatchAttempt.order` — ORM relationship, `DispatchAttemptResponse.order`
+    # esa DispatchOrderSummary. `model_validate(attempt)` ni to'g'ridan-to'g'ri chaqirish
+    # relationshipni o'qiydi va (eager yuklanmagan bo'lsa) async kontekstda MissingGreenlet
+    # bilan yiqiladi. Shu sabab javob maydonlari qo'lda yig'iladi; `order` xulosasi esa
+    # get_active_attempt selectinload bilan oldindan yuklab bergan obyektdan olinadi —
+    # pending paytida haydovchi buyurtmani `GET /orders/{id}` orqali o'qiy olmaydi (403).
+    order = attempt.order
+    summary: Optional[schemas.DispatchOrderSummary] = None
+    if order is not None:
+        summary = schemas.DispatchOrderSummary(
             cargo_name=order.cargo_name,
             weight=order.weight,
             price=order.price,
@@ -240,7 +245,19 @@ async def get_active_dispatch(
             origin_address=order.origin.address if order.origin else None,
             destination_address=order.destination.address if order.destination else None,
         )
-    return response
+
+    return schemas.DispatchAttemptResponse(
+        id=attempt.id,
+        order_id=attempt.order_id,
+        driver_id=attempt.driver_id,
+        round_number=attempt.round_number,
+        match_type=attempt.match_type,
+        distance_km=attempt.distance_km,
+        status=attempt.status,
+        sent_at=attempt.sent_at,
+        expires_at=attempt.expires_at,
+        order=summary,
+    )
 
 
 @router.post("/dispatch/{attempt_id}/accept", response_model=schemas.OrderDetailResponse,
@@ -307,13 +324,14 @@ async def delete_order(
     # Kim o'chirmoqda: buyurtma egasi ("sender") yoki admin.
     deleted_by = "sender" if order.customer_id == current_user.id else "admin"
 
-    # MUHIM: order (va cascade orqali waypoint/route/attempt) o'chirilishidan OLDIN
-    # xabar berish uchun kerakli ma'lumotni o'qib olamiz — o'chirilgandan keyin bu
-    # ma'lumotlarga kirib bo'lmaydi.
+    # 1-QADAM: order (va cascade orqali waypoint/route/attempt) o'chirilishidan OLDIN
+    # xabar berish uchun kerakli ma'lumotni oddiy qiymatlarga o'qib olamiz — o'chirilgandan
+    # keyin ORM obyektlariga murojaat qilib bo'lmaydi.
     cargo_name = order.cargo_name
     assigned_driver_id = order.driver_id
 
-    pending_attempt: DispatchAttempt | None = None
+    pending_chat_id: Optional[int] = None
+    pending_message_id: Optional[int] = None
     if assigned_driver_id is None and order.status == OrderStatus.PENDING:
         result = await db.execute(
             select(DispatchAttempt)
@@ -324,21 +342,27 @@ async def delete_order(
             .order_by(DispatchAttempt.sent_at.desc())
         )
         pending_attempt = result.scalars().first()
+        if pending_attempt is not None:
+            pending_chat_id = pending_attempt.bot_chat_id
+            pending_message_id = pending_attempt.bot_message_id
 
+    # 2-QADAM: o'chirish (commit bilan). Faqat shu muvaffaqiyatli tugagach xabar yuboramiz —
+    # aks holda DB xatosida buyurtma o'chmay qoladi-yu, haydovchi "bekor qilindi" xabarini
+    # olib ishni to'xtatadi (mos kelmaydigan holat).
+    await crud.delete_order(db, order)
+
+    # 3-QADAM: xabarnoma (Telegram xatosi bo'lsa ham o'chirish allaqachon yakunlangan —
+    # notifications.* funksiyalari exception tashlamaydi, faqat log yozadi).
     if assigned_driver_id is not None:
         # ACCEPTED/IN_PROGRESS — biriktirilgan haydovchiga bekor qilingani haqida xabar.
         await notifications.notify_drivers_order_deleted(
             db, assigned_driver_id, cargo_name, deleted_by=deleted_by
         )
-    elif pending_attempt is not None:
-        # PENDING — faol taklif yuborilgan haydovchining bot xabarini tahrirlab,
-        # attemptni CANCELLED holatiga o'tkazamiz (cascade baribir o'chiradi, lekin
-        # driverga xabar berish uchun o'chirishdan OLDIN bajaramiz).
+    elif pending_chat_id is not None:
+        # PENDING — faol taklif yuborilgan haydovchining bot xabarini tahrirlaymiz
+        # (attempt cascade orqali allaqachon o'chirilgan).
         await notifications.edit_telegram_message(
-            pending_attempt.bot_chat_id,
-            pending_attempt.bot_message_id,
+            pending_chat_id,
+            pending_message_id,
             "Bu buyurtma bekor qilindi",
         )
-        pending_attempt.status = DispatchAttemptStatus.CANCELLED
-
-    await crud.delete_order(db, order)
