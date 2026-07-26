@@ -222,6 +222,10 @@ async def _dispatch_next(db: AsyncSession, order: Order) -> None:
     db.add(attempt)
     await db.commit()
     await db.refresh(attempt)
+    # order.dispatch_round UPDATE qilindi -> `updated_at` (server onupdate) expired bo'ladi.
+    # Chaqiruvchi (masalan POST /orders) javobni sinxron serializatsiya qilgani uchun
+    # o'sha yerda lazy refresh MissingGreenlet beradi — shuning uchun shu yerda tiklanadi.
+    await db.refresh(order, attribute_names=["dispatch_round", "updated_at"])
 
     chat_id = driver.user_id
     keyboard = notifications.inline_keyboard(
@@ -408,6 +412,8 @@ async def _request_price_bump(db: AsyncSession, order: Order) -> None:
         return  # allaqachon so'ralgan — qayta-qayta yubormaslik uchun
     order.price_bump_requested_at = datetime.now(timezone.utc)
     await db.commit()
+    # _dispatch_next dagi kabi: UPDATE'dan keyin `updated_at` expired qoladi.
+    await db.refresh(order, attribute_names=["price_bump_requested_at", "updated_at"])
 
     plus10 = _round_price(order.price * Decimal("1.10"))
     plus20 = _round_price(order.price * Decimal("1.20"))

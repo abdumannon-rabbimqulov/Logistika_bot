@@ -1,11 +1,15 @@
 import { api, getAccessToken } from './client';
 import type {
   AdminDashboardStats,
+  AdminDriverList,
+  AdminDriverListItem,
   AdminUserList,
   AdminUserListItem,
   AdminUserUpdate,
+  BalanceTransaction,
   CommissionSettings,
   DriverLocationItem,
+  DriverUnblockPayload,
   Order,
 } from '../types/api';
 
@@ -53,6 +57,55 @@ export function listAdminOrders(params: ListAdminOrdersParams = {}): Promise<Ord
     status: params.status,
     driver_id: params.driver_id,
     customer_id: params.customer_id,
+    skip: params.skip,
+    limit: params.limit,
+  });
+}
+
+// ── Haydovchilar: balans va bloklar ─────────────────────────────────────────────
+export interface ListDriversParams {
+  /** true — faqat bloklanganlar (qarz uchun avtomatik + qo'lda bloklanganlar) */
+  is_blocked?: boolean;
+  search?: string;
+  skip?: number;
+  limit?: number;
+}
+
+export function listDrivers(params: ListDriversParams = {}): Promise<AdminDriverList> {
+  return api.get<AdminDriverList>('/system/drivers', {
+    is_blocked: params.is_blocked,
+    search: params.search,
+    skip: params.skip,
+    limit: params.limit,
+  });
+}
+
+/** Blokdan chiqarish. `top_up_amount` berilsa avval balans to'ldiriladi (qarz yopiladi). */
+export function unblockDriver(
+  driverId: number,
+  payload: DriverUnblockPayload = {},
+): Promise<AdminDriverListItem> {
+  return api.post<AdminDriverListItem>(`/system/drivers/${driverId}/unblock`, payload);
+}
+
+export function blockDriver(driverId: number, reason: string): Promise<AdminDriverListItem> {
+  return api.post<AdminDriverListItem>(`/system/drivers/${driverId}/block`, { reason });
+}
+
+// ── Balans (qo'lda to'ldirish / tuzatish) ────────────────────────────────────────
+export function adjustUserBalance(
+  userId: number,
+  amount: number,
+  note?: string,
+): Promise<BalanceTransaction> {
+  return api.post<BalanceTransaction>(`/system/users/${userId}/balance/adjust`, { amount, note });
+}
+
+export function listBalanceTransactions(
+  userId: number,
+  params: { skip?: number; limit?: number } = {},
+): Promise<BalanceTransaction[]> {
+  return api.get<BalanceTransaction[]>(`/system/users/${userId}/balance/transactions`, {
     skip: params.skip,
     limit: params.limit,
   });

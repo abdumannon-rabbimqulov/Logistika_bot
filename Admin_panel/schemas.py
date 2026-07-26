@@ -118,6 +118,51 @@ class AICommandList(BaseModel):
 
 
 # ════════════════════════════════════════════════════════════
+# DRIVERS (blok / blokdan chiqarish)
+# ════════════════════════════════════════════════════════════
+
+
+class AdminDriverListItem(BaseModel):
+    """Admin panel haydovchilar ro'yxati — balans va blok holati bilan."""
+
+    driver_id: int
+    user_id: int
+    full_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    truck_number: str
+    truck_type_id: int
+    balance: Decimal
+    is_blocked: bool
+    block_reason: Optional[str] = None
+    # True bo'lsa — balans manfiy bo'lgani uchun tizim avtomatik bloklagan (admin qo'lda emas).
+    blocked_for_debt: bool = False
+    is_available: bool
+    verification_status: str
+    created_at: datetime
+
+
+class AdminDriverList(BaseModel):
+    total: int
+    items: List[AdminDriverListItem]
+
+
+class DriverBlockRequest(BaseModel):
+    reason: str = Field(..., min_length=3, max_length=300, description="Bloklash sababi (haydovchiga ko'rsatiladi)")
+
+
+class DriverUnblockRequest(BaseModel):
+    """Blokdan chiqarish. Balans hali manfiy bo'lsa ham admin ochib berishi mumkin —
+    lekin keyingi komissiya yechilganda haydovchi yana avtomatik bloklanadi."""
+
+    top_up_amount: Optional[Decimal] = Field(
+        None,
+        gt=0,
+        description="Ixtiyoriy: blokdan chiqarish bilan birga balansga qo'shiladigan summa (qarzni yopish uchun)",
+    )
+    note: Optional[str] = Field(None, max_length=300, description="Balans tarixiga yoziladigan izoh")
+
+
+# ════════════════════════════════════════════════════════════
 # DRIVER LIVE LOCATION
 # ════════════════════════════════════════════════════════════
 

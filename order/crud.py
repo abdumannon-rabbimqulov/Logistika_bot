@@ -121,11 +121,15 @@ async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int)
     # order PENDING holatda qoladi, admin/keyingi sweep qayta urinib ko'radi.
     from services import dispatch as dispatch_service
 
+    order_id = order.id
     try:
         await dispatch_service.start_dispatch(db, order)
     except Exception:
-        logger.exception("Order #%s uchun dispatch boshlanmadi", order.id)
+        logger.exception("Order #%s uchun dispatch boshlanmadi", order_id)
+        # rollback order obyektining BARCHA atributlarini expired qiladi — chaqiruvchi uni
+        # sinxron serializatsiya qilsa MissingGreenlet chiqadi. Shuning uchun qayta yuklanadi.
         await db.rollback()
+        order = await get_order(db, order_id) or order
 
     return order
 

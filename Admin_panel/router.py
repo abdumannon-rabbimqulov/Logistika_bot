@@ -144,6 +144,116 @@ async def admin_list_orders(
     return rows
 
 
+# ════════════════════════════════════════════════════════════
+# DRIVERS (blok / blokdan chiqarish)
+# ════════════════════════════════════════════════════════════
+
+
+def _driver_item(driver, user) -> admin_schemas.AdminDriverListItem:
+    return admin_schemas.AdminDriverListItem(
+        driver_id=driver.id,
+        user_id=user.id,
+        full_name=user.full_name,
+        phone_number=user.phone_number,
+        truck_number=driver.truck_number,
+        truck_type_id=driver.truck_type_id,
+        balance=user.balance or 0,
+        is_blocked=driver.is_blocked,
+        block_reason=driver.block_reason,
+        blocked_for_debt=driver.is_blocked and driver.block_reason == billing.DEBT_BLOCK_REASON,
+        is_available=driver.is_available,
+        verification_status=driver.verification_status.value,
+        created_at=driver.created_at,
+    )
+
+
+async def _get_driver_or_404(db: AsyncSession, driver_id: int):
+    pair = await admin_crud.get_driver_with_user(db, driver_id)
+    if not pair:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Haydovchi topilmadi.")
+    return pair
+
+
+@router.get(
+    "/drivers",
+    response_model=admin_schemas.AdminDriverList,
+    summary="Haydovchilar ro'yxati (balans va blok holati bilan)",
+)
+async def admin_list_drivers(
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(is_admin),
+    is_blocked: Optional[bool] = None,
+    search: Optional[str] = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+):
+    rows, total = await admin_crud.list_drivers_admin(
+        db, is_blocked=is_blocked, search=search, skip=skip, limit=limit
+    )
+    response.headers["X-Total-Count"] = str(total)
+    return admin_schemas.AdminDriverList(
+        total=total, items=[_driver_item(driver, user) for driver, user in rows]
+    )
+
+
+@router.post(
+    "/drivers/{driver_id}/unblock",
+    response_model=admin_schemas.AdminDriverListItem,
+    summary="Haydovchini blokdan chiqarish (qarzga tushib bloklanganlar uchun ham)",
+)
+async def admin_unblock_driver(
+    driver_id: int,
+    data: Optional[admin_schemas.DriverUnblockRequest] = None,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(is_admin),
+):
+    """Balans manfiy bo'lsa ham ochib berish mumkin — bu adminning qarori.
+
+    Diqqat: balans manfiyligicha qolsa, keyingi yakunlangan buyurtma komissiyasi
+    yechilganda haydovchi yana avtomatik bloklanadi (services/billing.py). Qarzni
+    darhol yopish uchun `top_up_amount` yuboriladi.
+    """
+    driver, user = await _get_driver_or_404(db, driver_id)
+    payload = data or admin_schemas.DriverUnblockRequest()
+
+    if payload.top_up_amount:
+        # Balans to'ldirilganda billing o'zi qarz blokini yechadi, lekin qo'lda
+        # bloklangan holat uchun quyidagi set_driver_blocked baribir kerak.
+        await billing.adjust_user_balance(
+            db,
+            user,
+            amount=payload.top_up_amount,
+            note=payload.note or "Admin blokdan chiqarishda balans to'ldirdi",
+            admin_id=admin.id,
+        )
+
+    if driver.is_blocked:
+        await admin_crud.set_driver_blocked(db, driver, blocked=False)
+
+    logger.info(
+        "Admin #%s haydovchi #%s ni blokdan chiqardi (balans=%s)", admin.id, driver.id, user.balance
+    )
+    return _driver_item(driver, user)
+
+
+@router.post(
+    "/drivers/{driver_id}/block",
+    response_model=admin_schemas.AdminDriverListItem,
+    summary="Haydovchini qo'lda bloklash",
+)
+async def admin_block_driver(
+    driver_id: int,
+    data: admin_schemas.DriverBlockRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(is_admin),
+):
+    driver, user = await _get_driver_or_404(db, driver_id)
+    await admin_crud.set_driver_blocked(db, driver, blocked=True, reason=data.reason)
+    logger.info("Admin #%s haydovchi #%s ni bloklandi: %s", admin.id, driver.id, data.reason)
+    return _driver_item(driver, user)
+
+
 @router.get("/drivers/locations", response_model=List[admin_schemas.DriverLocationItem])
 async def admin_list_driver_locations(_: User = Depends(is_admin)):
     items = await live_location.get_all_online_drivers()

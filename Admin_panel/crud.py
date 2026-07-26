@@ -97,6 +97,77 @@ async def update_user_admin(db: AsyncSession, user: User, data: AdminUserUpdate)
 
 
 # ════════════════════════════════════════════════════════════
+# DRIVERS (blok / blokdan chiqarish)
+# ════════════════════════════════════════════════════════════
+
+
+async def list_drivers_admin(
+    db: AsyncSession,
+    *,
+    is_blocked: Optional[bool] = None,
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
+) -> Tuple[List[Tuple[Driver, User]], int]:
+    """Haydovchilar ro'yxati (driver + user juftligi) — balans va blok holati bilan.
+
+    `is_blocked=True` bilan admin qarz tufayli avtomatik bloklanganlarni ham,
+    qo'lda bloklanganlarni ham bitta ro'yxatda ko'radi.
+    """
+    base = select(Driver, User).join(User, Driver.user_id == User.id)
+    if is_blocked is not None:
+        base = base.where(Driver.is_blocked == is_blocked)
+    if search:
+        cleaned = search.strip()
+        like = f"%{cleaned}%"
+        conditions = [
+            User.full_name.ilike(like),
+            Driver.truck_number.ilike(like),
+            User.phone_number.ilike(like),
+        ]
+        digits = "".join(c for c in cleaned if c.isdigit())
+        if digits:
+            conditions.append(User.phone_number.ilike(f"%{digits}%"))
+        base = base.where(or_(*conditions))
+
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+
+    stmt = (
+        base.order_by(desc(Driver.is_blocked), User.balance.asc(), desc(Driver.created_at))
+        .offset(max(skip, 0))
+        .limit(min(max(limit, 1), 200))
+    )
+    rows = (await db.execute(stmt)).all()
+    return [(row[0], row[1]) for row in rows], int(total)
+
+
+async def get_driver_with_user(db: AsyncSession, driver_id: int) -> Optional[Tuple[Driver, User]]:
+    row = (
+        await db.execute(
+            select(Driver, User).join(User, Driver.user_id == User.id).where(Driver.id == driver_id)
+        )
+    ).first()
+    return (row[0], row[1]) if row else None
+
+
+async def set_driver_blocked(
+    db: AsyncSession, driver: Driver, *, blocked: bool, reason: Optional[str] = None
+) -> Driver:
+    """Haydovchini qo'lda bloklaydi / blokdan chiqaradi.
+
+    Blokdan chiqarilganda `is_available` avtomatik yoqilmaydi — liniyaga chiqishni
+    haydovchining o'zi hal qiladi (driver/router.py `PATCH /drivers/me`).
+    """
+    driver.is_blocked = blocked
+    driver.block_reason = reason if blocked else None
+    if blocked:
+        driver.is_available = False
+    await db.commit()
+    await db.refresh(driver)
+    return driver
+
+
+# ════════════════════════════════════════════════════════════
 # ORDERS
 # ════════════════════════════════════════════════════════════
 

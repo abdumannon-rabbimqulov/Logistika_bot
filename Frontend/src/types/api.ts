@@ -285,6 +285,48 @@ export interface CommissionSettings {
   updated_at: string;
 }
 
+/** GET /system/drivers — balans va blok holati bilan (Admin_panel AdminDriverListItem) */
+export interface AdminDriverListItem {
+  driver_id: number;
+  user_id: number;
+  full_name: string | null;
+  phone_number: string | null;
+  truck_number: string;
+  truck_type_id: number;
+  balance: number;
+  is_blocked: boolean;
+  block_reason: string | null;
+  /** true — balans manfiy bo'lgani uchun tizim avtomatik bloklagan (admin qo'lda emas) */
+  blocked_for_debt: boolean;
+  is_available: boolean;
+  verification_status: string;
+  created_at: string;
+}
+
+export interface AdminDriverList {
+  total: number;
+  items: AdminDriverListItem[];
+}
+
+/** Balans harakati (GET /system/users/{id}/balance/transactions) */
+export interface BalanceTransaction {
+  id: number;
+  user_id: number;
+  type: string;
+  amount: number;
+  balance_after: number;
+  order_id: number | null;
+  created_by_admin_id: number | null;
+  note: string | null;
+  created_at: string;
+}
+
+export interface DriverUnblockPayload {
+  /** Blokdan chiqarish bilan birga balansga qo'shiladigan summa (qarzni yopish uchun) */
+  top_up_amount?: number;
+  note?: string;
+}
+
 // POST/PATCH /drivers/truck-types uchun kirish (driver/schemas.py TruckTypeCreate/Update)
 export interface TruckTypeInput {
   name: string;
