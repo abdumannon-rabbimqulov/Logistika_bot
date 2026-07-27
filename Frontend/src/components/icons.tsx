@@ -277,6 +277,17 @@ export function CloseIcon({ size = 18, color = 'var(--color-gray-700)', strokeWi
   );
 }
 
+/** Standart "power" (yoqish/o'chirish) ikonkasi — Lucide `Power` bilan bir xil geometriya:
+ *  ochiq halqa va tepa markazida vertikal chiziqcha. "Liniyaga chiqish" tugmasida ishlatiladi. */
+export function PowerIcon({ size = 22, color = 'currentColor', strokeWidth = 2.2 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+      <path d="M12 2v10" />
+    </svg>
+  );
+}
+
 export function WeightIcon({ size = 15, color = 'var(--color-gray-500)', strokeWidth = 1.7 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">

@@ -11,9 +11,9 @@ from driver.crud import get_driver, get_driver_by_user_id
 from users.crud import get_user_by_id
 from order import crud, schemas
 from order.dispatch_models import DispatchAttempt, DispatchAttemptStatus
-from order.models import Order, OrderStatus
+from order.models import Order, OrderStatus, WaypointStatus
 from services import dispatch as dispatch_service
-from services import notifications, osrm_client, yandex_geocoder
+from services import geofence, notifications, order_flow, osrm_client, yandex_geocoder
 from users.auth import get_current_active_user, get_current_sender
 from users.models import User, UserRole
 
@@ -162,30 +162,115 @@ async def update_order(
 
 
 @router.patch("/{order_id}/status", response_model=schemas.OrderResponse,
-              summary="Buyurtma holatini yangilash (faqat biriktirilgan haydovchi yoki admin)")
+              summary="Buyurtma holatini qo'lda yangilash (faqat admin)")
 async def update_order_status(
     order_id: int,
     data: schemas.OrderStatusUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
+    """DIQQAT: bu endpoint endi FAQAT admin uchun.
+
+    Ilgari biriktirilgan haydovchi ham statusni to'g'ridan-to'g'ri qo'ya olardi va shu
+    yo'l bilan manzilga umuman bormasdan buyurtmani `COMPLETED` qilib, komissiyani
+    ishga tushirardi. Endi haydovchi oqimni faqat nuqtalar orqali suradi
+    (`PATCH /orders/{id}/waypoints/{waypoint_id}`), u yerda esa har qadam GPS bilan
+    tekshiriladi — geofence'ni chetlab o'tadigan yo'l qolmasligi uchun.
+    """
     order = await _require_order_access(db, order_id, current_user)
 
+    if not _is_admin(current_user):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Buyurtma holatini qo'lda faqat admin o'zgartira oladi. "
+                "Haydovchi buyurtmani marshrut nuqtalari orqali yuritadi."
+            ),
+        )
+
+    try:
+        return await crud.update_order_status(db, order, data.status)
+    except order_flow.OrderFlowError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.patch("/{order_id}/waypoints/{waypoint_id}", response_model=schemas.OrderDetailResponse,
+              summary="Marshrut nuqtasidagi qadamni belgilash (biriktirilgan haydovchi yoki admin)")
+async def update_order_waypoint(
+    order_id: int,
+    waypoint_id: int,
+    data: schemas.WaypointProgressUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Haydovchi "Yetib keldim" / "Yukni ortdim" / "Yukni topshirdim" qadamlarini shu yerda belgilaydi.
+
+    Har bir qadamda haydovchi nuqta atrofidagi radiusda ekani tekshiriladi
+    (`services/geofence.py`). Buyurtma holati nuqtalardan kelib chiqib avtomatik
+    yangilanadi: birinchi yuk ortish nuqtasi yopilsa `IN_PROGRESS`, oxirgisi yopilsa
+    `COMPLETED` (va shu yerda komissiya yechiladi).
+    """
+    order = await _require_order_access(db, order_id, current_user)
+
+    is_admin = _is_admin(current_user)
     is_assigned_driver = False
     if current_user.role == UserRole.DRIVER:
         driver = await get_driver_by_user_id(db, current_user.id)
         is_assigned_driver = bool(driver and order.driver_id == driver.id)
 
-    if not _is_admin(current_user) and not is_assigned_driver:
-        # Sender (mijoz) buyurtmani ko'ra oladi, lekin holatini o'zgartira olmaydi —
-        # bu haydovchi/admin ixtiyorida (masalan sender "COMPLETED" qo'yib komissiyani
-        # o'zboshimchalik bilan ishga tushirmasligi uchun).
+    if not is_admin and not is_assigned_driver:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
-            detail="Buyurtma holatini faqat biriktirilgan haydovchi yoki admin o'zgartira oladi",
+            detail="Marshrut nuqtasini faqat biriktirilgan haydovchi yoki admin belgilay oladi",
         )
 
-    return await crud.update_order_status(db, order, data.status)
+    waypoint = next((wp for wp in order.waypoints if wp.id == waypoint_id), None)
+    if waypoint is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Bu buyurtmada bunday nuqta yo'q")
+
+    # Qo'lda tasdiqlash (geofence'ni chetlab o'tish) va nuqtani tashlab ketish — faqat admin.
+    override_reason = data.override_reason if is_admin else None
+    if data.override_reason and not is_admin:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail="Qadamni qo'lda tasdiqlashni faqat administrator bajara oladi",
+        )
+    if data.status == WaypointStatus.SKIPPED and not is_admin:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail="Nuqtani tashlab ketishni faqat administrator belgilay oladi",
+        )
+
+    try:
+        coords = None
+        if not override_reason:
+            # Admin SKIPPED qo'yayotgan bo'lsa sabab majburiy (yuqorida override_reason
+            # bo'lmasa bu yerga tushadi) — koordinata baribir kerak emas.
+            if data.status == WaypointStatus.SKIPPED:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Nuqtani tashlab ketish uchun sabab (override_reason) ko'rsatilishi shart",
+                )
+            driver_id = order.driver_id
+            if driver_id is None:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Buyurtmaga haydovchi biriktirilmagan",
+                )
+            coords = await geofence.resolve_driver_coords(
+                driver_id, data.latitude, data.longitude, data.accuracy
+            )
+
+        order = await order_flow.apply_waypoint_progress(
+            db, order, waypoint, data.status,
+            coords=coords,
+            override_by_user_id=current_user.id if override_reason else None,
+            override_reason=override_reason,
+        )
+    except (order_flow.OrderFlowError, geofence.GeofenceError) as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    return schemas.OrderDetailResponse.from_order(order)
 
 
 @router.post("/{order_id}/assign-driver", response_model=schemas.OrderAssignDriverResponse,
@@ -270,13 +355,23 @@ async def get_active_dispatch(
     order = attempt.order
     summary: Optional[schemas.DispatchOrderSummary] = None
     if order is not None:
+        origin, destination = order.origin, order.destination
         summary = schemas.DispatchOrderSummary(
             cargo_name=order.cargo_name,
             weight=order.weight,
             price=order.price,
             currency=order.currency,
-            origin_address=order.origin.address if order.origin else None,
-            destination_address=order.destination.address if order.destination else None,
+            origin_address=origin.address if origin else None,
+            destination_address=destination.address if destination else None,
+            # A→B masofasi va marshrut chizig'i — haydovchi taklifni ko'rishdayoq
+            # yo'nalishni xaritada baholay olishi uchun (attempt.distance_km esa
+            # haydovchidan A nuqtagacha bo'lgan masofa, bu bilan chalkashtirmaslik kerak).
+            total_distance_km=order.total_distance_km,
+            origin_latitude=float(origin.latitude) if origin else None,
+            origin_longitude=float(origin.longitude) if origin else None,
+            destination_latitude=float(destination.latitude) if destination else None,
+            destination_longitude=float(destination.longitude) if destination else None,
+            route_geometry=await crud.get_order_route_geometry(db, order.id),
         )
 
     return schemas.DispatchAttemptResponse(
@@ -345,21 +440,37 @@ async def price_bump_order(
 
 
 @router.delete("/{order_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Buyurtmani bekor qilish (egasi)")
-async def delete_order(
+async def cancel_order(
     order_id: int,
+    reason: Optional[str] = Query(None, max_length=300, description="Bekor qilish sababi"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    order = await _require_order_access(db, order_id, current_user)
-    if not _is_admin(current_user) and order.customer_id != current_user.id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Faqat buyurtma egasi o'chira oladi")
+    """Buyurtmani bekor qiladi (CANCELLED).
 
-    # Kim o'chirmoqda: buyurtma egasi ("sender") yoki admin.
+    Ilgari bu qattiq `DELETE` edi — buyurtma va uning butun tarixi izsiz yo'qolardi.
+    Endi yozuv saqlanadi: kim, qachon va nima sababdan bekor qilgani ma'lum bo'ladi.
+
+    Yuk allaqachon ortilgan bo'lsa (`IN_PROGRESS`) mijoz o'zi bekor qila olmaydi —
+    haydovchi yo'lda va bu pul/mas'uliyat masalasi, shuning uchun admin aralashadi.
+    """
+    order = await _require_order_access(db, order_id, current_user)
+    is_admin = _is_admin(current_user)
+    if not is_admin and order.customer_id != current_user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Faqat buyurtma egasi bekor qila oladi")
+
+    if not is_admin and order.status == OrderStatus.IN_PROGRESS:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Yuk allaqachon ortilgan — buyurtmani o'zingiz bekor qila olmaysiz. "
+                "Administratsiyaga murojaat qiling."
+            ),
+        )
+
+    # Kim bekor qilmoqda: buyurtma egasi ("sender") yoki admin.
     deleted_by = "sender" if order.customer_id == current_user.id else "admin"
 
-    # 1-QADAM: order (va cascade orqali waypoint/route/attempt) o'chirilishidan OLDIN
-    # xabar berish uchun kerakli ma'lumotni oddiy qiymatlarga o'qib olamiz — o'chirilgandan
-    # keyin ORM obyektlariga murojaat qilib bo'lmaydi.
     cargo_name = order.cargo_name
     assigned_driver_id = order.driver_id
 
@@ -379,12 +490,17 @@ async def delete_order(
             pending_chat_id = pending_attempt.bot_chat_id
             pending_message_id = pending_attempt.bot_message_id
 
-    # 2-QADAM: o'chirish (commit bilan). Faqat shu muvaffaqiyatli tugagach xabar yuboramiz —
-    # aks holda DB xatosida buyurtma o'chmay qoladi-yu, haydovchi "bekor qilindi" xabarini
-    # olib ishni to'xtatadi (mos kelmaydigan holat).
-    await crud.delete_order(db, order)
+    # Bekor qilish (commit bilan). Faqat shu muvaffaqiyatli tugagach xabar yuboramiz —
+    # aks holda DB xatosida buyurtma bekor bo'lmay qoladi-yu, haydovchi "bekor qilindi"
+    # xabarini olib ishni to'xtatadi (mos kelmaydigan holat).
+    try:
+        await crud.cancel_order(
+            db, order, cancelled_by_user_id=current_user.id, reason=reason
+        )
+    except order_flow.OrderFlowError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
-    # 3-QADAM: xabarnoma (Telegram xatosi bo'lsa ham o'chirish allaqachon yakunlangan —
+    # Xabarnoma (Telegram xatosi bo'lsa ham bekor qilish allaqachon yakunlangan —
     # notifications.* funksiyalari exception tashlamaydi, faqat log yozadi).
     if assigned_driver_id is not None:
         # ACCEPTED/IN_PROGRESS — biriktirilgan haydovchiga bekor qilingani haqida xabar.
@@ -393,7 +509,7 @@ async def delete_order(
         )
     elif pending_chat_id is not None:
         # PENDING — faol taklif yuborilgan haydovchining bot xabarini tahrirlaymiz
-        # (attempt cascade orqali allaqachon o'chirilgan).
+        # (urinishning o'zi `cancel_order` ichida CANCELLED qilib yopilgan).
         await notifications.edit_telegram_message(
             pending_chat_id,
             pending_message_id,

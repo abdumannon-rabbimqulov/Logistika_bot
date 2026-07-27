@@ -7,7 +7,7 @@ import { DispatchOfferCard } from '../components/DispatchOfferCard';
 import { DriverBottomNav } from '../components/DriverBottomNav';
 import { GoOnlineSheet, type GoOnlineResult } from '../components/GoOnlineSheet';
 import { YandexMap } from '../components/YandexMap';
-import { ChevronRightIcon } from '../components/icons';
+import { ChevronRightIcon, PowerIcon } from '../components/icons';
 import { useLiveLocation } from '../hooks/useLiveLocation';
 import type { DispatchAttemptResponse, OrderListItem } from '../types/api';
 import { formatPrice, statusLabel } from '../utils/format';
@@ -15,7 +15,7 @@ import { useDriverCabinet } from './DriverCabinetContext';
 import styles from './DriverHomePage.module.css';
 
 const DISPATCH_POLL_MS = 3000;
-const ACTIVE_STATUSES = new Set(['ACCEPTED', 'IN_PROGRESS']);
+const ACTIVE_STATUSES = new Set(['SCHEDULED', 'ACCEPTED', 'IN_PROGRESS']);
 
 function formatAvailableFrom(dateIso: string): string {
   return new Date(dateIso).toLocaleDateString('uz-UZ', { day: 'numeric', month: 'long' });
@@ -163,20 +163,51 @@ export function DriverHomePage() {
       ? `${formatAvailableFrom(cabinet.available_from_date!)} dan yuk qabul qilasiz`
       : 'Yoqilgan — takliflarni qabul qilyapsiz';
 
+  // Taklif kelganda xaritada A/B nuqtalari va OSRM marshrut chizig'i ko'rsatiladi —
+  // haydovchi qabul qilishdan oldin yo'nalishni ko'z bilan baholay olishi uchun.
+  // (Koordinatalar bo'lmasa `undefined` beriladi va xarita odatdagidek haydovchini kuzatadi.)
+  const offer = attempt?.order;
+  const offerOrigin =
+    offer?.origin_latitude != null && offer.origin_longitude != null
+      ? { latitude: offer.origin_latitude, longitude: offer.origin_longitude }
+      : null;
+  const offerDestination =
+    offer?.destination_latitude != null && offer.destination_longitude != null
+      ? { latitude: offer.destination_latitude, longitude: offer.destination_longitude }
+      : null;
+
   return (
     <div className={styles.page}>
       {/* Bosh sahifa — xarita. Qolgan hamma narsa uning ustida "suzadi". */}
       <div className={styles.mapLayer}>
-        <YandexMap userLocation={coords} followUser />
+        <YandexMap
+          origin={offerOrigin}
+          destination={offerDestination}
+          route={offer?.route_geometry?.length ? offer.route_geometry : null}
+          userLocation={coords}
+          followUser
+        />
       </div>
 
-      {/* Yuqori qatlam: holat chipi */}
+      {/* Yuqori qatlam: "liniyaga chiqish" power tugmasi (chapda) + holat chipi */}
       <div className={styles.topBar}>
-        <div className={cabinet.is_available ? styles.statusOnline : styles.statusOffline}>
-          <span className={styles.statusDot} />
-          {cabinet.is_available ? 'Liniyada' : 'Oflayn'}
+        <button
+          className={cabinet.is_available ? styles.powerBtnOn : styles.powerBtnOff}
+          onClick={() => (cabinet.is_available ? handleGoOffline() : setSheetOpen(true))}
+          disabled={toggling || cabinet.is_blocked}
+          aria-pressed={cabinet.is_available}
+          aria-label={cabinet.is_available ? 'Liniyadan chiqish' : 'Liniyaga chiqish'}
+          title={onlineHint}
+        >
+          <PowerIcon size={24} color="#fff" />
+        </button>
+        <div className={styles.topInfo}>
+          <div className={cabinet.is_available ? styles.statusOnline : styles.statusOffline}>
+            <span className={styles.statusDot} />
+            {cabinet.is_available ? 'Liniyada' : 'Oflayn'}
+          </div>
+          {!coords && <div className={styles.geoChip}>Joylashuv aniqlanmoqda...</div>}
         </div>
-        {!coords && <div className={styles.geoChip}>Joylashuv aniqlanmoqda...</div>}
       </div>
 
       {/* Pastki suzuvchi qatlam: taklif / faol buyurtma / liniyaga chiqish */}
@@ -184,17 +215,7 @@ export function DriverHomePage() {
         {geoError && <div className={styles.geoWarn}>{geoError}</div>}
         {error && <div className={styles.errorBanner}>{error}</div>}
 
-        {attempt && (
-          <DispatchOfferCard
-            attempt={attempt}
-            onAccept={handleAccept}
-            onReject={handleReject}
-            onExpire={() => setAttempt(null)}
-            busy={offerBusy}
-          />
-        )}
-
-        {activeOrder && (
+        {activeOrder && !attempt && (
           <button className={styles.activeCard} onClick={() => navigate(`/active/${activeOrder.id}`)}>
             <div className={styles.activeInfo}>
               <div className={styles.activeStatus}>
@@ -217,27 +238,27 @@ export function DriverHomePage() {
           </div>
         )}
 
-        {cabinet.is_blocked ? (
+        {cabinet.is_blocked && (
           <div className={styles.blockedBanner}>
             Siz bloklangansiz — liniyaga chiqa olmaysiz. Sabab uchun administratsiyaga murojaat qiling.
           </div>
-        ) : (
-          <div className={styles.availabilityRow}>
-            <div>
-              <div className={styles.availabilityText}>Liniyaga chiqish</div>
-              <div className={styles.availabilityHint}>{onlineHint}</div>
-            </div>
-            <button
-              className={cabinet.is_available ? styles.switchOn : styles.switch}
-              onClick={() => (cabinet.is_available ? handleGoOffline() : setSheetOpen(true))}
-              disabled={toggling}
-              aria-label="Liniyaga chiqish"
-            >
-              <span className={cabinet.is_available ? styles.switchKnobOn : styles.switchKnob} />
-            </button>
-          </div>
         )}
+
+        {/* Holat matni — power tugmasi nima qilishini so'z bilan tushuntiradi. */}
+        {!cabinet.is_blocked && !attempt && <div className={styles.hintChip}>{onlineHint}</div>}
       </div>
+
+      {/* Taklif — xaritani bosib qolmaslik uchun pastdan chiquvchi, tortiladigan sheet.
+          `floatLayer` ichida emas, alohida qatlamda: u ekran pastiga "yopishib" turadi. */}
+      {attempt && (
+        <DispatchOfferCard
+          attempt={attempt}
+          onAccept={handleAccept}
+          onReject={handleReject}
+          onExpire={() => setAttempt(null)}
+          busy={offerBusy}
+        />
+      )}
 
       {sheetOpen && (
         <GoOnlineSheet onSubmit={handleGoOnline} onClose={() => setSheetOpen(false)} submitting={toggling} />

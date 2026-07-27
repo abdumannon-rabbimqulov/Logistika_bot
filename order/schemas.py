@@ -42,14 +42,23 @@ class OrderWaypointCreate(OrderWaypointBase):
         return self
 
 
-class OrderWaypointUpdate(BaseModel):
-    """Waypoint holatini yangilash (masalan, haydovchi nuqtaga yetganda)"""
-    status: Optional[WaypointStatus] = None
-    address: Optional[str] = Field(None, max_length=300)
-    latitude: Optional[Decimal] = Field(None, ge=-90, le=90)
-    longitude: Optional[Decimal] = Field(None, ge=-180, le=180)
-    contact_name: Optional[str] = Field(None, max_length=150)
-    contact_phone: Optional[str] = Field(None, max_length=20)
+class WaypointProgressUpdate(BaseModel):
+    """Haydovchi nuqtadagi qadamni belgilaydi ("Yetib keldim" / "Yukni ortdim").
+
+    `latitude`/`longitude` — tugma bosilgan paytda olingan YANGI o'lchov. Bu geofence
+    uchun asosiy manba: Telegram WebApp fonga o'tganda OS jonli kuzatuvni to'xtatadi,
+    shuning uchun serverdagi "oxirgi ma'lum nuqta"ga tayanib bo'lmaydi. Berilmasa —
+    Redis'dagi yangi koordinata zaxira sifatida ishlatiladi (services/geofence.py).
+
+    `override_reason` — faqat admin uchun: GPS nosoz bo'lgan holatda qadamni qo'lda
+    tasdiqlaydi va sabab nuqtaga yozib qo'yiladi.
+    """
+
+    status: WaypointStatus
+    latitude: Optional[float] = Field(None, ge=-90, le=90)
+    longitude: Optional[float] = Field(None, ge=-180, le=180)
+    accuracy: Optional[float] = Field(None, ge=0, description="GPS aniqligi, metrda")
+    override_reason: Optional[str] = Field(None, max_length=300)
 
 
 class OrderWaypointResponse(OrderWaypointBase):
@@ -59,6 +68,14 @@ class OrderWaypointResponse(OrderWaypointBase):
     order_id: int
     status: WaypointStatus
     created_at: datetime
+
+    # Qadam vaqtlari va GPS isboti — haydovchi ilovasida va admin panelida ko'rsatiladi.
+    arrived_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    confirmed_distance_m: Optional[int] = None
+    confirmed_accuracy_m: Optional[int] = None
+    override_by_user_id: Optional[int] = None
+    override_reason: Optional[str] = None
 
 
 # ============================================================
@@ -112,19 +129,30 @@ class OrderCreate(OrderBase):
 
 
 class OrderUpdate(BaseModel):
-    """Buyurtmani qisman yangilash (barcha maydonlar ixtiyoriy)"""
+    """Buyurtmani qisman yangilash — `PATCH /orders/{id}`, buyurtma egasi uchun.
+
+    DIQQAT: bu sxemada tizim boshqaradigan maydonlar ATAYLAB YO'Q.
+
+    Ilgari bu yerda `status`, `driver_id`, `price`, `currency`, `total_distance_km` va
+    `departure_at` ham bor edi, `crud.update_order` esa ularni to'g'ridan-to'g'ri
+    `UPDATE` qilardi. Natijada buyurtma egasi o'z buyurtmasiga `status=COMPLETED`
+    yozib, `/status` endpointidagi 403 himoyasini butunlay chetlab o'ta olardi —
+    bunda `completed_at` ham yozilmasdi, komissiya ham yechilmasdi. Xuddi shunday
+    yo'l bilan `price` ni tushirib komissiya bazasini kamaytirish yoki `driver_id` ni
+    o'zgartirib boshqa haydovchini biriktirish mumkin edi.
+
+    Endi: statusni admin `PATCH /orders/{id}/status` orqali, haydovchi esa marshrut
+    nuqtalari orqali o'zgartiradi; narxni oshirish `POST /orders/{id}/price-bump`
+    orqali; masofa/narx esa OSRM bo'yicha faqat server tomonida hisoblanadi.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     cargo_name: Optional[str] = Field(None, max_length=200)
     weight: Optional[Decimal] = Field(None, gt=0)
     volume: Optional[Decimal] = Field(None, gt=0)
     pickup_at: Optional[datetime] = None
-    departure_at: Optional[datetime] = None
     required_truck_type_id: Optional[int] = None
-    price: Optional[Decimal] = Field(None, gt=0)
-    currency: Optional[str] = Field(None, max_length=10)
-    driver_id: Optional[int] = None
-    status: Optional[OrderStatus] = None
-    total_distance_km: Optional[Decimal] = Field(None, ge=0)
 
 
 class OrderStatusUpdate(BaseModel):
@@ -306,6 +334,19 @@ class DispatchOrderSummary(BaseModel):
     currency: str
     origin_address: Optional[str] = None
     destination_address: Optional[str] = None
+
+    # A→B marshrut ma'lumotlari — taklif kartasidagi "N km" va xaritadagi chiziq uchun.
+    # DIQQAT: bu `DispatchAttemptResponse.distance_km` DAN BOSHQA narsa — u haydovchidan
+    # yuk ortish nuqtasigacha bo'lgan masofa (haydovchi A nuqtada tursa ~0 km bo'ladi),
+    # bu esa buyurtmaning o'z uzunligi (Toshkent→Samarqand ≈ 280 km).
+    total_distance_km: Optional[Decimal] = None
+    origin_latitude: Optional[float] = None
+    origin_longitude: Optional[float] = None
+    destination_latitude: Optional[float] = None
+    destination_longitude: Optional[float] = None
+    # OSRM marshrut chizig'i: [[latitude, longitude], ...] — buyurtma yaratilganda
+    # PostGIS'ga saqlangan geometriyadan o'qiladi (qayta OSRM so'rovi yuborilmaydi).
+    route_geometry: list[tuple[float, float]] = []
 
 
 class DispatchAttemptResponse(BaseModel):

@@ -1,20 +1,22 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional, Sequence
 
 from geoalchemy2.elements import WKTElement
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from driver.models import TruckType
+from order.dispatch_models import DispatchAttempt, DispatchAttemptStatus
 from order.models import Order, OrderRoutePostGIS, OrderStatus, OrderWaypoint
 from order.schemas import OrderCreate, PriceEstimateRequest, OrderUpdate, OrderWaypointCreate
-from services import billing, osrm_client, yandex_geocoder
+from services import billing, order_flow, osrm_client, yandex_geocoder
 from utils.geo import simplify_polyline
 
 logger = logging.getLogger(__name__)
@@ -187,6 +189,14 @@ async def update_order(db: AsyncSession, order: Order, data: OrderUpdate) -> Ord
 
 
 async def update_order_status(db: AsyncSession, order: Order, new_status: OrderStatus) -> Order:
+    # O'tish qoidalari markazlashtirilgan joyda tekshiriladi — bu funksiya statusni
+    # o'zgartiradigan YAGONA yo'l (haydovchi nuqtalari, admin paneli, bekor qilish
+    # hammasi shu yerdan o'tadi). Ilgari tekshiruv umuman yo'q edi va
+    # COMPLETED -> PENDING -> COMPLETED qilib komissiyani takroran yechish mumkin edi.
+    order_flow.ensure_order_transition_allowed(order.status, new_status)
+    if order.status == new_status:
+        return order
+
     was_completed = order.status == OrderStatus.COMPLETED
     order.status = new_status
     # Yakunlanish vaqti bir marta — birinchi COMPLETED o'tishida yoziladi (qayta COMPLETED
@@ -236,9 +246,49 @@ async def assign_driver(db: AsyncSession, order: Order, driver_id: int) -> Optio
     return order
 
 
-async def delete_order(db: AsyncSession, order: Order) -> None:
-    await db.delete(order)
+async def cancel_order(
+    db: AsyncSession,
+    order: Order,
+    *,
+    cancelled_by_user_id: int,
+    reason: Optional[str] = None,
+) -> Order:
+    """Buyurtmani CANCELLED holatiga o'tkazadi (ilgari bu qattiq DELETE edi).
+
+    Qattiq o'chirishda buyurtma, uning nuqtalari va barcha dispatch urinishlari izsiz
+    yo'qolardi: bekor qilish tarixi qolmasdi, admin statistikasida `CANCELLED` hech
+    qachon ko'rinmasdi va "nega bu yuk tashlab yuborilgan?" degan savolga javob yo'q edi.
+
+    Kutilayotgan dispatch urinishlari ham yopiladi — aks holda haydovchi allaqachon
+    bekor qilingan buyurtmani qabul qilib yuborishi mumkin.
+    """
+    # Allaqachon bekor qilingan bo'lsa — hech narsaga tegilmaydi. Bu shunchaki
+    # optimizatsiya emas: takroriy so'rov asl sabab va vaqtni ustiga yozib yuborardi,
+    # ya'ni bekor qilish tarixi (bu o'zgarishning asosiy maqsadi) yo'qolardi.
+    if order.status == OrderStatus.CANCELLED:
+        return order
+
+    order_flow.ensure_order_transition_allowed(order.status, OrderStatus.CANCELLED)
+
+    await db.execute(
+        update(DispatchAttempt)
+        .where(
+            DispatchAttempt.order_id == order.id,
+            DispatchAttempt.status == DispatchAttemptStatus.PENDING,
+        )
+        .values(status=DispatchAttemptStatus.CANCELLED)
+    )
+
+    order.status = OrderStatus.CANCELLED
+    order.cancelled_at = datetime.now(timezone.utc)
+    order.cancelled_by_user_id = cancelled_by_user_id
+    order.cancel_reason = reason
     await db.commit()
+    await db.refresh(
+        order,
+        attribute_names=["status", "cancelled_at", "cancelled_by_user_id", "cancel_reason", "updated_at"],
+    )
+    return order
 
 
 async def estimate_price(db: AsyncSession, data: PriceEstimateRequest) -> dict:
@@ -286,3 +336,33 @@ async def estimate_price(db: AsyncSession, data: PriceEstimateRequest) -> dict:
         "route_geometry": simplify_polyline(route.geometry),
         "options": options,
     }
+
+
+async def get_order_route_geometry(db: AsyncSession, order_id: int) -> list[tuple[float, float]]:
+    """Buyurtmaning saqlangan marshrut chizig'i: [(latitude, longitude), ...].
+
+    Geometriya buyurtma yaratilganda OSRM'dan olinib PostGIS'ga yozilgan
+    (`OrderRoutePostGIS.geom_route`) — bu yerda u qaytadan hisoblanmaydi, faqat
+    o'qiladi. `ST_AsGeoJSON` koordinatalarni [lon, lat] tartibida beradi, xarita
+    kutubxonalari esa (lat, lon) kutadi — shu sabab almashtiriladi.
+
+    Marshruti yo'q (eski yoki nuqson bilan yaratilgan) buyurtma uchun bo'sh ro'yxat
+    qaytadi: xaritada chiziq chizilmaydi, lekin A/B belgilari baribir ko'rinadi.
+    """
+    result = await db.execute(
+        select(func.ST_AsGeoJSON(OrderRoutePostGIS.geom_route)).where(
+            OrderRoutePostGIS.order_id == order_id
+        )
+    )
+    raw = result.scalar_one_or_none()
+    if not raw:
+        return []
+    try:
+        coordinates = json.loads(raw).get("coordinates", [])
+    except (ValueError, AttributeError):
+        logger.warning("Buyurtma %s marshrut geometriyasi o'qilmadi", order_id)
+        return []
+
+    # Bazadagi geometriya to'liq aniqlikda (minglab nuqta) — javob hajmini kichraytirish
+    # uchun xaritada ko'rinishi o'zgarmaydigan darajada soddalashtiriladi.
+    return simplify_polyline([(lat, lon) for lon, lat in coordinates])

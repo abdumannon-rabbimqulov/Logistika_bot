@@ -1,7 +1,7 @@
 from __future__ import annotations
 import enum
 from config.base import Base
-from sqlalchemy import Integer, ForeignKey, DateTime, func, BigInteger, String, Numeric, Enum as SQLEnum, SmallInteger
+from sqlalchemy import Integer, ForeignKey, DateTime, func, BigInteger, String, Numeric, Enum as SQLEnum, SmallInteger, Float
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from geoalchemy2 import Geometry
 from datetime import datetime
@@ -94,6 +94,16 @@ class Order(Base):
     # (haydovchi kabinetidagi haftalik statistika) aynan shu vaqt bo'yicha guruhlanadi:
     # 10 kun oldin yaratilib bugun yakunlangan yuk "shu hafta" daromadiga tushishi kerak.
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Bekor qilish tarixi. Ilgari bekor qilish qattiq DELETE edi — buyurtma, uning
+    # nuqtalari va dispatch urinishlari butunlay yo'qolar, statistikada CANCELLED
+    # hech qachon ko'rinmasdi. Endi yozuv saqlanadi va kim/nima sababdan bekor
+    # qilgani ma'lum bo'ladi.
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_by_user_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    cancel_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
 
     created_at : Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -216,5 +226,25 @@ class OrderWaypoint(Base):
     contact_phone: Mapped[str | None] = mapped_column(String(20),  nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # ── Qadam vaqtlari va GPS isboti ────────────────────────────────────────────
+    # Haydovchi "Yetib keldim" / "Yukni ortdim" tugmalarini bosgan paytlar.
+    arrived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Tugma bosilgan paytdagi haydovchining HAQIQIY joylashuvi va o'lchangan masofa.
+    # Bu audit uchun saqlanadi: keyinchalik "haydovchi rostdan ham nuqtada edimi?"
+    # degan savolga javob berish imkonini beradi (nizo/shikoyat holatlarida).
+    confirmed_latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confirmed_longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confirmed_distance_m: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    confirmed_accuracy_m: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # GPS nosoz bo'lgani uchun admin qo'lda tasdiqlagan bo'lsa — kim va nima sababdan.
+    # To'ldirilgan bo'lsa, bu qadam geofence tekshiruvidan o'tmaganini bildiradi.
+    override_by_user_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    override_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
 
     order: Mapped["Order"] = relationship("Order", back_populates="waypoints")

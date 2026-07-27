@@ -55,6 +55,12 @@ async def _dispatch_sweep_loop() -> None:
                 swept = await dispatch_service.sweep_expired(db)
                 if swept:
                     logger.info("Dispatch sweep: %s ta muddati o'tgan urinish yopildi", swept)
+
+                # Yo'lga chiqish vaqti kelgan rejalashtirilgan buyurtmalar ACCEPTED bo'ladi
+                # va haydovchi eslatma oladi (services/dispatch.py resolve_departure_plan).
+                promoted = await dispatch_service.promote_due_scheduled(db)
+                if promoted:
+                    logger.info("Dispatch sweep: %s ta rejalashtirilgan buyurtma faollashtirildi", promoted)
         except Exception:
             logger.exception("Dispatch sweep xatosi")
         await asyncio.sleep(DISPATCH_SWEEP_INTERVAL_SEC)

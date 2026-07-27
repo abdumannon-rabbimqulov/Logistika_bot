@@ -8,7 +8,7 @@ import type { OrderListItem, OrderStatus } from '../types/api';
 import { formatPrice, formatRelativeDate, statusLabel } from '../utils/format';
 import styles from './DriverOrdersPage.module.css';
 
-const ACTIVE_STATUSES = new Set<OrderStatus>(['ACCEPTED', 'IN_PROGRESS']);
+const ACTIVE_STATUSES = new Set<OrderStatus>(['SCHEDULED', 'ACCEPTED', 'IN_PROGRESS']);
 
 function statusClass(status: OrderStatus): string {
   if (ACTIVE_STATUSES.has(status)) return styles.chipActive;

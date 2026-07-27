@@ -1,0 +1,139 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
+}
+
+.heading {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--color-gray-700);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-gray-50);
+}
+
+.itemHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--color-gray-200);
+  color: var(--color-gray-700);
+}
+
+.badge_COMPLETED {
+  background: var(--color-accent-tint);
+  color: var(--color-accent-pressed);
+}
+
+.badge_ARRIVED {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.badge_SKIPPED {
+  background: var(--color-gray-200);
+  color: var(--color-gray-500);
+}
+
+.type {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.current {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-accent-pressed);
+}
+
+.address {
+  margin-top: 5px;
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+}
+
+/* Qo'lda tasdiqlangan qadam ajralib tursin — bu geofence'dan o'tmaganini bildiradi. */
+.override {
+  margin-top: 6px;
+  padding: 6px 9px;
+  border-radius: var(--radius-sm);
+  background: #FEF3C7;
+  color: #92400E;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.overrideBtn {
+  margin-top: 9px;
+  padding: 7px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-gray-700);
+  cursor: pointer;
+}
+
+.overrideBtn:hover {
+  background: var(--color-gray-100);
+}
+
+.confirmBox {
+  margin-top: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reasonInput {
+  height: 38px;
+  padding: 0 11px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

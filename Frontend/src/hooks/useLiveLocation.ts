@@ -132,7 +132,16 @@ export function useLiveLocation({ broadcast = false }: Options = {}): LiveLocati
       if (!socket || !point) return;
       if (socket.readyState !== WebSocket.OPEN) return;
 
-      socket.send(JSON.stringify({ latitude: point.latitude, longitude: point.longitude }));
+      // `accuracy` ham yuboriladi: server geofence tekshiruvida zaxira koordinata
+      // sifatida shu nuqtadan foydalanganda ruxsat etilgan radiusni aniqlikka qarab
+      // kengaytiradi (services/geofence.py).
+      socket.send(
+        JSON.stringify({
+          latitude: point.latitude,
+          longitude: point.longitude,
+          ...(point.accuracy != null ? { accuracy: point.accuracy } : {}),
+        }),
+      );
     };
 
     // Birinchi koordinata kelishi bilan darhol yuboriladi (30s kutilmaydi), keyin interval.

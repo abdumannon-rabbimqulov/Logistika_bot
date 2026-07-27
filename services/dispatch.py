@@ -35,7 +35,7 @@ import order.crud as order_crud
 from driver.models import Driver
 from order.dispatch_models import DispatchAttempt, DispatchAttemptStatus, DispatchMatchType
 from order.models import Order, OrderStatus
-from services import live_location, navigation, notifications
+from services import live_location, navigation, notifications, osrm_client
 from utils.geo import calculate_distance_km
 
 logger = logging.getLogger(__name__)
@@ -49,6 +49,12 @@ LAST_LOCATION_MAX_AGE_SEC = 6 * 60 * 60  # 6 soat
 
 # Joylashuvsiz haydovchiga ogohlantirish yuborish oralig'i (spam bo'lmasligi uchun).
 WARN_THROTTLE_SEC = 12 * 60 * 60  # 12 soat
+
+# Yo'lga chiqish vaqtigacha shuncha qolganda buyurtma SCHEDULED emas, ACCEPTED bo'ladi
+# (ya'ni "hozir yo'lga chiqing"). Undan uzoq bo'lsa — haydovchi topilgan, lekin hali
+# kutadi: `OrderStatus.SCHEDULED` aynan shu holat uchun yozilgan edi, lekin shu paytgacha
+# hech qachon qo'yilmasdi.
+SCHEDULED_LEAD_SEC = 30 * 60  # 30 daqiqa
 
 
 class DispatchError(Exception):
@@ -70,6 +76,93 @@ def _pickup_info(order: Order) -> tuple[Optional[float], Optional[float], Option
     lat = float(origin.latitude) if origin.latitude is not None else None
     lon = float(origin.longitude) if origin.longitude is not None else None
     return lat, lon, origin.address
+
+
+async def resolve_departure_plan(
+    order: Order, driver: Driver
+) -> tuple[OrderStatus, Optional[datetime]]:
+    """Haydovchi qabul qilganda: buyurtma darhol ACCEPTED bo'ladimi yoki SCHEDULED bo'lib kutadimi.
+
+    `departure_at` — haydovchi yo'lga chiqishi kerak bo'lgan payt: yuklash vaqtidan
+    (`pickup_at`) haydovchining yuk ortish nuqtasigacha yetib borish vaqti ayriladi.
+    Ustun modelda boshidan bor edi ("tizim hisoblaydi" izohi bilan), lekin hech qachon
+    to'ldirilmasdi.
+
+    OSRM ishlamasa yoki haydovchining koordinatasi bo'lmasa — yo'l vaqti hisobga
+    olinmaydi va `departure_at = pickup_at` deb qabul qilinadi (buyurtma baribir
+    to'g'ri ishlaydi, faqat eslatma aniqroq bo'lmaydi).
+    """
+    pickup_at = order.pickup_at
+    if pickup_at is None:
+        return OrderStatus.ACCEPTED, None
+    if pickup_at.tzinfo is None:
+        pickup_at = pickup_at.replace(tzinfo=timezone.utc)
+
+    departure_at = pickup_at
+    pickup_lat, pickup_lon, _ = _pickup_info(order)
+    if (
+        pickup_lat is not None
+        and pickup_lon is not None
+        and driver.last_latitude is not None
+        and driver.last_longitude is not None
+    ):
+        try:
+            route = await osrm_client.get_route(
+                [(driver.last_latitude, driver.last_longitude), (pickup_lat, pickup_lon)]
+            )
+            departure_at = pickup_at - timedelta(minutes=route.duration_min)
+        except osrm_client.OSRMRouteError as exc:
+            logger.info(
+                "Order #%s uchun yo'lga chiqish vaqti hisoblanmadi (OSRM): %s", order.id, exc
+            )
+
+    now = datetime.now(timezone.utc)
+    if (departure_at - now).total_seconds() > SCHEDULED_LEAD_SEC:
+        return OrderStatus.SCHEDULED, departure_at
+    return OrderStatus.ACCEPTED, departure_at
+
+
+async def promote_due_scheduled(db: AsyncSession) -> int:
+    """Yo'lga chiqish vaqti kelgan SCHEDULED buyurtmalarni ACCEPTED ga o'tkazadi.
+
+    `config/main.py` dagi davriy sweep chaqiradi. Har bir buyurtma uchun haydovchiga
+    bir marta eslatma yuboriladi.
+    """
+    now = datetime.now(timezone.utc)
+    due_before = now + timedelta(seconds=SCHEDULED_LEAD_SEC)
+
+    result = await db.execute(
+        select(Order)
+        .options(selectinload(Order.waypoints))
+        .where(
+            Order.status == OrderStatus.SCHEDULED,
+            Order.departure_at.is_not(None),
+            Order.departure_at <= due_before,
+        )
+    )
+    orders = list(result.scalars().all())
+    if not orders:
+        return 0
+
+    for order in orders:
+        order.status = OrderStatus.ACCEPTED
+    await db.commit()
+
+    for order in orders:
+        if order.driver_id is None:
+            continue
+        drv = await driver_crud.get_driver(db, order.driver_id)
+        if drv is None:
+            continue
+        _, _, pickup_address = _pickup_info(order)
+        # Driver.user_id — Telegram chat id (dispatch.py'dagi boshqa xabarlar ham shunday yuboriladi).
+        await notifications.send_telegram_message(
+            drv.user_id,
+            f"⏰ '{order.cargo_name}' buyurtmasi uchun yo'lga chiqish vaqti keldi.\n"
+            f"Yuk ortish nuqtasi: {pickup_address or 'manzil ko‘rsatilmagan'}",
+        )
+
+    return len(orders)
 
 
 def _region_matches(pickup_address: Optional[str], driver_field: Optional[str]) -> bool:
@@ -428,9 +521,12 @@ async def accept_attempt(db: AsyncSession, attempt_id: int, *, acting_user_id: i
         raise DispatchError("Buyurtma allaqachon boshqa haydovchiga biriktirilgan", status_code=409)
 
     order.driver_id = driver.id
-    order.status = OrderStatus.ACCEPTED
+    # Yuklash vaqti hali uzoq bo'lsa buyurtma darhol ACCEPTED emas, SCHEDULED bo'ladi
+    # va yo'lga chiqish vaqti (`departure_at`) hisoblanadi — vaqt yaqinlashganda
+    # `promote_due_scheduled` uni ACCEPTED ga o'tkazib, haydovchiga eslatma yuboradi.
+    order.status, order.departure_at = await resolve_departure_plan(order, driver)
     await db.commit()
-    await db.refresh(order, attribute_names=["driver_id", "status", "updated_at"])
+    await db.refresh(order, attribute_names=["driver_id", "status", "departure_at", "updated_at"])
 
     # Ehtiyot chorasi (odatda bo'sh): ketma-ket dispatch bo'lgani uchun shu order uchun
     # boshqa pending attempt bo'lmasligi kerak, lekin himoya qatlami sifatida yopib qo'yiladi.

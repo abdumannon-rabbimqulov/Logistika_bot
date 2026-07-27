@@ -178,7 +178,7 @@ async def list_drivers_for_monitor(
         .options(selectinload(Order.waypoints))
         .where(
             Order.driver_id.in_(driver_ids),
-            Order.status.in_([OrderStatus.ACCEPTED, OrderStatus.IN_PROGRESS]),
+            Order.status.in_([OrderStatus.SCHEDULED, OrderStatus.ACCEPTED, OrderStatus.IN_PROGRESS]),
         )
         .order_by(desc(Order.created_at))
     )

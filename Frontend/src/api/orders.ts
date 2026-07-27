@@ -10,6 +10,7 @@ import type {
   PriceEstimateLocation,
   PriceEstimateResponse,
   ReverseGeocodeResponse,
+  WaypointProgressInput,
 } from '../types/api';
 
 export function createOrder(data: OrderCreateInput): Promise<OrderDetail> {
@@ -59,7 +60,18 @@ export function rejectDispatch(attemptId: number): Promise<void> {
   return api.post<void>(`/orders/dispatch/${attemptId}/reject`);
 }
 
-/** Buyurtma holatini yangilash (ACCEPTED→IN_PROGRESS→COMPLETED). */
+/** Buyurtma holatini qo'lda yangilash — FAQAT admin uchun.
+ *  Haydovchi oqimni `updateWaypoint` orqali suradi (har qadam GPS bilan tekshiriladi). */
 export function updateOrderStatus(orderId: number, status: OrderStatus): Promise<Order> {
   return api.patch<Order>(`/orders/${orderId}/status`, { status });
+}
+
+/** Marshrut nuqtasidagi qadamni belgilash ("Yetib keldim" / "Yukni ortdim" / "Topshirdim").
+ *  Javobda yangilangan buyurtma to'liq qaytadi — qayta so'rov kerak emas. */
+export function updateWaypoint(
+  orderId: number,
+  waypointId: number,
+  data: WaypointProgressInput,
+): Promise<OrderDetail> {
+  return api.patch<OrderDetail>(`/orders/${orderId}/waypoints/${waypointId}`, data);
 }

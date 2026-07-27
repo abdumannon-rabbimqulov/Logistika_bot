@@ -77,7 +77,8 @@ export function OrderTrackingPage() {
   }
 
   const isSearching = order.status === 'PENDING';
-  const isFound = order.status === 'ACCEPTED' || order.status === 'IN_PROGRESS';
+  const isFound =
+    order.status === 'SCHEDULED' || order.status === 'ACCEPTED' || order.status === 'IN_PROGRESS';
   const awaitingBump = Boolean(order.price_bump_requested_at) && order.driver_id === null;
   const progressPercent = Math.min(100, (order.dispatch_round / MAX_ROUNDS) * 100);
 

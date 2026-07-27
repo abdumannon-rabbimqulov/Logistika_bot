@@ -269,11 +269,16 @@ async def websocket_driver_location(
 
                 lat = float(data["latitude"])
                 lon = float(data["longitude"])
+                # GPS aniqligi (metr) — ixtiyoriy. Geofence tekshiruvida zaxira
+                # koordinata ishlatilganda ruxsat etilgan radius shunga qarab kengayadi.
+                raw_accuracy = data.get("accuracy")
+                accuracy = float(raw_accuracy) if raw_accuracy is not None else None
 
                 await live_location.update_driver_location(
                     driver_id=driver_id,
                     lat=lat,
                     lon=lon,
+                    accuracy=accuracy,
                     user_id=user.id,
                     full_name=user.full_name,
                     truck_number=driver.truck_number,

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
-import { getOrder, updateOrderStatus } from '../api/orders';
+import { getOrder, updateWaypoint } from '../api/orders';
 import { BackIcon, PhoneIcon, WeightIcon } from '../components/icons';
-import type { OrderDetail, OrderStatus, OrderWaypoint, WaypointType } from '../types/api';
+import { useLiveLocation } from '../hooks/useLiveLocation';
+import type { OrderDetail, OrderWaypoint, WaypointStatus, WaypointType } from '../types/api';
+import { getCurrentPositionOnce, PositionError } from '../utils/currentPosition';
 import { formatPrice, statusLabel } from '../utils/format';
 import styles from './DriverActiveOrderPage.module.css';
 
@@ -13,15 +15,38 @@ const WAYPOINT_TYPE_LABEL: Record<WaypointType, string> = {
   TRANSIT: 'Oraliq nuqta',
 };
 
-// Joriy statusdan keyingi qadam: qaysi tugma va qaysi yangi status.
-const NEXT_STEP: Partial<Record<OrderStatus, { label: string; next: OrderStatus }>> = {
-  ACCEPTED: { label: 'Yukni oldim', next: 'IN_PROGRESS' },
-  IN_PROGRESS: { label: 'Yetkazdim', next: 'COMPLETED' },
-};
+/** Joriy nuqtadagi keyingi qadam: tugma matni va nuqtaning yangi holati.
+ *
+ *  Ilgari bu yerda buyurtma statusiga bog'langan ikkita tugma bor edi
+ *  (`ACCEPTED → IN_PROGRESS → COMPLETED`) va ular oraliq nuqtalarni umuman
+ *  hisobga olmasdi. Endi qadam har doim JORIY nuqtaga tegishli, shuning uchun
+ *  2 ta ham, 5 ta ham nuqtali marshrut bir xil ishlaydi. */
+function nextStep(
+  waypoint: OrderWaypoint,
+): { label: string; status: WaypointStatus } | null {
+  if (waypoint.status === 'PENDING') return { label: 'Yetib keldim', status: 'ARRIVED' };
+  if (waypoint.status === 'ARRIVED') {
+    const label =
+      waypoint.type === 'PICKUP'
+        ? 'Yukni ortdim'
+        : waypoint.type === 'DELIVERY'
+          ? 'Yukni topshirdim'
+          : 'Nuqtani yakunladim';
+    return { label, status: 'COMPLETED' };
+  }
+  return null;
+}
 
 function contactOf(order: OrderDetail): OrderWaypoint | null {
   const pickup = order.waypoints.find((w) => w.type === 'PICKUP' && w.contact_phone);
   return pickup ?? order.waypoints.find((w) => w.contact_phone) ?? order.origin ?? null;
+}
+
+/** Buyurtmadagi birinchi tugallanmagan nuqta — backenddagi `Order.current_waypoint`
+ *  bilan bir xil qoida. Backend `current_waypoint`ni javobda bersa ham, ro'yxatdagi
+ *  aynan shu obyektni topish qulayroq (id bo'yicha solishtirish uchun). */
+function currentWaypointOf(order: OrderDetail): OrderWaypoint | null {
+  return order.waypoints.find((w) => w.status !== 'COMPLETED' && w.status !== 'SKIPPED') ?? null;
 }
 
 export function DriverActiveOrderPage() {
@@ -31,6 +56,12 @@ export function DriverActiveOrderPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
+
+  // Faol buyurtma davomida joylashuv uzatiladi — mijoz kuzatuv sahifasida va admin
+  // jonli xaritasida haydovchi ko'rinib tursin. Ilgari uzatish faqat bosh sahifada
+  // va faqat "liniyada" holatida ishlagan, ya'ni yuk yo'ldaligida umuman to'xtardi.
+  const isTracking = Boolean(order && order.status !== 'COMPLETED' && order.status !== 'CANCELLED');
+  useLiveLocation({ broadcast: isTracking });
 
   const load = useCallback(async () => {
     if (!orderId) return;
@@ -50,15 +81,29 @@ export function DriverActiveOrderPage() {
 
   async function handleAdvance() {
     if (!order) return;
-    const step = NEXT_STEP[order.status];
-    if (!step) return;
+    const waypoint = currentWaypointOf(order);
+    const step = waypoint && nextStep(waypoint);
+    if (!waypoint || !step) return;
+
     setUpdating(true);
     setError(null);
     try {
-      await updateOrderStatus(order.id, step.next);
-      await load();
+      // Qadam tasdiqlanishidan oldin aynan shu lahzadagi joylashuv olinadi — server
+      // shu koordinata bo'yicha haydovchi nuqtada ekanini tekshiradi (geofence).
+      const position = await getCurrentPositionOnce();
+      const updated = await updateWaypoint(order.id, waypoint.id, {
+        status: step.status,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        ...(position.accuracy != null ? { accuracy: position.accuracy } : {}),
+      });
+      setOrder(updated);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Holatni o'zgartirib bo'lmadi");
+      if (err instanceof PositionError) {
+        setError(err.message);
+      } else {
+        setError(err instanceof ApiError ? err.message : "Qadamni belgilab bo'lmadi");
+      }
     } finally {
       setUpdating(false);
     }
@@ -82,8 +127,10 @@ export function DriverActiveOrderPage() {
   }
 
   const contact = contactOf(order);
-  const step = NEXT_STEP[order.status];
+  const currentWaypoint = currentWaypointOf(order);
+  const step = currentWaypoint ? nextStep(currentWaypoint) : null;
   const isDone = order.status === 'COMPLETED';
+  const isCancelled = order.status === 'CANCELLED';
 
   return (
     <div className={styles.page}>
@@ -114,6 +161,7 @@ export function DriverActiveOrderPage() {
         <div className={styles.route}>
           {order.waypoints.map((wp, idx) => {
             const isLast = idx === order.waypoints.length - 1;
+            const isCurrent = currentWaypoint?.id === wp.id;
             return (
               <div key={wp.id} className={styles.checkpoint}>
                 <div className={styles.markerCol}>
@@ -121,12 +169,29 @@ export function DriverActiveOrderPage() {
                   {!isLast && <span className={styles.connector} />}
                 </div>
                 <div className={styles.checkpointBody}>
-                  <div className={styles.checkpointType}>{WAYPOINT_TYPE_LABEL[wp.type]}</div>
+                  <div className={styles.checkpointType}>
+                    {WAYPOINT_TYPE_LABEL[wp.type]}
+                    {isCurrent && !isDone && !isCancelled && (
+                      <span className={styles.currentTag}>Joriy nuqta</span>
+                    )}
+                  </div>
                   <div className={styles.checkpointAddress}>{wp.address ?? 'Manzil ko’rsatilmagan'}</div>
                   {wp.contact_phone && (
                     <a className={styles.miniCall} href={`tel:${wp.contact_phone}`}>
                       <PhoneIcon size={13} color="var(--color-accent-pressed)" /> {wp.contact_name ?? wp.contact_phone}
                     </a>
+                  )}
+                  {/* Tasdiqlangan qadamlar: qachon va qanchalik yaqindan belgilangani —
+                      haydovchi uchun ham, nizo holatida admin uchun ham ochiq ma'lumot. */}
+                  {wp.completed_at && (
+                    <div className={styles.checkpointProof}>
+                      {new Date(wp.completed_at).toLocaleTimeString('uz-UZ', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                      {wp.confirmed_distance_m != null && ` · nuqtadan ${wp.confirmed_distance_m} m`}
+                      {wp.override_reason && ' · admin tasdiqlagan'}
+                    </div>
                   )}
                 </div>
               </div>
@@ -157,12 +222,21 @@ export function DriverActiveOrderPage() {
       <div className={styles.footer}>
         {isDone ? (
           <div className={styles.doneNote}>Buyurtma yakunlandi ✅</div>
-        ) : step ? (
-          <button className={styles.advanceBtn} onClick={handleAdvance} disabled={updating}>
-            {updating ? 'Saqlanmoqda...' : step.label}
-          </button>
+        ) : isCancelled ? (
+          <div className={styles.doneNote}>Buyurtma bekor qilingan</div>
+        ) : step && currentWaypoint ? (
+          <>
+            {/* Qadam nuqtaga borib bosilishi kerakligi oldindan aytiladi — haydovchi
+                422 xatosini ko'rgandan keyin emas, oldin biladi. */}
+            <div className={styles.stepHint}>
+              {currentWaypoint.address ?? 'Manzil ko’rsatilmagan'} — joylashuvingiz tekshiriladi
+            </div>
+            <button className={styles.advanceBtn} onClick={handleAdvance} disabled={updating}>
+              {updating ? 'Joylashuv tekshirilmoqda...' : step.label}
+            </button>
+          </>
         ) : (
-          <div className={styles.doneNote}>Yuklash vaqti kelishi kutilmoqda</div>
+          <div className={styles.doneNote}>Barcha nuqtalar yakunlangan</div>
         )}
       </div>
     </div>

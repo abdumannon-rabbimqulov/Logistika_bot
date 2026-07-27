@@ -59,8 +59,14 @@ async def update_driver_location(
     truck_number: str,
     truck_type_id: int,
     live_period: int = 1800,
+    accuracy: Optional[float] = None,
 ) -> None:
-    """Haydovchining GPS kordinatasini yangilash."""
+    """Haydovchining GPS kordinatasini yangilash.
+
+    `accuracy` (metr) — ixtiyoriy: geofence tekshiruvi bu nuqtani zaxira sifatida
+    ishlatganda ruxsat etilgan radiusni aniqlikka qarab kengaytiradi
+    (services/geofence.py). Eski klientlar uni yubormaydi — shunda `None` qoladi.
+    """
     try:
         r = get_redis()
         key = f"driver_location:{driver_id}"
@@ -75,6 +81,7 @@ async def update_driver_location(
             "truck_type_id": truck_type_id,
             "lat": lat,
             "lon": lon,
+            "accuracy": accuracy,
             "ts": ts,
             "expires_at": expires_at,
         }

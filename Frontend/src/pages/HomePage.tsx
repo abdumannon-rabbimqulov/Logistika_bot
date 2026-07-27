@@ -11,7 +11,7 @@ import type { OrderPrefillState } from '../types/navigation';
 import { formatPrice, formatRelativeDate, routeLabel, statusLabel } from '../utils/format';
 import styles from './HomePage.module.css';
 
-const ACTIVE_STATUSES = new Set(['ACCEPTED', 'IN_PROGRESS']);
+const ACTIVE_STATUSES = new Set(['SCHEDULED', 'ACCEPTED', 'IN_PROGRESS']);
 const PAST_STATUSES = new Set(['COMPLETED', 'CANCELLED']);
 
 export function HomePage() {

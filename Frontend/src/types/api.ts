@@ -124,6 +124,27 @@ export interface OrderWaypoint {
   contact_name: string | null;
   contact_phone: string | null;
   created_at: string;
+  /** Haydovchi "Yetib keldim" bosgan payt. */
+  arrived_at: string | null;
+  /** Nuqta yakunlangan (yuk ortilgan/topshirilgan) payt. */
+  completed_at: string | null;
+  /** Qadam tasdiqlanganda o'lchangan masofa (metr) — GPS isboti. */
+  confirmed_distance_m: number | null;
+  confirmed_accuracy_m: number | null;
+  /** To'ldirilgan bo'lsa — qadam admin tomonidan qo'lda tasdiqlangan (geofence'siz). */
+  override_by_user_id: number | null;
+  override_reason: string | null;
+}
+
+/** PATCH /orders/{id}/waypoints/{wid} — nuqtadagi qadamni belgilash.
+ *  Koordinata tugma bosilgan paytda olinadi (geofence uchun asosiy manba). */
+export interface WaypointProgressInput {
+  status: WaypointStatus;
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  /** Faqat admin: GPS nosoz bo'lganda qadamni qo'lda tasdiqlash sababi. */
+  override_reason?: string;
 }
 
 export interface OrderWaypointInput {
@@ -203,6 +224,15 @@ export interface DispatchOrderSummary {
   currency: string;
   origin_address: string | null;
   destination_address: string | null;
+  /** A→B marshrut uzunligi (buyurtmaning o'z masofasi) — `DispatchAttemptResponse.distance_km`
+   *  bilan chalkashtirmaslik kerak: u haydovchidan A nuqtagacha bo'lgan masofa. */
+  total_distance_km: number | null;
+  origin_latitude: number | null;
+  origin_longitude: number | null;
+  destination_latitude: number | null;
+  destination_longitude: number | null;
+  /** OSRM marshrut chizig'i: [[latitude, longitude], ...] — xaritada chiziladi. */
+  route_geometry: [number, number][];
 }
 
 // GET /orders/dispatch/active — null yoki joriy faol taklif (order/schemas.py DispatchAttemptResponse).
@@ -212,6 +242,7 @@ export interface DispatchAttemptResponse {
   driver_id: number;
   round_number: number;
   match_type: DispatchMatchType;
+  /** Haydovchidan yuk ortish nuqtasigacha ("sizgacha") masofa — marshrut uzunligi EMAS. */
   distance_km: number | null;
   status: DispatchAttemptStatus;
   sent_at: string;

@@ -3,6 +3,7 @@ import { ApiError } from '../../api/client';
 import { updateAdminOrder } from '../../api/admin';
 import type { AdminOrderUpdate, Order, OrderStatus } from '../../types/api';
 import { Modal } from './Modal';
+import { OrderWaypointsPanel } from './OrderWaypointsPanel';
 import shared from '../shared.module.css';
 import styles from './OrderEditModal.module.css';
 
@@ -125,6 +126,8 @@ export function OrderEditModal({ order, onClose, onSaved }: Props) {
             {order.driver_id ? ` (haydovchi #${order.driver_id})` : ' — bu buyurtmada haydovchi yo‘q, komissiya yechilmaydi'}.
           </div>
         )}
+
+        <OrderWaypointsPanel order={order} onChanged={onSaved} />
 
         {!numbersValid && <div className={styles.invalid}>Narx va og‘irlik 0 dan katta bo‘lishi kerak</div>}
         {error && <div className={shared.errorBanner}>{error}</div>}

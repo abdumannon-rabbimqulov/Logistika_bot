@@ -65,6 +65,19 @@ LIVE_LOC_TTL_SEC = int(get_optional_env("LIVE_LOC_TTL_SEC", "120"))
 LIVE_LOC_DB_THROTTLE_SEC = int(get_optional_env("LIVE_LOC_DB_THROTTLE_SEC", "60"))
 LIVE_LOC_DEFAULT_PERIOD_SEC = int(get_optional_env("LIVE_LOC_DEFAULT_PERIOD_SEC", "1800"))
 
+# ── Geofence: haydovchi nuqtaga haqiqatan yetib kelganini tekshirish ──────────
+# (services/geofence.py). Haydovchi buyurtma qadamini faqat shu radius ichida
+# turib yopa oladi — aks holda manzilga bormasdan "Yetkazdim" bosish mumkin edi.
+GEOFENCE_RADIUS_M = int(get_optional_env("GEOFENCE_RADIUS_M", "1000"))
+# GPS xatosi radiusga qo'shiladi (lekin bu chegaradan oshmaydi) — shahar ichida
+# yoki ombor binosi yonida aniqlik pasayganda haqiqiy haydovchini rad etmaslik uchun.
+GEOFENCE_ACCURACY_ALLOWANCE_M = int(get_optional_env("GEOFENCE_ACCURACY_ALLOWANCE_M", "250"))
+# Bundan yomon aniqlikdagi o'lchov umuman qabul qilinmaydi — bunday koordinata
+# bilan "nuqtadamisiz?" degan savolga ishonchli javob berib bo'lmaydi.
+GEOFENCE_MAX_ACCURACY_M = int(get_optional_env("GEOFENCE_MAX_ACCURACY_M", "500"))
+# Zaxira (Redis'dagi oxirgi ma'lum) koordinata shu muddatdan eski bo'lsa ishlatilmaydi.
+GEOFENCE_LOCATION_MAX_AGE_SEC = int(get_optional_env("GEOFENCE_LOCATION_MAX_AGE_SEC", "120"))
+
 
 ENVIRONMENT = get_optional_env('ENVIRONMENT', 'development')
 LOG_LEVEL = get_optional_env('LOG_LEVEL', 'INFO')
