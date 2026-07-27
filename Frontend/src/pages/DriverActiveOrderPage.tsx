@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { getOrder, updateWaypoint } from '../api/orders';
-import { BackIcon, PhoneIcon, WeightIcon } from '../components/icons';
+import { BackIcon, PhoneIcon, SendIcon, WeightIcon } from '../components/icons';
 import { useLiveLocation } from '../hooks/useLiveLocation';
 import type { OrderDetail, OrderWaypoint, WaypointStatus, WaypointType } from '../types/api';
 import { getCurrentPositionOnce, PositionError } from '../utils/currentPosition';
+import { openTelegramLocationSettings } from '../utils/telegramLocation';
 import { formatPrice, statusLabel } from '../utils/format';
 import styles from './DriverActiveOrderPage.module.css';
 
@@ -55,6 +56,7 @@ export function DriverActiveOrderPage() {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showLocationSettingsHint, setShowLocationSettingsHint] = useState(false);
   const [updating, setUpdating] = useState(false);
 
   // Faol buyurtma davomida joylashuv uzatiladi — mijoz kuzatuv sahifasida va admin
@@ -87,6 +89,7 @@ export function DriverActiveOrderPage() {
 
     setUpdating(true);
     setError(null);
+    setShowLocationSettingsHint(false);
     try {
       // Qadam tasdiqlanishidan oldin aynan shu lahzadagi joylashuv olinadi — server
       // shu koordinata bo'yicha haydovchi nuqtada ekanini tekshiradi (geofence).
@@ -101,6 +104,7 @@ export function DriverActiveOrderPage() {
     } catch (err) {
       if (err instanceof PositionError) {
         setError(err.message);
+        setShowLocationSettingsHint(err.canOpenSettings);
       } else {
         setError(err instanceof ApiError ? err.message : "Qadamni belgilab bo'lmadi");
       }
@@ -199,9 +203,47 @@ export function DriverActiveOrderPage() {
           })}
         </div>
 
+        {order.sender_contact && (
+          <>
+            <div className={styles.sectionTitle}>Buyurtmachi</div>
+            <div className={styles.customerCard}>
+              <div className={styles.customerInfo}>
+                <div className={styles.customerName}>{order.sender_contact.full_name}</div>
+                <div className={styles.customerPhone}>
+                  {order.sender_contact.phone_number ?? 'Telefon ko’rsatilmagan'}
+                </div>
+              </div>
+              <div className={styles.customerActions}>
+                {order.sender_contact.phone_number && (
+                  <a
+                    className={styles.callBtn}
+                    href={`tel:${order.sender_contact.phone_number}`}
+                    aria-label="Buyurtmachiga qo'ng'iroq qilish"
+                  >
+                    <PhoneIcon />
+                  </a>
+                )}
+                {order.sender_contact.telegram_url && (
+                  <a
+                    className={styles.callBtn}
+                    href={order.sender_contact.telegram_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Buyurtmachiga Telegram orqali yozish"
+                  >
+                    <SendIcon />
+                  </a>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Yuk ortish/topshirish manzilidagi kontakt (buyurtmachining o'zi emas —
+            masalan ombor xodimi) — buyurtmachidan alohida, chunki boshqa odam bo'lishi mumkin. */}
         {contact && (
           <>
-            <div className={styles.sectionTitle}>Mijoz</div>
+            <div className={styles.sectionTitle}>Manzildagi aloqa</div>
             <div className={styles.customerCard}>
               <div className={styles.customerInfo}>
                 <div className={styles.customerName}>{contact.contact_name ?? 'Mijoz'}</div>
@@ -216,7 +258,20 @@ export function DriverActiveOrderPage() {
           </>
         )}
 
-        {error && <div className={styles.errorBanner}>{error}</div>}
+        {error && (
+          <div className={styles.errorBanner}>
+            {error}
+            {showLocationSettingsHint && (
+              <button
+                type="button"
+                className={styles.settingsLink}
+                onClick={() => openTelegramLocationSettings()}
+              >
+                Sozlamalarni ochish
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className={styles.footer}>

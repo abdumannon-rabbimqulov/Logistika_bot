@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { bumpPrice, getOrder } from '../api/orders';
-import { BackIcon } from '../components/icons';
+import { BackIcon, PhoneIcon, SendIcon, StarIcon } from '../components/icons';
+import { YandexMap } from '../components/YandexMap';
+import { useOrderDriverLocation } from '../hooks/useOrderDriverLocation';
 import type { OrderDetail } from '../types/api';
 import { formatPrice, routeLabel, statusLabel } from '../utils/format';
 import styles from './OrderTrackingPage.module.css';
@@ -58,6 +60,16 @@ export function OrderTrackingPage() {
     }
   }
 
+  // Haydovchi biriktirilgan va yo'lda bo'lsa — jonli joylashuvi kuzatiladi
+  // (order/router.py `WS /orders/{id}/ws/driver-location`). Hook har renderda
+  // bir xil tartibda chaqirilishi shart, shuning uchun quyidagi `if (!order)`
+  // ERTA return'idan OLDIN turadi — `order` hali `null` bo'lsa `enabled=false`.
+  const isFound =
+    order != null &&
+    (order.status === 'SCHEDULED' || order.status === 'ACCEPTED' || order.status === 'IN_PROGRESS');
+  const isTrackable = isFound && order?.driver_id != null;
+  const driverPoint = useOrderDriverLocation(order?.id ?? null, isTrackable);
+
   if (!order) {
     return (
       <div className={styles.page}>
@@ -77,10 +89,19 @@ export function OrderTrackingPage() {
   }
 
   const isSearching = order.status === 'PENDING';
-  const isFound =
-    order.status === 'SCHEDULED' || order.status === 'ACCEPTED' || order.status === 'IN_PROGRESS';
   const awaitingBump = Boolean(order.price_bump_requested_at) && order.driver_id === null;
   const progressPercent = Math.min(100, (order.dispatch_round / MAX_ROUNDS) * 100);
+  const driverLocation = driverPoint
+    ? { latitude: driverPoint.latitude, longitude: driverPoint.longitude }
+    : null;
+  const originPoint =
+    order.origin?.latitude != null && order.origin.longitude != null
+      ? { latitude: order.origin.latitude, longitude: order.origin.longitude }
+      : null;
+  const destinationPoint =
+    order.destination?.latitude != null && order.destination.longitude != null
+      ? { latitude: order.destination.latitude, longitude: order.destination.longitude }
+      : null;
 
   return (
     <div className={styles.page}>
@@ -113,6 +134,59 @@ export function OrderTrackingPage() {
           )}
         </div>
       </div>
+
+      {isTrackable && (
+        <div className={styles.section}>
+          <div className={styles.mapCard}>
+            <YandexMap
+              origin={originPoint}
+              destination={destinationPoint}
+              driverLocation={driverLocation}
+            />
+          </div>
+          {!driverLocation && (
+            <div className={styles.mapHint}>Haydovchining jonli joylashuvi kutilmoqda...</div>
+          )}
+        </div>
+      )}
+
+      {order.driver_contact && (
+        <div className={styles.section}>
+          <div className={styles.contactCard}>
+            <div className={styles.contactInfo}>
+              <div className={styles.contactName}>{order.driver_contact.full_name}</div>
+              <div className={styles.contactMeta}>
+                <StarIcon size={13} />
+                {Number(order.driver_contact.rating).toFixed(1)}
+                {order.driver_contact.truck_type_name && ` · ${order.driver_contact.truck_type_name}`}
+                {` · ${order.driver_contact.truck_number}`}
+              </div>
+            </div>
+            <div className={styles.contactActions}>
+              {order.driver_contact.phone_number && (
+                <a
+                  className={styles.contactBtn}
+                  href={`tel:${order.driver_contact.phone_number}`}
+                  aria-label="Haydovchiga qo'ng'iroq qilish"
+                >
+                  <PhoneIcon />
+                </a>
+              )}
+              {order.driver_contact.telegram_url && (
+                <a
+                  className={styles.contactBtn}
+                  href={order.driver_contact.telegram_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Haydovchiga Telegram orqali yozish"
+                >
+                  <SendIcon />
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {awaitingBump && (
         <div className={styles.section}>

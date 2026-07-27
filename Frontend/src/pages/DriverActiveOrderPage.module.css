@@ -273,6 +273,12 @@
   text-decoration: none;
 }
 
+.customerActions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 /* ── Footer ── */
 .footer {
   position: fixed;
@@ -331,6 +337,14 @@
   color: var(--color-danger);
   font-size: 13px;
   line-height: 1.4;
+}
+
+.settingsLink {
+  display: block;
+  margin-top: 8px;
+  font-weight: 700;
+  text-decoration: underline;
+  color: var(--color-danger);
 }
 
 .backLink {

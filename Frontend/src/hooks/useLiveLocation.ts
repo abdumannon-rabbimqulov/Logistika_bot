@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { getAccessToken, apiBaseUrl } from '../api/client';
+import { getTelegramLocationOnce, isTelegramLocationSupported } from '../utils/telegramLocation';
 
 export interface LiveCoords {
   latitude: number;
@@ -19,6 +20,10 @@ interface Options {
  * trafik va Redis yozuvlarini tejaydi.
  */
 const BROADCAST_INTERVAL_MS = 30_000;
+
+/** Telegram `LocationManager`da `watchPosition` yo'q — shu oraliqda `getLocation()`
+ *  qayta so'raladi. Xaritadagi nuqta shuncha tez-tez yangilanadi. */
+const TELEGRAM_POLL_INTERVAL_MS = 8_000;
 
 interface LiveLocationState {
   coords: LiveCoords | null;
@@ -41,9 +46,18 @@ function locationWsUrl(): string {
 }
 
 /**
- * Haydovchining jonli joylashuvi: `watchPosition` orqali uzluksiz kuzatiladi va
- * (broadcast=true bo'lsa) `/drivers/ws/location` WebSocket'iga yuboriladi — admin
- * paneldagi jonli xarita aynan shu ma'lumotdan oziqlanadi (services/live_location.py).
+ * Haydovchining jonli joylashuvi va (broadcast=true bo'lsa) uni
+ * `/drivers/ws/location` WebSocket'iga yuborish — admin/sender jonli xaritasi
+ * aynan shu ma'lumotdan oziqlanadi (services/live_location.py).
+ *
+ * Joylashuv manbai: Telegram ichida (WebApp) `LocationManager` mavjud bo'lsa
+ * ustuvor ishlatiladi — oddiy `navigator.geolocation` Telegram'ning ichki
+ * WebView'ida (ayniqsa Android/iOS ilovasida) ko'pincha ishlamaydi: OS ruxsat
+ * so'rovi umuman ko'rinmay doimiy `PERMISSION_DENIED` qaytaradi, chunki ruxsat
+ * brauzerga emas, Telegram ilovasining o'ziga berilishi kerak
+ * (`utils/telegramLocation.ts`). `LocationManager`da uzluksiz "watch" bo'lmagani
+ * uchun davriy so'rov (`TELEGRAM_POLL_INTERVAL_MS`) bilan simulyatsiya qilinadi.
+ * Telegramdan tashqarida (dev/test brauzerida) `watchPosition` ishlatiladi.
  *
  * Liniyadan chiqilganda WS'ga `{event: "stop"}` yuboriladi, shunda haydovchi admin
  * xaritasidan olib tashlanadi.
@@ -56,8 +70,38 @@ export function useLiveLocation({ broadcast = false }: Options = {}): LiveLocati
   // Oxirgi olingan koordinata — interval taymeri shu qiymatni yuboradi.
   const latestCoordsRef = useRef<LiveCoords | null>(null);
 
-  // 1) Brauzer geolokatsiyasini kuzatish
+  // 1) Joylashuvni kuzatish (Telegram LocationManager yoki brauzer watchPosition).
   useEffect(() => {
+    let cancelled = false;
+
+    const applyCoords = (next: LiveCoords) => {
+      if (cancelled) return;
+      latestCoordsRef.current = next;
+      setCoords(next);
+      setError(null);
+      setLoading(false);
+    };
+
+    if (isTelegramLocationSupported()) {
+      const poll = () => {
+        getTelegramLocationOnce()
+          .then((sample) => {
+            applyCoords({ ...sample, at: Date.now() });
+          })
+          .catch((err: unknown) => {
+            if (cancelled) return;
+            setError(err instanceof Error ? err.message : 'Joylashuv aniqlanmadi');
+            setLoading(false);
+          });
+      };
+      poll();
+      const id = window.setInterval(poll, TELEGRAM_POLL_INTERVAL_MS);
+      return () => {
+        cancelled = true;
+        window.clearInterval(id);
+      };
+    }
+
     if (!navigator.geolocation) {
       setError("Qurilma geolokatsiyani qo'llab-quvvatlamaydi");
       setLoading(false);
@@ -66,18 +110,15 @@ export function useLiveLocation({ broadcast = false }: Options = {}): LiveLocati
 
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        const next: LiveCoords = {
+        applyCoords({
           latitude: pos.coords.latitude,
           longitude: pos.coords.longitude,
           accuracy: pos.coords.accuracy ?? null,
           at: Date.now(),
-        };
-        latestCoordsRef.current = next;
-        setCoords(next);
-        setError(null);
-        setLoading(false);
+        });
       },
       (err) => {
+        if (cancelled) return;
         setError(
           err.code === err.PERMISSION_DENIED
             ? "Joylashuvga ruxsat berilmagan — xaritada o'zingizni ko'rish uchun ruxsat bering"
@@ -88,7 +129,10 @@ export function useLiveLocation({ broadcast = false }: Options = {}): LiveLocati
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
     );
 
-    return () => navigator.geolocation.clearWatch(watchId);
+    return () => {
+      cancelled = true;
+      navigator.geolocation.clearWatch(watchId);
+    };
   }, []);
 
   // 2) Liniyadagi holatda — WS ulanishi

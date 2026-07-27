@@ -170,3 +170,68 @@
   font-size: 13px;
   margin-top: 8px;
 }
+
+/* ── Haydovchini jonli kuzatish xaritasi ── */
+.mapCard {
+  height: 260px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: var(--border-w) solid var(--color-border);
+}
+
+.mapHint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+/* ── Haydovchi kontakt kartasi ── */
+.contactCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--color-bg);
+  border: var(--border-w) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+}
+
+.contactInfo {
+  min-width: 0;
+}
+
+.contactName {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.contactMeta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contactActions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.contactBtn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

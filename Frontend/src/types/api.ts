@@ -197,10 +197,39 @@ export interface Order {
   waypoints: OrderWaypoint[];
 }
 
+/** Bir foydalanuvchi bilan bog'lanish uchun kerakli minimal ma'lumot (order/schemas.py TelegramContact). */
+export interface TelegramContact {
+  full_name: string;
+  phone_number: string | null;
+  username: string | null;
+  /** Tayyor `https://t.me/<username>` havolasi — `username` bo'lmasa `null`. */
+  telegram_url: string | null;
+}
+
+/** Haydovchi kontakti — mashina ma'lumoti bilan birga (order/schemas.py OrderDriverContact). */
+export interface OrderDriverContact extends TelegramContact {
+  truck_number: string;
+  truck_type_name: string | null;
+  rating: number;
+}
+
+/** GET /orders/{id}/driver-location va WS `location`/`update` hodisasi. */
+export interface OrderDriverLocation {
+  lat: number;
+  lon: number;
+  accuracy: number | null;
+  ts: string;
+}
+
 export interface OrderDetail extends Order {
   origin: OrderWaypoint | null;
   destination: OrderWaypoint | null;
   current_waypoint: OrderWaypoint | null;
+  /** Buyurtmaga haydovchi biriktirilgan bo'lsa to'ldiriladi — sender shu orqali
+   *  haydovchi bilan bog'lanadi (tel/telegram). */
+  driver_contact: OrderDriverContact | null;
+  /** Haydovchi shu orqali buyurtmachi (sender) bilan bog'lanadi. */
+  sender_contact: TelegramContact | null;
 }
 
 export interface OrderCreateInput {

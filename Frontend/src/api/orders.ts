@@ -1,10 +1,11 @@
-import { api } from './client';
+import { api, apiBaseUrl, getAccessToken } from './client';
 import type {
   DispatchAttemptResponse,
   GeocodeSuggestion,
   Order,
   OrderCreateInput,
   OrderDetail,
+  OrderDriverLocation,
   OrderListItem,
   OrderStatus,
   PriceEstimateLocation,
@@ -74,4 +75,28 @@ export function updateWaypoint(
   data: WaypointProgressInput,
 ): Promise<OrderDetail> {
   return api.patch<OrderDetail>(`/orders/${orderId}/waypoints/${waypointId}`, data);
+}
+
+// ── Sender uchun jonli GPS kuzatuvi ─────────────────────────────────────────────────
+
+/** Biriktirilgan haydovchining joriy lokatsiyasi (bir martalik so'rov — WS ulanmasdan
+ *  oldingi boshlang'ich holat yoki WS ishlamasa zaxira sifatida). Haydovchi hali
+ *  biriktirilmagan yoki jonli lokatsiya yo'q bo'lsa 404 (ApiError). */
+export function getOrderDriverLocation(orderId: number): Promise<OrderDriverLocation> {
+  return api.get<OrderDriverLocation>(`/orders/${orderId}/driver-location`);
+}
+
+/** WS /orders/{id}/ws/driver-location manzilini quradi — faqat shu buyurtmaning
+ *  haydovchisi bo'yicha filtrlangan jonli oqim (order/router.py). */
+export function orderDriverLocationWsUrl(orderId: number): string {
+  const base = apiBaseUrl().replace(/\/$/, '');
+  let httpBase: string;
+  try {
+    httpBase = new URL(base, window.location.origin).toString().replace(/\/$/, '');
+  } catch {
+    httpBase = `${window.location.origin}${base}`;
+  }
+  const wsBase = httpBase.replace(/^http/, 'ws');
+  const token = getAccessToken() ?? '';
+  return `${wsBase}/orders/${orderId}/ws/driver-location?token=${encodeURIComponent(token)}`;
 }

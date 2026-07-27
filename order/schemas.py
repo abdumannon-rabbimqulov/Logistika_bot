@@ -165,6 +165,44 @@ class OrderAssignDriver(BaseModel):
     driver_id: int = Field(..., gt=0)
 
 
+class TelegramContact(BaseModel):
+    """Bir foydalanuvchi bilan bog'lanish uchun kerakli minimal ma'lumot.
+
+    Sender va haydovchi bir-birining to'liq ismi, telefoni va Telegram akkauntini
+    ko'rishi kerak (`OrderDetailResponse.driver_contact`/`sender_contact`) — buyurtma
+    biriktirilgach ular to'g'ridan-to'g'ri (Telegram orqali ham) bog'lanishi mumkin
+    bo'lishi uchun. `_require_order_access` allaqachon faqat egasi/haydovchi/adminga
+    ruxsat berganidan so'ng shu ma'lumot to'ldiriladi — begona odam ko'ra olmaydi.
+    """
+
+    full_name: str
+    phone_number: Optional[str] = None
+    username: Optional[str] = None
+    # Frontend qayta hisoblamasin deb tayyor havola sifatida beriladi.
+    telegram_url: Optional[str] = None
+
+
+class OrderDriverContact(TelegramContact):
+    """Haydovchi kontakti — mashina ma'lumoti bilan birga."""
+
+    truck_number: str
+    truck_type_name: Optional[str] = None
+    rating: Decimal
+
+
+class OrderDriverLocationResponse(BaseModel):
+    """`GET /orders/{id}/driver-location` va WS'dagi `location` hodisasi.
+
+    `services/live_location.get_driver_location` qaytargan dictdan to'g'ridan-to'g'ri
+    quriladi (kalitlar bir xil: lat/lon/accuracy/ts).
+    """
+
+    lat: float
+    lon: float
+    accuracy: Optional[float] = None
+    ts: datetime
+
+
 class AssignedDriverInfo(BaseModel):
     """Biriktirilgan haydovchi haqida qisqa ma'lumot (admin panel javobda ko'rsatadi)."""
 
@@ -228,6 +266,12 @@ class OrderDetailResponse(OrderResponse):
     destination: Optional[OrderWaypointResponse] = None
     current_waypoint: Optional[OrderWaypointResponse] = None
 
+    # Sender <-> haydovchi o'zaro to'liq aloqa ma'lumoti (ism, telefon, Telegram).
+    # `_require_order_access` bu javobni faqat egasi/biriktirilgan haydovchi/adminga
+    # berganidan keyin to'ldiriladi — begona odam ko'rmaydi.
+    driver_contact: Optional[OrderDriverContact] = None
+    sender_contact: Optional[TelegramContact] = None
+
     @classmethod
     def from_order(cls, order) -> "OrderDetailResponse":
         """Order ORM obyektidagi property'larni (origin/destination/current_waypoint) sxemaga joylash"""
@@ -237,6 +281,28 @@ class OrderDetailResponse(OrderResponse):
         base.current_waypoint = (
             OrderWaypointResponse.model_validate(order.current_waypoint) if order.current_waypoint else None
         )
+
+        if order.driver is not None and order.driver.user is not None:
+            driver_user = order.driver.user
+            base.driver_contact = OrderDriverContact(
+                full_name=driver_user.full_name,
+                phone_number=driver_user.phone_number,
+                username=driver_user.username,
+                telegram_url=f"https://t.me/{driver_user.username}" if driver_user.username else None,
+                truck_number=order.driver.truck_number,
+                truck_type_name=order.truck_type.name if order.truck_type else None,
+                rating=order.driver.rating,
+            )
+
+        if order.customer is not None:
+            customer = order.customer
+            base.sender_contact = TelegramContact(
+                full_name=customer.full_name,
+                phone_number=customer.phone_number,
+                username=customer.username,
+                telegram_url=f"https://t.me/{customer.username}" if customer.username else None,
+            )
+
         return base
 
 

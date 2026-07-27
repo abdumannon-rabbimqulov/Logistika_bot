@@ -12,7 +12,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from driver.models import TruckType
+from driver.models import Driver, TruckType
 from order.dispatch_models import DispatchAttempt, DispatchAttemptStatus
 from order.models import Order, OrderRoutePostGIS, OrderStatus, OrderWaypoint
 from order.schemas import OrderCreate, PriceEstimateRequest, OrderUpdate, OrderWaypointCreate
@@ -137,9 +137,19 @@ async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int)
 
 
 async def get_order(db: AsyncSession, order_id: int) -> Optional[Order]:
+    # `driver`->`user`, `customer` va `truck_type` ham shu yerda eager-load qilinadi:
+    # `OrderDetailResponse.from_order` sender/haydovchi kontakt kartochkasi va mashina
+    # nomini shu obyektlardan o'qiydi — lazy-load async kontekstda MissingGreenlet
+    # bilan yiqilardi.
     result = await db.execute(
         select(Order)
-        .options(selectinload(Order.waypoints), selectinload(Order.route))
+        .options(
+            selectinload(Order.waypoints),
+            selectinload(Order.route),
+            selectinload(Order.driver).selectinload(Driver.user),
+            selectinload(Order.customer),
+            selectinload(Order.truck_type),
+        )
         .where(Order.id == order_id)
     )
     return result.scalar_one_or_none()

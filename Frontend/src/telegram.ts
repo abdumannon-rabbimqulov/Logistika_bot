@@ -36,17 +36,49 @@ interface TelegramBackButton {
   offClick: (cb: () => void) => void;
 }
 
+/** Bot API 8.0+ da qo'shilgan — brauzer `navigator.geolocation` o'rniga shu orqali
+ *  joylashuv so'ralishi kerak: Telegramning ichki WebView'ida (ayniqsa Android/iOS
+ *  ilovasida) `navigator.geolocation` ko'pincha OS ruxsat oynasini umuman ko'rsatmay,
+ *  doimiy `PERMISSION_DENIED` qaytaradi — chunki ruxsat brauzerga emas, Telegram
+ *  ilovasining o'ziga berilishi kerak. `LocationManager` aynan shu ruxsatni Telegram
+ *  orqali so'raydi.
+ */
+interface TelegramLocationData {
+  latitude: number;
+  longitude: number;
+  altitude: number | null;
+  course: number | null;
+  speed: number | null;
+  horizontal_accuracy: number | null;
+  vertical_accuracy: number | null;
+  course_accuracy: number | null;
+  speed_accuracy: number | null;
+}
+
+interface TelegramLocationManager {
+  isInited: boolean;
+  isLocationAvailable: boolean;
+  isAccessRequested: boolean;
+  isAccessGranted: boolean;
+  init: (callback?: () => void) => void;
+  getLocation: (callback: (data: TelegramLocationData | null) => void) => void;
+  openSettings: () => void;
+}
+
 interface TelegramWebApp {
   initData: string;
   initDataUnsafe: { user?: TelegramWebAppUser };
   platform: string;
   colorScheme: 'light' | 'dark';
+  version: string;
+  isVersionAtLeast: (version: string) => boolean;
   ready: () => void;
   expand: () => void;
   close: () => void;
   MainButton: TelegramMainButton;
   BackButton: TelegramBackButton;
   HapticFeedback: TelegramHapticFeedback;
+  LocationManager?: TelegramLocationManager;
 }
 
 declare global {

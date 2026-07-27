@@ -1,21 +1,26 @@
 from __future__ import annotations
 
+import asyncio
+import json
+import logging
 from typing import List, NoReturn, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config.config import ADMIN_IDS, get_db
+from config.config import ADMIN_IDS, async_session, get_db
 from driver.crud import get_driver, get_driver_by_user_id
 from users.crud import get_user_by_id
 from order import crud, schemas
 from order.dispatch_models import DispatchAttempt, DispatchAttemptStatus
 from order.models import Order, OrderStatus, WaypointStatus
 from services import dispatch as dispatch_service
-from services import geofence, notifications, order_flow, osrm_client, yandex_geocoder
-from users.auth import get_current_active_user, get_current_sender
+from services import geofence, live_location, notifications, order_flow, osrm_client, yandex_geocoder
+from users.auth import get_current_active_user, get_current_sender, verify_token
 from users.models import User, UserRole
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/orders", tags=["Buyurtmalar (Orders)"])
 
@@ -145,6 +150,119 @@ async def get_order(
 ):
     order = await _require_order_access(db, order_id, current_user)
     return schemas.OrderDetailResponse.from_order(order)
+
+
+@router.get(
+    "/{order_id}/driver-location",
+    response_model=schemas.OrderDriverLocationResponse,
+    summary="Biriktirilgan haydovchining joriy jonli joylashuvi (sender/admin kuzatuvi uchun)",
+)
+async def get_order_driver_location(
+    order_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Sender o'z buyurtmasini kuzatib borishi uchun — admin jonli xaritasidagi bilan
+    bir xil manba (`services/live_location.py`), lekin faqat SHU buyurtmaga
+    biriktirilgan haydovchi bo'yicha va faqat buyurtma egasi/haydovchi/admin ko'ra oladi
+    (`_require_order_access`).
+    """
+    order = await _require_order_access(db, order_id, current_user)
+    if order.driver_id is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Buyurtmaga hali haydovchi biriktirilmagan")
+
+    item = await live_location.get_driver_location(order.driver_id)
+    if not item:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Haydovchining jonli joylashuvi hozircha yo'q")
+    return item
+
+
+async def _resolve_order_track_ws_user(token: Optional[str]) -> Optional[User]:
+    """WS `accept()`dan oldingi token tekshiruvi — driver/router.py naqshi bilan bir xil."""
+    if not token:
+        return None
+    payload = verify_token(token)
+    if not payload or payload.get("type") != "access":
+        return None
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+    async with async_session() as db:
+        return await get_user_by_id(db, int(user_id))
+
+
+@router.websocket("/{order_id}/ws/driver-location")
+async def order_driver_location_ws(
+    websocket: WebSocket,
+    order_id: int,
+    token: Optional[str] = None,
+):
+    """Sender WebApp'ida jonli xarita uchun — buyurtmaga biriktirilgan haydovchining
+    koordinatasi o'zgarganda darhol yuboriladi (admin `driver_locations_ws` bilan bir xil
+    pub/sub manbadan, lekin faqat shu buyurtmaning haydovchisi bo'yicha filtrlanadi).
+    """
+    user = await _resolve_order_track_ws_user(token)
+    if user is None:
+        await websocket.close(code=4401)
+        return
+
+    async with async_session() as db:
+        order = await crud.get_order(db, order_id)
+        if order is None:
+            await websocket.close(code=4404)
+            return
+        is_allowed = (
+            _is_admin(user)
+            or order.customer_id == user.id
+            or (order.driver_id is not None and await _is_order_driver_user(db, order, user))
+        )
+        if not is_allowed:
+            await websocket.close(code=4403)
+            return
+        driver_id = order.driver_id
+
+    if driver_id is None:
+        await websocket.accept()
+        await websocket.send_text(json.dumps({"event": "no_driver"}))
+        await websocket.close(code=4404)
+        return
+
+    await websocket.accept()
+
+    try:
+        snapshot = await live_location.get_driver_location(driver_id)
+        await websocket.send_text(json.dumps({"event": "snapshot", "item": snapshot}))
+    except Exception:
+        logger.warning("order driver-location ws: snapshot yuborilmadi (order %s)", order_id)
+
+    sub_task = asyncio.create_task(_pump_order_driver_updates(websocket, driver_id))
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:
+        logger.debug("order driver-location ws receive xatosi: %s", exc)
+    finally:
+        sub_task.cancel()
+
+
+async def _is_order_driver_user(db: AsyncSession, order: Order, user: User) -> bool:
+    driver = await get_driver_by_user_id(db, user.id)
+    return bool(driver and order.driver_id == driver.id)
+
+
+async def _pump_order_driver_updates(websocket: WebSocket, driver_id: int) -> None:
+    try:
+        async for payload in live_location.subscribe_location_updates():
+            if payload.get("driver_id") != driver_id:
+                continue
+            try:
+                await websocket.send_text(json.dumps({"event": "update", "item": payload}))
+            except Exception:
+                break
+    except asyncio.CancelledError:
+        pass
 
 
 @router.patch("/{order_id}", response_model=schemas.OrderDetailResponse, summary="Buyurtmani tahrirlash (egasi)")

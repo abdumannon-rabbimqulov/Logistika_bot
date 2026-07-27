@@ -31,13 +31,16 @@ interface Props {
   route?: [number, number][] | null;
   /** Foydalanuvchining jonli joylashuvi — ko'k nuqta bilan ko'rsatiladi. */
   userLocation?: MapPoint | null;
+  /** Boshqa odam (masalan biriktirilgan haydovchi)ning jonli joylashuvi — `userLocation`dan
+   *  farqli rang/hint bilan, sender kuzatuv sahifasida ishlatiladi. */
+  driverLocation?: MapPoint | null;
   /** `userLocation` birinchi marta kelganda xarita o'sha nuqtaga markazlashsin
    *  (bosh sahifadagi xarita uchun; buyurtma sahifalarida marshrut ustuvor). */
   followUser?: boolean;
 }
 
 export const YandexMap = forwardRef<YandexMapHandle, Props>(function YandexMap(
-  { origin, destination, route, userLocation, followUser = false },
+  { origin, destination, route, userLocation, driverLocation, followUser = false },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -140,6 +143,20 @@ export const YandexMap = forwardRef<YandexMapHandle, Props>(function YandexMap(
         );
       }
 
+      // Boshqa odam (biriktirilgan haydovchi)ning jonli joylashuvi — sender kuzatuv
+      // sahifasida ishlatiladi. `userLocation`dan alohida rang: ikkalasi bir vaqtda
+      // chizilishi mumkin (masalan admin ham o'z joylashuvini, ham haydovchinikini ko'rsa).
+      if (driverLocation) {
+        points.push([driverLocation.latitude, driverLocation.longitude]);
+        map.geoObjects.add(
+          new ymaps.Placemark(
+            [driverLocation.latitude, driverLocation.longitude],
+            { hintContent: 'Haydovchi joylashuvi' },
+            { preset: 'islands#circleIcon', iconColor: '#F59E0B', zIndex: 999 },
+          ),
+        );
+      }
+
       // Marshrut bo'lsa — butun chiziq ko'rinadigan qilib moslanadi (chiziq to'g'ri
       // yo'nalishda emas, egri bo'lgani uchun faqat ikki nuqta bo'yicha moslash yetarli emas).
       const fitPoints = route && route.length >= 2 ? route : points;
@@ -155,7 +172,7 @@ export const YandexMap = forwardRef<YandexMapHandle, Props>(function YandexMap(
     return () => {
       cancelled = true;
     };
-  }, [ready, origin, destination, route, userLocation, followUser]);
+  }, [ready, origin, destination, route, userLocation, driverLocation, followUser]);
 
   return (
     <div className={styles.wrap}>
