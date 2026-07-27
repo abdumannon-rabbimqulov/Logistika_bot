@@ -436,6 +436,23 @@ async def update_commission_settings(
     return await billing.update_commission_percent(db, data.commission_percent)
 
 
+@router.get("/settings/pricing", response_model=admin_schemas.PricingSettingsResponse)
+async def get_pricing_settings(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(is_admin),
+):
+    return await billing.get_or_create_settings(db)
+
+
+@router.patch("/settings/pricing", response_model=admin_schemas.PricingSettingsResponse)
+async def update_pricing_settings(
+    data: admin_schemas.PricingSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(is_admin),
+):
+    return await billing.update_sender_max_discount_percent(db, data.sender_max_discount_percent)
+
+
 @router.post(
     "/users/{user_id}/balance/adjust",
     response_model=admin_schemas.BalanceTransactionResponse,

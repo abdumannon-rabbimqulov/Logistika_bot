@@ -57,8 +57,17 @@ class TruckType(Base):
     drivers : Mapped[list["Driver"]] = relationship("Driver", back_populates="truck_type_obj")
 
     def calculate_price(self, distance_km: Decimal) -> Decimal:
-        """Masofaga qarab narx: base_price + price_per_km * masofa, min_price dan past bo'lmaydi."""
-        price = self.base_price + self.price_per_km * distance_km
+        """Masofaga qarab narx: base_price + price_per_km * masofa, min_price dan past bo'lmaydi.
+
+        Masofa avval eng yaqin 5 km ga yaxlitlanadi (112 km -> 110, 113 km -> 115):
+        OSRM qaytargan "112.37 km" kabi aniq raqamdan chiqqan narx mijoz uchun
+        tushunarsiz bo'ladi. Yaxlitlash shu yerda — barcha chaqiruvchilar bir xil
+        narx olishi kafolatlanadi.
+        """
+        from services.pricing import round_distance_km
+
+        billable_km = Decimal(round_distance_km(distance_km))
+        price = self.base_price + self.price_per_km * billable_km
         if self.min_price is not None and price < self.min_price:
             price = self.min_price
         return price

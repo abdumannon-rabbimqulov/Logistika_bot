@@ -16,7 +16,7 @@ from order import crud, schemas
 from order.dispatch_models import DispatchAttempt, DispatchAttemptStatus
 from order.models import Order, OrderStatus, WaypointStatus
 from services import dispatch as dispatch_service
-from services import geofence, live_location, notifications, order_flow, osrm_client, yandex_geocoder
+from services import geofence, live_location, notifications, order_flow, osrm_client, pricing, yandex_geocoder
 from users.auth import get_current_active_user, get_current_sender, verify_token
 from users.models import User, UserRole
 
@@ -535,6 +535,47 @@ async def reject_dispatch(
         await dispatch_service.reject_attempt(db, attempt_id, acting_user_id=current_user.id)
     except dispatch_service.DispatchError as exc:
         _raise_dispatch_error(exc)
+
+
+async def _require_own_order(db: AsyncSession, order_id: int, current_user: User) -> Order:
+    """Buyurtmani topadi va uning egasi hozirgi sender ekanini tekshiradi."""
+    order = await crud.get_order(db, order_id)
+    if not order:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Buyurtma topilmadi")
+    if order.customer_id != current_user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Bu buyurtma sizga tegishli emas")
+    return order
+
+
+@router.get("/{order_id}/price-options", response_model=schemas.OrderPriceOptionsResponse,
+            summary="Narx tahrirlash ekrani uchun chegara va 5 ta tayyor variant")
+async def get_order_price_options(
+    order_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_sender),
+):
+    order = await _require_own_order(db, order_id, current_user)
+    return await crud.get_order_price_options(db, order)
+
+
+@router.patch("/{order_id}/price", response_model=schemas.OrderDetailResponse,
+              summary="Sender narxni qo'lda o'zgartiradi (oshirish cheksiz, chegirma cheklangan)")
+async def set_custom_price(
+    order_id: int,
+    data: schemas.CustomPriceRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_sender),
+):
+    """Narxni oshirish cheklanmagan; pasaytirish `SENDER_MAX_DISCOUNT_PERCENT`
+    (standart 15%) bilan chegaralangan — chegaradan past narx 400 qaytaradi."""
+    order = await _require_own_order(db, order_id, current_user)
+    try:
+        order = await crud.set_custom_price(db, order, data.price)
+    except pricing.PriceValidationError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return schemas.OrderDetailResponse.from_order(order)
 
 
 @router.post("/{order_id}/price-bump", response_model=schemas.OrderDetailResponse,

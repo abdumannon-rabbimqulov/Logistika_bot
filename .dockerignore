@@ -21,6 +21,10 @@ postgres_data/
 # konteyneri uni volume orqali oladi. Bulardan tashqarida qolsa har bir `docker build`
 # 1 GB build context'ni bekorga nusxalaydi.
 osrm-data/
-node_modules/
-dist/
-build/
+# `node_modules/` (slashsiz prefiks) FAQAT ildizdagi papkani chiqarib tashlaydi —
+# Docker naqshni to'liq nisbiy yo'lga solishtiradi. Shu sababli `Frontend/node_modules`
+# (~88 MB) har bir backend `docker build` da build context'ga bekorga yuklanardi.
+# `**/` bilan istalgan chuqurlikdagi papka chiqarib tashlanadi.
+**/node_modules/
+**/dist/
+**/build/

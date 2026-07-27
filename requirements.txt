@@ -18,3 +18,4 @@ aiofiles>=23.2.1
 geoalchemy2
 shapely
 httpx>=0.27.0
+pytest>=8.0.0

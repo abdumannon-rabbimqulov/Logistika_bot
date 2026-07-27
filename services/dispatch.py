@@ -23,7 +23,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import or_, select, update
@@ -35,7 +35,7 @@ import order.crud as order_crud
 from driver.models import Driver
 from order.dispatch_models import DispatchAttempt, DispatchAttemptStatus, DispatchMatchType
 from order.models import Order, OrderStatus
-from services import live_location, navigation, notifications, osrm_client
+from services import live_location, navigation, notifications, osrm_client, pricing
 from utils.geo import calculate_distance_km
 
 logger = logging.getLogger(__name__)
@@ -63,10 +63,6 @@ class DispatchError(Exception):
     def __init__(self, message: str, *, status_code: int = 409):
         super().__init__(message)
         self.status_code = status_code
-
-
-def _round_price(amount: Decimal) -> Decimal:
-    return amount.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
 
 
 def _pickup_info(order: Order) -> tuple[Optional[float], Optional[float], Optional[str]]:
@@ -644,17 +640,20 @@ async def _request_price_bump(db: AsyncSession, order: Order) -> None:
     # _dispatch_next dagi kabi: UPDATE'dan keyin `updated_at` expired qoladi.
     await db.refresh(order, attribute_names=["price_bump_requested_at", "updated_at"])
 
-    plus10 = _round_price(order.price * Decimal("1.10"))
-    plus20 = _round_price(order.price * Decimal("1.20"))
     text = (
         f"😔 '{order.cargo_name}' buyurtmangiz uchun {order.dispatch_round} ta haydovchidan "
         f"hech biri javob bermadi.\n\nJoriy narx: {order.price} {order.currency}\n"
         f"Narxni oshirib qidiruvni davom ettiramizmi?"
     )
+    # 5 ta belgilangan variant (+100 000 ... +500 000 UZS) — WebApp'dagi narx tahrirlash
+    # ekrani bilan aynan bir xil ro'yxat (services/pricing.py).
     keyboard = notifications.inline_keyboard(
         [
-            [(f"+10% ({plus10} {order.currency})", f"pricebump:{order.id}:{plus10}")],
-            [(f"+20% ({plus20} {order.currency})", f"pricebump:{order.id}:{plus20}")],
+            [(
+                f"+{option['increment']:,.0f} ({option['price']:,.0f} {order.currency})".replace(",", " "),
+                f"pricebump:{order.id}:{option['price']}",
+            )]
+            for option in pricing.quick_price_options(order.price)
         ]
     )
     await notifications.send_telegram_message(order.customer_id, text, reply_markup=keyboard)
@@ -665,6 +664,14 @@ async def apply_price_bump(db: AsyncSession, order: Order, new_price: Decimal) -
         raise DispatchError("Buyurtmaga allaqachon haydovchi biriktirilgan", status_code=409)
     if order.dispatch_round < MAX_ROUNDS:
         raise DispatchError("Bu buyurtma uchun narx oshirish hali taklif qilinmagan", status_code=409)
+
+    # Bu endpoint narxni oshirish uchun, lekin qiymat mijozdan keladi — qo'lda tahrirlash
+    # bilan bir xil chegara (SENDER_MAX_DISCOUNT_PERCENT) shu yerda ham tekshiriladi.
+    base_price = order_crud.order_base_price(order)
+    try:
+        new_price = await pricing.validate_custom_price_for_db(db, new_price, base_price)
+    except pricing.PriceValidationError as exc:
+        raise DispatchError(str(exc), status_code=400) from exc
 
     if order.original_price is None:
         order.original_price = order.price

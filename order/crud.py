@@ -16,7 +16,7 @@ from driver.models import Driver, TruckType
 from order.dispatch_models import DispatchAttempt, DispatchAttemptStatus
 from order.models import Order, OrderRoutePostGIS, OrderStatus, OrderWaypoint
 from order.schemas import OrderCreate, PriceEstimateRequest, OrderUpdate, OrderWaypointCreate
-from services import billing, order_flow, osrm_client, yandex_geocoder
+from services import billing, order_flow, osrm_client, pricing, yandex_geocoder
 from utils.geo import simplify_polyline
 
 logger = logging.getLogger(__name__)
@@ -86,6 +86,9 @@ async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int)
         raise ValueError(f"Bu manzillar orasida yo'l topilmadi, buyurtma yaratilmadi: {exc}") from exc
 
     distance_km = Decimal(str(route.distance_km))
+    # Narx 5 km qadamiga yaxlitlangan masofadan hisoblanadi (services/pricing.py),
+    # `total_distance_km` esa OSRM bergan aniq masofa bo'lib qoladi.
+    billable_distance_km = pricing.round_distance_km(distance_km)
     price = truck_type.calculate_price(distance_km)
 
     order = Order(
@@ -96,8 +99,10 @@ async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int)
         pickup_at=data.pickup_at,
         required_truck_type_id=data.required_truck_type_id,
         price=price,
+        base_price=price,
         currency="UZS",
         total_distance_km=distance_km,
+        billable_distance_km=billable_distance_km,
         overload_warning=_overload_warning(data, truck_type),
         route=OrderRoutePostGIS(geom_route=WKTElement(route.geometry_wkt, srid=4326)),
         waypoints=[
@@ -315,22 +320,26 @@ async def estimate_price(db: AsyncSession, data: PriceEstimateRequest) -> dict:
         raise ValueError(f"Bu manzillar orasida yo'l topilmadi: {exc}") from exc
 
     distance_km = Decimal(str(route.distance_km))
+    billable_distance_km = pricing.round_distance_km(distance_km)
 
     result = await db.execute(select(TruckType).where(TruckType.is_active.is_(True)))
     truck_types = result.scalars().all()
 
-    options = sorted(
-        (
-            {
-                "truck_type_id": tt.id,
-                "name": tt.name,
-                "image_url": tt.image_url,
-                "price": tt.calculate_price(distance_km),
-            }
-            for tt in truck_types
-        ),
-        key=lambda o: o["price"],
-    )
+    # Chegirma chegarasi bir marta o'qiladi — har bir variant uchun qayta so'rov shart emas.
+    max_discount_percent = await pricing.get_sender_max_discount_percent(db)
+
+    def _option(tt: TruckType) -> dict:
+        price = tt.calculate_price(distance_km)
+        return {
+            "truck_type_id": tt.id,
+            "name": tt.name,
+            "image_url": tt.image_url,
+            "price": price,
+            "min_allowed_price": pricing.min_allowed_price(price, max_discount_percent),
+            "quick_price_options": pricing.quick_price_options(price),
+        }
+
+    options = sorted((_option(tt) for tt in truck_types), key=lambda o: o["price"])
 
     return {
         "origin_address": origin_address,
@@ -340,12 +349,64 @@ async def estimate_price(db: AsyncSession, data: PriceEstimateRequest) -> dict:
         "destination_latitude": dest_lat,
         "destination_longitude": dest_lon,
         "distance_km": distance_km,
+        "billable_distance_km": billable_distance_km,
         "duration_min": Decimal(str(route.duration_min)),
         # To'liq geometriya bazaga saqlanadigan aniqlikda — xaritada ko'rsatish uchun
         # shuncha nuqta shart emas, shuning uchun javob hajmi soddalashtirib kichraytiriladi.
         "route_geometry": simplify_polyline(route.geometry),
         "options": options,
+        "max_discount_percent": max_discount_percent,
     }
+
+
+def order_base_price(order: Order) -> Decimal:
+    """Chegirma hisoblanadigan anchor narx.
+
+    Eski buyurtmalarda (migratsiyadan oldingi) `base_price` NULL bo'lishi mumkin —
+    u holda tahrirlanmagan asl narxga eng yaqin qiymat ishlatiladi.
+    """
+    return order.base_price or order.original_price or order.price
+
+
+async def get_order_price_options(db: AsyncSession, order: Order) -> dict:
+    """Narx tahrirlash ekrani uchun: anchor narx, chegara va 5 ta tez variant."""
+    base_price = order_base_price(order)
+    max_discount_percent = await pricing.get_sender_max_discount_percent(db)
+    return {
+        "order_id": order.id,
+        "currency": order.currency,
+        "base_price": base_price,
+        "current_price": order.price,
+        "min_allowed_price": pricing.min_allowed_price(base_price, max_discount_percent),
+        "max_discount_percent": max_discount_percent,
+        "quick_price_options": pricing.quick_price_options(order.price),
+    }
+
+
+async def set_custom_price(db: AsyncSession, order: Order, new_price: Decimal) -> Order:
+    """Sender belgilagan narxni buyurtmaga yozadi.
+
+    Oshirish cheklanmagan, pasaytirish esa `SENDER_MAX_DISCOUNT_PERCENT` bilan
+    chegaralangan — chegaradan past narx `pricing.PriceValidationError` ko'taradi
+    (router 400 ga aylantiradi).
+
+    Narx faqat haydovchi biriktirilgunga qadar o'zgartiriladi: kelishilgan narxni
+    yo'lda o'zgartirish haydovchi uchun bir tomonlama zarar bo'lardi.
+    """
+    if order.driver_id is not None or order.status != OrderStatus.PENDING:
+        raise ValueError("Narxni faqat haydovchi biriktirilmagan (PENDING) buyurtmada o'zgartirish mumkin")
+
+    base_price = order_base_price(order)
+    price = await pricing.validate_custom_price_for_db(db, new_price, base_price)
+
+    if order.base_price is None:
+        order.base_price = base_price
+    if order.original_price is None and price != order.price:
+        order.original_price = order.price
+    order.price = price
+    await db.commit()
+    await db.refresh(order, attribute_names=["price", "base_price", "original_price", "updated_at"])
+    return order
 
 
 async def get_order_route_geometry(db: AsyncSession, order_id: int) -> list[tuple[float, float]]:

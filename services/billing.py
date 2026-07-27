@@ -54,6 +54,15 @@ async def update_commission_percent(db: AsyncSession, percent: Decimal) -> Platf
     return settings
 
 
+async def update_sender_max_discount_percent(db: AsyncSession, percent: Decimal) -> PlatformSettings:
+    """SENDER_MAX_DISCOUNT_PERCENT — sender narxni qo'lda qancha tushira olishi (services/pricing.py)."""
+    settings = await get_or_create_settings(db)
+    settings.sender_max_discount_percent = percent
+    await db.commit()
+    await db.refresh(settings)
+    return settings
+
+
 async def _block_driver_for_debt(db: AsyncSession, driver: Driver) -> None:
     driver.is_blocked = True
     driver.block_reason = DEBT_BLOCK_REASON

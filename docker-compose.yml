@@ -104,14 +104,16 @@ services:
         # bera olmasligi mumkin — healthcheck o'tguncha kutiladi.
         condition: service_healthy
 
-  # 5. Frontend (Vite dev server — hot reload)
+  # 5. Frontend (Vite dev server — hot reload) → http://localhost:5173
   #
   # Kod host'dan bind-mount qilingan, shuning uchun faylni saqlash bilanoq HMR orqali
-  # brauzerda aks etadi — image'ni qayta build qilish shart emas. Faqat `package.json`
-  # o'zgarganda (yangi paket) bir marta `docker compose up -d --build frontend` kerak.
+  # brauzerda aks etadi — image'ni qayta build qilish shart emas.
   #
-  # Ishlab chiqarish (production) uchun bu xizmat ishlatilmaydi: u yerda `Frontend/Dockerfile`
-  # (nginx + `npm run build`) va `Frontend/docker-compose.yml` bor.
+  # DIQQAT — ishlab chiqish paytida AYNAN shu port (5173) ochilishi kerak.
+  # `Frontend/docker-compose.yml` dagi `yuk_frontend` (nginx, port 8080) BOSHQA xizmat:
+  # u image ichiga "qotirilgan" statik `dist/` ni beradi, shuning uchun u yerda har bir
+  # o'zgarish uchun qayta build kerak bo'ladi — bu kutilgan holat, nosozlik emas.
+  # Lokalda ikkalasini birdan ishlatmang: ikki port ikki xil kodni ko'rsatadi.
   frontend:
     build:
       context: ./Frontend
@@ -124,13 +126,25 @@ services:
       - ./Frontend:/app
       # Anonim volume — image ichidagi node_modules host'dagi papka bilan
       # "yopilib qolmasligi" uchun (host'da node_modules bo'lmasa ham ishlaydi).
+      #
+      # TUZOQ: `docker compose up -d --build frontend` image'ni qayta quradi, lekin
+      # MAVJUD anonim volume'ni qayta ishlatadi — ya'ni `package.json` ga qo'shilgan
+      # yangi paket konteynerga umuman yetib bormaydi va Vite "Failed to resolve import"
+      # deb chalg'ituvchi xato beradi. Paket qo'shgandan keyin shu buyruq kerak:
+      #   docker compose up -d --build --renew-anon-volumes frontend
       - /app/node_modules
     environment:
       - NODE_ENV=development
-      # Docker (ayniqsa macOS/Windows) bind-mount'da fayl hodisalarini yetkazmaydi —
-      # chokidar polling rejimida ishlaydi (vite.config.ts shu o'zgaruvchini o'qiydi).
-      - CHOKIDAR_USEPOLLING=true
-      - WATCHPACK_POLLING=true
+      # Polling ATAYLAB o'chirilgan. Eski Docker Desktop bind-mount'da fayl hodisalarini
+      # (inotify) yetkazmasdi, shuning uchun chokidar 300ms'da har bir faylni qayta
+      # tekshirib turardi — bu bekorga CPU yeydi. Hozirgi Docker Desktop (VirtioFS)
+      # hodisalarni to'g'ri uzatadi va HMR polling'siz ham ishlaydi (tekshirilgan).
+      #
+      # Agar biror muhitda (eski Docker, Windows/WSL1, tarmoq disk) fayl saqlaganda HMR
+      # ishlamay qolsa — quyidagi ikki qatorni oching, `vite.config.ts` ularni o'qib
+      # polling rejimiga o'tadi:
+      # - CHOKIDAR_USEPOLLING=true
+      # - WATCHPACK_POLLING=true
       # Brauzer `/api` ni Vite dev serveridan so'raydi, u esa backendga proxy qiladi.
       # Konteyner ichida `localhost` — konteynerning o'zi, shuning uchun compose
       # tarmog'idagi xizmat nomi (`web`) ishlatiladi.

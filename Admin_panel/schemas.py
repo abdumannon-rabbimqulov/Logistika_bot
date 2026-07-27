@@ -263,6 +263,21 @@ class CommissionSettingsUpdate(BaseModel):
     commission_percent: Decimal = Field(..., ge=0, le=100, description="Har bir order narxidan olinadigan foiz")
 
 
+class PricingSettingsResponse(BaseModel):
+    """SENDER_MAX_DISCOUNT_PERCENT — sender narxni qo'lda qancha tushira olishi."""
+
+    sender_max_discount_percent: Decimal
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PricingSettingsUpdate(BaseModel):
+    sender_max_discount_percent: Decimal = Field(
+        ..., ge=0, le=100, description="Sender hisoblangan narxdan eng ko'p tushira oladigan foiz"
+    )
+
+
 class BalanceAdjustRequest(BaseModel):
     amount: Decimal = Field(
         ..., description="Musbat = balansga qo'shish (to'ldirish), manfiy = balansdan yechish (tuzatish)"

@@ -227,7 +227,11 @@ class OrderResponse(OrderBase):
     driver_id: Optional[int] = None
     departure_at: Optional[datetime] = None
     total_distance_km: Optional[Decimal] = None
+    # Narx hisoblashda ishlatilgan, 5 km qadamiga yaxlitlangan masofa
+    billable_distance_km: Optional[int] = None
     price: Decimal
+    # Tizim hisoblagan narx — sender `price` ni tahrirlagan bo'lsa ham o'zgarmaydi
+    base_price: Optional[Decimal] = None
     original_price: Optional[Decimal] = None
     currency: str
     status: OrderStatus
@@ -358,12 +362,23 @@ class PriceEstimateRequest(BaseModel):
     destination: PriceEstimateLocation
 
 
+class QuickPriceOption(BaseModel):
+    """Sender uchun tayyor "narxni oshirish" tugmasi (+100 000 ... +500 000 UZS)."""
+    increment: Decimal
+    price: Decimal
+    currency: str = "UZS"
+
+
 class TruckTypePriceOption(BaseModel):
     truck_type_id: int
     name: str
     image_url: Optional[str] = None
     price: Decimal
     currency: str = "UZS"
+    # Sender qo'lda tahrirlaganda tusha oladigan eng past narx (chegirma chegarasi)
+    min_allowed_price: Decimal
+    # 5 ta tez tanlash varianti — frontend shu tugmalarni chizadi
+    quick_price_options: list[QuickPriceOption] = []
 
 
 class PriceEstimateResponse(BaseModel):
@@ -373,11 +388,16 @@ class PriceEstimateResponse(BaseModel):
     destination_address: Optional[str] = None
     destination_latitude: float
     destination_longitude: float
+    # OSRM bergan aniq masofa (xarita/ma'lumot uchun)
     distance_km: Decimal
+    # Narx hisoblashda ishlatilgan, 5 km qadamiga yaxlitlangan masofa
+    billable_distance_km: int
     duration_min: Decimal
     # OSRM marshrut chizig'i: [[latitude, longitude], ...] — mijozga xaritada ko'rsatish uchun
     route_geometry: list[tuple[float, float]] = []
     options: list[TruckTypePriceOption]
+    # Narxni pasaytirish chegarasi (foiz) — frontend xato matnini shu bilan ko'rsatadi
+    max_discount_percent: Decimal
 
 
 # ============================================================
@@ -435,3 +455,29 @@ class DispatchAttemptResponse(BaseModel):
 class PriceBumpRequest(BaseModel):
     """Sender barcha urinishlar rad etilgandan keyin narxni oshiradi."""
     price: Decimal = Field(..., gt=0)
+
+
+# ============================================================
+#  Sender tomonidan narxni qo'lda tahrirlash
+# ============================================================
+
+class CustomPriceRequest(BaseModel):
+    """Sender hisoblangan narxni o'zi belgilagan narx bilan almashtiradi.
+
+    Oshirish cheklanmagan; pasaytirish `SENDER_MAX_DISCOUNT_PERCENT` (standart 15%)
+    bilan chegaralangan va chegaradan past qiymat 400 qaytaradi.
+    """
+    price: Decimal = Field(..., gt=0, description="Yangi narx (UZS)")
+
+
+class OrderPriceOptionsResponse(BaseModel):
+    """Narx tahrirlash ekrani uchun kerakli hamma narsa."""
+    order_id: int
+    currency: str = "UZS"
+    # Tizim hisoblagan narx — chegirma shundan hisoblanadi
+    base_price: Decimal
+    # Buyurtmadagi joriy narx (tahrirlangan bo'lishi mumkin)
+    current_price: Decimal
+    min_allowed_price: Decimal
+    max_discount_percent: Decimal
+    quick_price_options: list[QuickPriceOption] = []

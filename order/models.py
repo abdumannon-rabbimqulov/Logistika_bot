@@ -68,6 +68,15 @@ class Order(Base):
     price    : Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     currency : Mapped[str]     = mapped_column(String(10), default="UZS")
 
+    # Tizim hisoblagan (tahrirlanmagan) narx — sender `price` ni qo'lda o'zgartirsa ham
+    # o'zgarmaydi. Chegirma chegarasi (SENDER_MAX_DISCOUNT_PERCENT) aynan shundan
+    # hisoblanadi: `price` ni anchor qilib bo'lmaydi, aks holda ketma-ket kichik
+    # tahrirlar bilan narxni istalgancha pastga tushirish mumkin bo'lardi.
+    base_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    # Narx hisoblashda ishlatilgan, 5 km qadamiga yaxlitlangan masofa (`total_distance_km`
+    # esa OSRM bergan aniq masofa — u xarita/hisobot uchun qoladi).
+    billable_distance_km: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     # Avtomatik dispatch: nechanchi haydovchi urinib ko'rilgani (docs/DISPATCH_SYSTEM_PLAN.md)
     dispatch_round: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")
     # Narx oshirilishidan oldingi asl narx (tarix uchun, birinchi bump'da to'ldiriladi)
