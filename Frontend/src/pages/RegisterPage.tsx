@@ -3,6 +3,7 @@ import { selectRole, updateMe } from '../api/auth';
 import { ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthProvider';
 import { getTelegramUser } from '../telegram';
+import { PHONE_PLACEHOLDER } from '../utils/phone';
 import styles from './RegisterPage.module.css';
 
 const LANGUAGES: { code: string; label: string }[] = [
@@ -71,7 +72,7 @@ export function RegisterPage() {
           className={styles.input}
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
-          placeholder="+998 XX XXX XX XX"
+          placeholder={PHONE_PLACEHOLDER}
           inputMode="tel"
         />
       </div>

@@ -57,6 +57,35 @@ services:
       - config/uvicorn_logging.json
     restart: always
 
+  # Frontend — ishlab chiqarish rejimi: nginx + `npm run build` bergan statik `dist/`.
+  # Bazaviy docker-compose.yml dagi SHU NOMLI dev xizmati (Vite, port 5173) ustiga
+  # yoziladi. `!reset` teglari majburiy: compose overlay'ni odatda QO'SHIB birlashtiradi,
+  # ya'ni ularsiz dev portlari (5173) va bind-mount volume'lari prod'da ham qolib ketardi.
+  #
+  # VITE_API_BASE_URL build vaqtida JS bundle'ga "quyiladi" (Vite env'lari runtime'da
+  # o'qilmaydi) — backend manzili o'zgarsa image qayta build qilinishi shart.
+  # Standart `/api`: nginx (Frontend/nginx.conf) uni host'dagi backendga proxy qiladi,
+  # shunda frontend va API brauzer uchun bitta origin'da bo'ladi (CORS'siz).
+  frontend:
+    build:
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+    # Dev image'idan (yuk_frontend_dev) ALOHIDA teg — ikkalasi bir-birini almashtirmasin.
+    image: yuk_frontend:latest
+    container_name: yuk_frontend
+    volumes: !reset []
+    environment: !reset null
+    # `!override` (`!reset` emas): `!reset` qiymatni butunlay olib tashlaydi, bu yerda esa
+    # dev portini (5173) prod porti bilan ALMASHTIRISH kerak — tegsiz compose ikkalasini
+    # qo'shib yuborardi.
+    ports: !override
+      - "${FRONTEND_PORT:-8080}:80"
+    healthcheck: !reset null
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: always
+
   bot:
     build: .
     container_name: logistika_bot_prod

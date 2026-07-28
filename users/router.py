@@ -36,11 +36,15 @@ from users.models import User, UserRole, VerificationCode
 from users.telegram_auth import validate_telegram_init_data
 from users.schemas import (
     ChangePasswordRequest,
+    LoginRequest,
     RefreshTokenRequest,
+    ResetPasswordSchema,
+    ResetPhoneSchema,
     RoleSelectRequest,
     Token,
     UserRead,
     UserUpdate,
+    VerifyResetCodeSchema,
 )
 from driver.crud import  get_driver_by_user_id
 from utils.validation import normalize_phone_number
@@ -137,12 +141,13 @@ async def refresh_tokens(data: RefreshTokenRequest):
 @router.post("/login", summary="Telefon+parol yoki Telegram initData orqali kirish")
 async def login(
     request: Request,
-    phone_number: Optional[str] = Body(None, embed=True),
-    password: Optional[str] = Body(None, embed=True),
-    init_data: Optional[str] = Body(None, embed=True),
+    data: LoginRequest,
     db: AsyncSession = Depends(get_db),
 ):
     user = None
+    phone_number = data.phone_number
+    password = data.password
+    init_data = data.init_data
 
     if phone_number:
         try:
@@ -242,17 +247,19 @@ async def login(
     summary="Parolni tiklash uchun Telegramga tasdiqlash kodi yuboradi",
 )
 async def reset_phone(
-    phone_number: str = Body(..., embed=True),
+    data: ResetPhoneSchema,
     db: AsyncSession = Depends(get_db),
 ):
     """1-qadam: telefon raqam bo'yicha Telegramga kod yuborish.
+
+    So'rov `application/json` body ko'rinishida qabul qilinadi (`/auth/login` kabi).
 
     Xavfsizlik: bu endpoint HECH QANDAY token qaytarmaydi. Foydalanuvchi
     mavjudligini oshkor qilmaslik uchun har doim bir xil javob beriladi
     (user enumeration'ni oldini olish).
     """
     try:
-        phone_number = normalize_phone_number(phone_number)
+        phone_number = normalize_phone_number(data.phone_number)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -280,14 +287,14 @@ async def reset_phone(
     summary="Tasdiqlash kodini tekshirish (parol tiklash tokenini beradi)",
 )
 async def verify_reset_code(
-    phone_number: str = Body(..., embed=True),
-    code: str = Body(..., embed=True),
+    data: VerifyResetCodeSchema,
     db: AsyncSession = Depends(get_db),
 ):
     """2-qadam: kod to'g'ri bo'lsa, faqat parol tiklash uchun qisqa muddatli
     token qaytariladi. Bu token boshqa endpointlar uchun yaroqsiz."""
+    code = data.code
     try:
-        phone_number = normalize_phone_number(phone_number)
+        phone_number = normalize_phone_number(data.phone_number)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -325,13 +332,13 @@ async def verify_reset_code(
     summary="Parolni tiklash (verify-reset-code bergan reset_token bilan)",
 )
 async def reset_password(
-    reset_token: str = Body(..., embed=True),
-    new_password: str = Body(..., embed=True, min_length=8, max_length=128),
-    confirm_password: str = Body(..., embed=True, min_length=8, max_length=128),
+    data: ResetPasswordSchema,
     db: AsyncSession = Depends(get_db),
 ):
     """3-qadam: reset_token tekshiriladi va yangi parol o'rnatiladi."""
-    payload = verify_token(reset_token)
+    new_password = data.new_password
+    confirm_password = data.confirm_password
+    payload = verify_token(data.reset_token)
     if not payload or payload.get("type") != "reset":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

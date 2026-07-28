@@ -1,5 +1,7 @@
 # ── Build bosqichi ──────────────────────────────────────────────────────────
-FROM node:20-alpine AS build
+# Node 22: vite@8, @vitejs/plugin-react@6 va oxlint@1 `engines: node ^20.19.0 || >=22.12.0`
+# talab qiladi, Node 20 esa qo'llab-quvvatlash muddatini tugatgan (EOL).
+FROM node:22-alpine AS build
 WORKDIR /app
 
 COPY package*.json ./

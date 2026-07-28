@@ -5,47 +5,63 @@ TypeScript, backend (`../order`, `../users`, `../driver`) bilan REST API orqali 
 
 Dizayn manbai: `../design_handoff_yuk_asosiy_ekranlar/`.
 
-## Ikki xil ishga tushirish — qaysi portni ochish kerak
+## Ishga tushirish
 
-Loyihada frontend uchun IKKITA alohida stack bor. Ishlab chiqish paytida faqat birinchisi
-ishlatiladi:
-
-| Port | Konteyner | Compose fayli | Nima beradi | Kod o'zgarganda |
-|------|-----------|---------------|-------------|-----------------|
-| **5173** | `yuk_frontend_dev` | `../docker-compose.yml` (ildizda) | Vite dev serveri | **HMR — darhol aks etadi** |
-| 8080 | `yuk_frontend` | `./docker-compose.yml` (shu papkada) | nginx + statik `dist/` | qayta build kerak |
-
-**Ishlab chiqishda http://localhost:5173 ni oching.** 8080-port image ichiga "qotirilgan"
-`dist/` ni beradi — u yerda har bir o'zgarish uchun qayta build kerak bo'lishi kutilgan holat,
-nosozlik emas. Ikkalasini birdan ishlatmang: ikki port ikki xil kodni ko'rsatadi.
-
-### Docker bilan (tavsiya etiladi)
-
-Repo ildizidan (`cd ..`):
+Barcha buyruqlar **repo ildizidan** (`cd ..`) beriladi. `Makefile` shunchaki `docker compose`
+qisqartmalari — istasangiz to'liq buyruqni qo'lda yozishingiz mumkin.
 
 ```bash
-docker compose up -d frontend      # http://localhost:5173 — HMR tayyor
-docker compose logs -f frontend    # `[vite] (client) hmr update ...` shu yerda ko'rinadi
+make fe          # ⇒ docker compose up -d frontend   → http://localhost:5173
+make fe-logs     # `[vite] (client) hmr update ...` shu yerda ko'rinadi
+make dev         # frontend + backend (web)
+make             # barcha buyruqlar ro'yxati
 ```
 
-Manba kod `./Frontend:/app` orqali bind-mount qilingan, shuning uchun faylni saqlash bilanoq
-brauzerda aks etadi — `--build` SHART EMAS.
+`make fe` backendni **kutmaydi** (frontend'da `depends_on` yo'q) — bir necha soniyada tayyor.
+Vite `/api` so'rovlarini `web:8000` ga proxy qiladi, shuning uchun backendni keyinroq
+(`make dev`) ko'tarsangiz ham ishlaydi.
 
-Faqat `package.json` o'zgarganda (yangi paket qo'shilganda) qayta build kerak, va aynan shu
-bayroq bilan — aks holda eski `node_modules` anonim volume'i saqlanib qoladi va Vite chalg'ituvchi
-`Failed to resolve import` xatosini beradi:
+| Rejim | Buyruq | Port | Nima beradi | Kod o'zgarganda |
+|-------|--------|------|-------------|-----------------|
+| **dev** | `make fe` | **5173** | Vite dev serveri | **HMR — darhol aks etadi** |
+| prod | `make prod-up` | 8080 | nginx + statik `dist/` | qayta build kerak |
+
+Ikkalasi ham bitta `frontend` xizmatining ikki rejimi (`docker-compose.yml` va uning ustidagi
+`docker-compose.prod.yml`), shuning uchun ular bir vaqtda ishlamaydi — chalkashlik yo'q.
+Image teglari alohida (`yuk_frontend_dev` / `yuk_frontend`), ya'ni `make prod-up` dev image'ni
+buzmaydi va rejimlar orasida bemalol o'tish mumkin.
+
+### Kundalik ish
+
+`src/` va `public/` host'dan bind-mount qilingan, shuning uchun **kod o'zgarishi uchun hech
+narsa qilish shart emas** — saqlaysiz, HMR brauzerda aks ettiradi.
+
+Qayta build faqat **image ichidagi** fayllar o'zgarganda kerak — ya'ni `package.json`,
+`vite.config.ts`, `index.html`, `tsconfig*.json`:
 
 ```bash
-docker compose up -d --build --renew-anon-volumes frontend
+make fe-rebuild         # ~10 soniya (npm ci qatlami va BuildKit npm keshi saqlanadi)
+make fe-add pkg=zod     # host'da npm install + fe-rebuild — bitta buyruqda
 ```
+
+> **Nima uchun butun papka mount qilinmaydi.** Ilgari `./Frontend:/app` to'liq mount qilinib,
+> `node_modules` ustiga alohida volume qo'yilardi. Docker Desktop (macOS) bind-mount ichidagi
+> volume'ni ishonchli "yopmaydi" — konteyner baribir host'dagi `Frontend/node_modules` ni
+> ko'rardi va u yerga linux/musl nativ binarlarni (rolldown, oxlint) yozib qo'yardi. Natijada
+> host'da `npm run build` `Cannot find native binding` bilan yiqilar, fayllar esa root
+> egaligida qolardi. Endi konteyner `node_modules` ni o'z qatlamida saqlaydi va host'dagi
+> `Frontend/node_modules` mutlaqo mustaqil.
 
 ### Docker'siz (host'da)
 
 ```bash
-npm install
+make fe-install        # ⇒ cd Frontend && npm ci  (lock fayl bo'yicha aniq versiyalar)
 cp .env.example .env   # VITE_API_BASE_URL ni backend manziliga moslang
 npm run dev
 ```
+
+Node **22+** kerak (`vite@8` / `oxlint` `engines: ^20.19.0 || >=22.12.0` talab qiladi).
+`make fe-build` va `make fe-lint` ham host'dagi `node_modules` bilan ishlaydi.
 
 ### Brauzerda ochish
 
@@ -59,11 +75,23 @@ Haqiqiy Telegram ichida sinash uchun HTTPS tunnel kerak (Telegram faqat HTTPS qa
 npm run dev:tunnel   # VITE_TUNNEL=1 — HMR websocket'i wss://...:443 ga yo'naltiriladi
 ```
 
-## Build
+## Build va deploy
 
 ```bash
-npm run build   # dist/ ga statik build
+make fe-build          # konteyner ichida: tsc -b && vite build → dist/
+npm run build          # yoki host'da
 ```
 
-`dist/` papkasini HTTPS orqali joylashtiring va bot'dagi `WEBAPP_URL` (`.env`, repo ildizida)
-o'sha manzilga ishora qilishi kerak — Telegram WebApp tugmasi faqat HTTPS bilan ishlaydi.
+Server uchun repo ildizidan:
+
+```bash
+make prod-up           # docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+Bu `frontend` xizmatini nginx rejimida quradi (`Frontend/Dockerfile`) va `${FRONTEND_PORT:-8080}`
+da ochadi. `VITE_API_BASE_URL` build vaqtida bundle'ga "quyiladi" (Vite env'lari runtime'da
+o'qilmaydi) — backend manzili o'zgarsa `--build` bilan qayta quring. Qiymatlar repo ildizidagi
+`.env` dan olinadi (`FRONTEND_PORT`, `VITE_API_BASE_URL` — namuna `.env.example` da).
+
+Frontend HTTPS orqali ochilishi va bot'dagi `WEBAPP_URL` (`.env`, repo ildizida) o'sha manzilga
+ishora qilishi kerak — Telegram WebApp tugmasi faqat HTTPS bilan ishlaydi.

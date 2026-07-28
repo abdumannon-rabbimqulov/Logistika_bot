@@ -12,17 +12,24 @@ from keyboards.reply import (
 )
 from users.models import UserRole
 import database as db
+from config.config import ADMIN_IDS
 from utils.validation import normalize_phone_number
-
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
 
 router = Router()
 
 
-ADMIN_ID=int(os.getenv("ADMIN", 0))
+def resolve_role(telegram_id: int, chosen_role: UserRole) -> UserRole:
+    """Bazaga yozishdan oldin yakuniy rolni aniqlaydi.
+
+    Admin huquqi foydalanuvchi tanlovi bilan emas, `.env` dagi `ADMIN` ro'yxati bilan
+    beriladi. Tekshiruv ATAYLAB shu yerda — ya'ni ro'yxatdan o'tish to'liq tugab,
+    telefon raqami olingandan keyin. Ilgari `/start` da tekshirilib, admin registratsiya
+    oqimini butunlay chetlab o'tardi va bazada `phone_number` NULL bo'lib qolardi.
+    """
+    if telegram_id in ADMIN_IDS:
+        return UserRole.ADMIN
+    return chosen_role
+
 
 class Registration(StatesGroup):
     language = State()
@@ -53,35 +60,25 @@ async def cmd_start(message: types.Message, state: FSMContext):
     tg_id = message.from_user.id
     user = await db.get_user(tg_id)
 
-    if tg_id == ADMIN_ID:
-        if not user:
-            user = await db.create_user(
-                user_id=tg_id,
-                full_name=message.from_user.full_name,
-                username=message.from_user.username,
-                language="uz",
-                phone_number=None,
-                role=UserRole.ADMIN
-            )
-        elif getattr(user, 'role', None) != UserRole.ADMIN:
+    # DIQQAT: bu yerda admin uchun ALOHIDA yo'l YO'Q. Admin ham hamma qatori tilni
+    # tanlaydi va telefon raqamini yuboradi; `role="admin"` esa faqat oxirida,
+    # `select_role` ichida `resolve_role()` orqali beriladi.
+
+    if user and user.phone_number:
+        # Ro'yxatdan o'tgan foydalanuvchi keyinchalik `ADMIN` ro'yxatiga qo'shilgan
+        # bo'lishi mumkin — qayta ro'yxatdan o'tkazmasdan rolini moslaymiz. Telefon
+        # raqami allaqachon bazada, ya'ni talab buzilmaydi.
+        if tg_id in ADMIN_IDS and user.role != UserRole.ADMIN:
             await db.update_user_profile_from_tg(
                 user_id=tg_id,
                 full_name=message.from_user.full_name,
                 username=message.from_user.username,
                 language=user.language,
                 phone_number=user.phone_number,
-                role=UserRole.ADMIN
+                role=UserRole.ADMIN,
             )
             user = await db.get_user(tg_id)
-        
-        await message.answer(
-            f"Assalomu alaykum Admin, {message.from_user.full_name}!\n"
-            "Tizimga kirishga ruxsat berildi. Boshqaruv paneli huquqlari ochildi.",
-            reply_markup=types.ReplyKeyboardRemove()
-        )
-        return
 
-    if user and user.phone_number:
         if user.language == "ru":
             greet = "Здравствуйте"
             help_text = "Чем могу помочь?"
@@ -142,12 +139,30 @@ async def get_phone(message: types.Message, state: FSMContext):
 
 @router.message(Registration.role, F.text.in_(ROLE_MAP.keys()))
 async def select_role(message: types.Message, state: FSMContext):
-    role = ROLE_MAP[message.text]
+    chosen_role = ROLE_MAP[message.text]
     data = await state.get_data()
     lang = data.get("language", "uz")
     phone = data.get("phone_number")
 
     tg_user = message.from_user
+
+    # Telefon raqamisiz saqlamaymiz — aks holda bazada NULL qolib ketadi. Bunday holat
+    # (masalan bot qayta ishga tushib, FSM ma'lumoti yo'qolsa) foydalanuvchini shu
+    # qadamga qaytaradi, FSM esa TOZALANMAYDI.
+    if not phone:
+        if lang == "ru":
+            text = "Сначала отправьте номер телефона (нажмите кнопку ниже):"
+        elif lang == "uz_cyrl":
+            text = "Аввал телефон рақамингизни юборинг (пастдаги тугмани босинг):"
+        else:
+            text = "Avval telefon raqamingizni yuboring (pastdagi tugmani bosing):"
+        await message.answer(text, reply_markup=get_phone_keyboard(lang))
+        await state.set_state(Registration.phone_number)
+        return
+
+    # Yakuniy rol: `.env` dagi ADMIN ro'yxatida bo'lsa — admin, aks holda tanlangani.
+    role = resolve_role(tg_user.id, chosen_role)
+
     user = await db.get_user(tg_user.id)
 
     if not user:
@@ -169,6 +184,18 @@ async def select_role(message: types.Message, state: FSMContext):
             role=role
         )
 
+    # FSM AYNAN shu yerda tozalanadi — ro'yxatdan o'tish tugab, telefon raqami bazaga
+    # yozilgandan keyin. Yuqoridagi erta `return` yo'llarida tozalanmaydi.
+    await state.clear()
+
+    if role == UserRole.ADMIN:
+        await message.answer(
+            f"✅ Ro'yxatdan o'tdingiz, {tg_user.full_name}!\n"
+            "Siz admin sifatida aniqlandingiz — boshqaruv paneli huquqlari ochildi.",
+            reply_markup=types.ReplyKeyboardRemove(),
+        )
+        return
+
     if lang == "ru":
         text = (
             f"✅ Вы успешно зарегистрированы, {tg_user.full_name}!\n"
@@ -185,10 +212,8 @@ async def select_role(message: types.Message, state: FSMContext):
             "Endi bot xizmatlaridan foydalanishingiz mumkin."
         )
 
-    # TUZATILDI: Ro'yxatdan o'tish tugaganligi haqida xabar yuborish qo'shildi
     webapp_kb = get_sender_webapp_keyboard(lang) if role == UserRole.SENDER else None
     await message.answer(text, reply_markup=webapp_kb or types.ReplyKeyboardRemove())
-    await state.clear()
 
 
 @router.message(Registration.language)

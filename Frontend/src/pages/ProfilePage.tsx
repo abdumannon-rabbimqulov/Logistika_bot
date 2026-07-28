@@ -7,6 +7,7 @@ import { BottomNav } from '../components/BottomNav';
 import { ChevronRightIcon, PhoneIcon, UserLineIcon, WalletIcon } from '../components/icons';
 import type { OrderListItem, UserProfile } from '../types/api';
 import { formatPrice } from '../utils/format';
+import { PHONE_PLACEHOLDER } from '../utils/phone';
 import styles from './ProfilePage.module.css';
 
 export function ProfilePage() {
@@ -144,7 +145,7 @@ export function ProfilePage() {
             </div>
             <div className={styles.field}>
               <label className={styles.label}>Telefon raqami</label>
-              <input className={styles.input} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+998 XX XXX XX XX" />
+              <input className={styles.input} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={PHONE_PLACEHOLDER} inputMode="tel" />
             </div>
             {error && <div className={styles.errorHint}>{error}</div>}
             <div className={styles.editActions}>

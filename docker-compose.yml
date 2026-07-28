@@ -106,33 +106,40 @@ services:
 
   # 5. Frontend (Vite dev server — hot reload) → http://localhost:5173
   #
-  # Kod host'dan bind-mount qilingan, shuning uchun faylni saqlash bilanoq HMR orqali
-  # brauzerda aks etadi — image'ni qayta build qilish shart emas.
+  # `src/` host'dan bind-mount qilingan, shuning uchun faylni saqlash bilanoq HMR orqali
+  # brauzerda aks etadi — image'ni qayta build qilish shart emas. Kundalik ish shu.
   #
-  # DIQQAT — ishlab chiqish paytida AYNAN shu port (5173) ochilishi kerak.
-  # `Frontend/docker-compose.yml` dagi `yuk_frontend` (nginx, port 8080) BOSHQA xizmat:
-  # u image ichiga "qotirilgan" statik `dist/` ni beradi, shuning uchun u yerda har bir
-  # o'zgarish uchun qayta build kerak bo'ladi — bu kutilgan holat, nosozlik emas.
-  # Lokalda ikkalasini birdan ishlatmang: ikki port ikki xil kodni ko'rsatadi.
+  # Qayta build FAQAT `package.json` / `vite.config.ts` / `index.html` / `tsconfig*`
+  # o'zgarganda kerak (ular image ichida): `make fe-rebuild` — ~10 soniya, chunki
+  # `npm ci` qatlami va BuildKit npm keshi saqlanadi.
+  #
+  # Ishlab chiqarish varianti (nginx + statik `dist/`, port 8080) `docker-compose.prod.yml`
+  # dagi SHU NOMLI xizmat tomonidan ustiga yoziladi:
+  #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+  # Ya'ni dev va prod bitta xizmat nomining ikki rejimi — lokalda faqat 5173 ishlaydi.
   frontend:
     build:
       context: ./Frontend
       dockerfile: Dockerfile.dev
+    # Image nomi ATAYLAB aniq berilgan. Aks holda dev ham, prod ham compose'ning standart
+    # `<loyiha>-frontend` tegini olardi va `make prod-up --build` dev image'ni jimgina
+    # nginx varianti bilan almashtirib qo'yardi — keyin `make fe` nginx'ni ishga tushirib,
+    # "host not found in upstream host.docker.internal" bilan tsiklga tushardi.
+    image: yuk_frontend_dev:latest
     container_name: yuk_frontend_dev
     ports:
       - "${FRONTEND_DEV_PORT:-5173}:5173"
     volumes:
-      # Manba kod: host'dagi o'zgarish darhol konteynerga tushadi.
-      - ./Frontend:/app
-      # Anonim volume — image ichidagi node_modules host'dagi papka bilan
-      # "yopilib qolmasligi" uchun (host'da node_modules bo'lmasa ham ishlaydi).
+      # FAQAT manba papkalari mount qilinadi — butun `./Frontend` EMAS.
+      # Sabab: `node_modules` konteynerning o'zida (image qatlamida) qolishi kerak.
+      # Docker Desktop (macOS) bind-mount ichidagi volume'ni ishonchli "yopmaydi",
+      # shuning uchun eski `./Frontend:/app` + `/app/node_modules` sxemasida konteyner
+      # host'dagi node_modules'ga linux/musl binarlarni yozib, host'dagi `npm run build`
+      # ni buzardi (batafsil izoh: Frontend/Dockerfile.dev).
       #
-      # TUZOQ: `docker compose up -d --build frontend` image'ni qayta quradi, lekin
-      # MAVJUD anonim volume'ni qayta ishlatadi — ya'ni `package.json` ga qo'shilgan
-      # yangi paket konteynerga umuman yetib bormaydi va Vite "Failed to resolve import"
-      # deb chalg'ituvchi xato beradi. Paket qo'shgandan keyin shu buyruq kerak:
-      #   docker compose up -d --build --renew-anon-volumes frontend
-      - /app/node_modules
+      # Kundalik ish `src/` da kechadi — u mount qilingan, ya'ni HMR darhol ishlaydi.
+      - ./Frontend/src:/app/src
+      - ./Frontend/public:/app/public
     environment:
       - NODE_ENV=development
       # Polling ATAYLAB o'chirilgan. Eski Docker Desktop bind-mount'da fayl hodisalarini
@@ -152,8 +159,18 @@ services:
       - VITE_API_BASE_URL=/api
       - TZ=Asia/Tashkent
     restart: unless-stopped
-    depends_on:
-      - web
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5173/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    # `depends_on: web` ATAYLAB YO'Q. Vite backendga faqat brauzerdan `/api` so'rovi
+    # kelganda murojaat qiladi — ishga tushish paytida `web` kerak emas. Bog'liqlik
+    # bo'lganda esa zanjir `web → osrm (service_healthy)` gacha cho'zilardi: OSRM Apple
+    # Silicon'da amd64 emulyatsiyasida, ~1 GB xarita bilan daqiqalab ko'tariladi.
+    # Endi `docker compose up -d frontend` bir necha soniyada tayyor bo'ladi;
+    # backend keyinroq ko'tarilsa ham frontend uni o'zi topadi.
 
   # 6. Telegram Bot
   bot:

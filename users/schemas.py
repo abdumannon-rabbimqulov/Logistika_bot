@@ -57,6 +57,31 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=8)
 
 
+class LoginRequest(BaseModel):
+    """`/auth/login` uchun JSON body: telefon+parol YOKI Telegram initData."""
+    phone_number: Optional[str] = None
+    password:     Optional[str] = None
+    init_data:    Optional[str] = None
+
+
+class ResetPhoneSchema(BaseModel):
+    """`/auth/reset-phone` (1-qadam) uchun JSON body."""
+    phone_number: str = Field(..., min_length=5, max_length=20)
+
+
+class VerifyResetCodeSchema(BaseModel):
+    """`/auth/verify-reset-code` (2-qadam) uchun JSON body."""
+    phone_number: str = Field(..., min_length=5, max_length=20)
+    code:         str = Field(..., min_length=1, max_length=16)
+
+
+class ResetPasswordSchema(BaseModel):
+    """`/auth/reset-password` (3-qadam) uchun JSON body."""
+    reset_token:      str
+    new_password:     str = Field(..., min_length=8, max_length=128)
+    confirm_password: str = Field(..., min_length=8, max_length=128)
+
+
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
 

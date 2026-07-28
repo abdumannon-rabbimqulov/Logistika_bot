@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { requestPasswordResetCode, setNewPassword, verifyPasswordResetCode } from '../api/auth';
 import { ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthProvider';
+import { PHONE_PLACEHOLDER } from '../utils/phone';
 import styles from './LocalLoginPage.module.css';
 
 type Step = 'login' | 'request-code' | 'verify-code' | 'set-password' | 'done';
@@ -108,7 +109,7 @@ export function LocalLoginPage() {
         <>
           <div className={styles.field}>
             <label className={styles.label}>Telefon raqami</label>
-            <input className={styles.input} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+998 XX XXX XX XX" inputMode="tel" />
+            <input className={styles.input} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={PHONE_PLACEHOLDER} inputMode="tel" />
           </div>
           <div className={styles.field}>
             <label className={styles.label}>Parol</label>
@@ -129,7 +130,7 @@ export function LocalLoginPage() {
         <>
           <div className={styles.field}>
             <label className={styles.label}>Telefon raqami</label>
-            <input className={styles.input} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+998 XX XXX XX XX" inputMode="tel" />
+            <input className={styles.input} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={PHONE_PLACEHOLDER} inputMode="tel" />
           </div>
           {error && <div className={styles.error}>{error}</div>}
           <button className={styles.submitBtn} disabled={submitting} onClick={handleRequestCode}>
