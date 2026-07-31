@@ -27,12 +27,55 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from order.models import Order, OrderStatus, OrderWaypoint, WaypointStatus, WaypointType
 from services import geofence
+from services.problems import Violation, WaypointProblem
 
 logger = logging.getLogger(__name__)
 
 
 class OrderFlowError(Exception):
-    """Qoidaga zid o'tish — router buni 422 qilib qaytaradi (matn foydalanuvchiga ko'rinadi)."""
+    """Qoidaga zid o'tish. Matn to'g'ridan-to'g'ri foydalanuvchiga ko'rsatiladi.
+
+    `middlewares/error_handler.py` da global handler bilan **400 Bad Request** ga
+    aylantiriladi. Shu sababli har bir endpointda alohida `try/except` yozish shart
+    emas: ilgari `Admin_panel/router.py` da aynan shunday tutib olinmagan chaqiruv
+    bor edi va u 500 Internal Server Error berardi.
+    """
+
+    #: Xato javobidagi mashina o'qiy oladigan kod.
+    code = "ORDER_FLOW_ERROR"
+
+    def context(self) -> dict:
+        """Xato javobiga qo'shiladigan qo'shimcha qiymatlar (kichik sinflar to'ldiradi)."""
+        return {}
+
+
+class OrderTransitionError(OrderFlowError):
+    """Buyurtma statusini bu ketma-ketlikda o'zgartirib bo'lmaydi.
+
+    Masalan `ACCEPTED → COMPLETED`: yuk ortilmasdan yakunlangan bo'lib qolardi
+    (va komissiya yechilardi), shuning uchun avval `IN_PROGRESS` bo'lishi shart.
+    """
+
+    code = "INVALID_ORDER_TRANSITION"
+
+    def __init__(self, current: OrderStatus, new: OrderStatus):
+        self.current = current
+        self.new = new
+        self.allowed = sorted(s.value for s in ALLOWED_ORDER_TRANSITIONS.get(current, set()))
+        super().__init__(
+            f"'{_ORDER_STATUS_LABEL.get(current, current.value)}' holatidan "
+            f"'{_ORDER_STATUS_LABEL.get(new, new.value)}' holatiga o'tish mumkin emas. "
+            "Iltimos, statuslarni ketma-ketlikda o'zgartiring."
+        )
+
+    def context(self) -> dict:
+        return {
+            "current_status": self.current.value,
+            "new_status": self.new.value,
+            # Shu holatdan qaysi holatlarga o'tsa bo'ladi — mijoz to'g'ri qadamni
+            # o'zi tanlay olishi uchun.
+            "allowed_statuses": self.allowed,
+        }
 
 
 # ── Buyurtma holatlari ────────────────────────────────────────────────────────
@@ -77,16 +120,26 @@ _ORDER_STATUS_LABEL = {
     OrderStatus.CANCELLED: "bekor qilingan",
 }
 
+# Nuqta holatlarining o'zbekcha nomlari. Xato matnida xom enum qiymati
+# ("'PENDING' holatidan 'ARRIVED' holatiga") o'rniga ishlatiladi.
+_WAYPOINT_STATUS_LABEL = {
+    WaypointStatus.PENDING: "kutilmoqda",
+    WaypointStatus.ARRIVED: "yetib keldi",
+    WaypointStatus.COMPLETED: "yakunlandi",
+    WaypointStatus.SKIPPED: "o'tkazib yuborildi",
+}
+
+
+def _waypoint_status_label(status: WaypointStatus) -> str:
+    return _WAYPOINT_STATUS_LABEL.get(status, status.value)
+
 
 def ensure_order_transition_allowed(current: OrderStatus, new: OrderStatus) -> None:
-    """Buyurtma holati o'tishini tekshiradi; nomaqbul bo'lsa `OrderFlowError`."""
+    """Buyurtma holati o'tishini tekshiradi; nomaqbul bo'lsa `OrderTransitionError`."""
     if current == new:
         return
     if new not in ALLOWED_ORDER_TRANSITIONS.get(current, set()):
-        raise OrderFlowError(
-            f"'{_ORDER_STATUS_LABEL.get(current, current.value)}' holatidan "
-            f"'{_ORDER_STATUS_LABEL.get(new, new.value)}' holatiga o'tish mumkin emas."
-        )
+        raise OrderTransitionError(current, new)
 
 
 def waypoint_label(waypoint: OrderWaypoint) -> str:
@@ -126,9 +179,132 @@ def ensure_waypoint_transition_allowed(
 ) -> None:
     if new_status not in _ALLOWED_WAYPOINT_TRANSITIONS.get(waypoint.status, set()):
         raise OrderFlowError(
-            f"Bu nuqtani '{waypoint.status.value}' holatidan '{new_status.value}' "
-            "holatiga o'tkazib bo'lmaydi."
+            f"Bu nuqtani '{_waypoint_status_label(waypoint.status)}' holatidan "
+            f"'{_waypoint_status_label(new_status)}' holatiga o'tkazib bo'lmaydi."
         )
+
+
+def collect_waypoint_violations(
+    order: Order,
+    waypoint: OrderWaypoint,
+    new_status: WaypointStatus,
+    *,
+    coords: Optional[geofence.DriverCoords],
+    coords_violation: Optional[Violation] = None,
+    override_reason: Optional[str] = None,
+) -> list[Violation]:
+    """Qadamni bajarishga to'sqinlik qilayotgan BARCHA sabablarni yig'adi.
+
+    Ilgari har bir tekshiruv birinchi muammoda darhol `raise` qilardi va foydalanuvchi
+    sabablarni birma-bir kashf etardi. Bu funksiya bir-biriga bog'liq bo'lmagan hamma
+    tekshiruvni oxirigacha bajaradi — masalan noto'g'ri nuqta yuborilgan bo'lsa ham
+    masofa baribir o'lchanadi, chunki ikkalasi ham foydalanuvchiga kerak.
+
+    Bo'sh ro'yxat = qadamni bajarish mumkin.
+    """
+    violations: list[Violation] = []
+    is_override = bool(override_reason)
+
+    # ── Buyurtma darajasidagi shartlar ────────────────────────────────────────
+    if order.status not in _ACTIVE_ORDER_STATUSES:
+        violations.append(
+            Violation(
+                code="ORDER_NOT_ACTIVE",
+                message=(
+                    f"Buyurtma '{_ORDER_STATUS_LABEL.get(order.status, order.status.value)}' "
+                    "holatida — nuqtalarni belgilab bo'lmaydi."
+                ),
+                context={
+                    "order_status": order.status.value,
+                    "allowed_statuses": [s.value for s in _ACTIVE_ORDER_STATUSES],
+                },
+            )
+        )
+
+    if order.driver_id is None:
+        violations.append(
+            Violation(
+                code="NO_DRIVER_ASSIGNED",
+                message="Buyurtmaga haydovchi biriktirilmagan — qadamni belgilab bo'lmaydi.",
+            )
+        )
+
+    # ── Ketma-ketlik: faqat joriy nuqta ustida ish olib boriladi ──────────────
+    current = order.current_waypoint
+    if current is None:
+        violations.append(
+            Violation(
+                code="ALL_WAYPOINTS_DONE",
+                message="Buyurtmaning barcha nuqtalari allaqachon yakunlangan.",
+            )
+        )
+    elif current.id != waypoint.id:
+        violations.append(
+            Violation(
+                code="WRONG_WAYPOINT",
+                message=(
+                    f"Avval {waypoint_label(current)}ni yakunlang "
+                    f"({current.address or 'manzil ko‘rsatilmagan'})."
+                ),
+                context={
+                    "expected_waypoint_id": current.id,
+                    "expected_sequence": current.sequence,
+                    "expected_type": current.type.value,
+                    "expected_address": current.address,
+                },
+            )
+        )
+
+    # ── Nuqta holati o'tishi ──────────────────────────────────────────────────
+    allowed = _ALLOWED_WAYPOINT_TRANSITIONS.get(waypoint.status, set())
+    if new_status not in allowed:
+        violations.append(
+            Violation(
+                code="INVALID_TRANSITION",
+                message=(
+                    f"Bu nuqtani '{_waypoint_status_label(waypoint.status)}' holatidan "
+                    f"'{_waypoint_status_label(new_status)}' holatiga o'tkazib bo'lmaydi."
+                ),
+                context={
+                    "from_status": waypoint.status.value,
+                    "to_status": new_status.value,
+                    "allowed_statuses": sorted(s.value for s in allowed),
+                },
+            )
+        )
+
+    # ── Nuqtani tashlab ketish faqat sabab bilan ──────────────────────────────
+    if new_status == WaypointStatus.SKIPPED and not is_override:
+        violations.append(
+            Violation(
+                code="SKIP_REASON_REQUIRED",
+                message="Nuqtani tashlab ketish uchun sabab (override_reason) ko'rsatilishi shart.",
+            )
+        )
+
+    # ── Geofence ──────────────────────────────────────────────────────────────
+    # Admin qo'lda tasdiqlayotgan bo'lsa (override) joylashuv tekshirilmaydi, va
+    # SKIPPED da ham nuqtaga borish talab qilinmaydi.
+    if not is_override and new_status != WaypointStatus.SKIPPED:
+        if coords_violation is not None:
+            violations.append(coords_violation)
+        elif coords is None:
+            violations.append(
+                Violation(
+                    code="LOCATION_UNKNOWN",
+                    message="Joylashuv aniqlanmadi — qayta urinib ko'ring.",
+                )
+            )
+        else:
+            _, geo_violation = geofence.evaluate_at_point(
+                coords,
+                float(waypoint.latitude) if waypoint.latitude is not None else None,
+                float(waypoint.longitude) if waypoint.longitude is not None else None,
+            )
+            if geo_violation is not None:
+                violations.append(geo_violation)
+
+    return violations
 
 
 def next_order_status(order: Order) -> Optional[OrderStatus]:
@@ -171,6 +347,7 @@ async def apply_waypoint_progress(
     new_status: WaypointStatus,
     *,
     coords: Optional[geofence.DriverCoords],
+    coords_violation: Optional[Violation] = None,
     override_by_user_id: Optional[int] = None,
     override_reason: Optional[str] = None,
 ) -> Order:
@@ -183,8 +360,18 @@ async def apply_waypoint_progress(
     DIQQAT: buyurtma COMPLETED ga o'tishi `order.crud.update_order_status` orqali bajariladi —
     `completed_at` va `billing.charge_order_commission` o'sha yerda, bitta joyda qoladi.
     """
-    ensure_waypoint_actionable(order, waypoint)
-    ensure_waypoint_transition_allowed(waypoint, new_status)
+    # Barcha tekshiruvlar BIR MARTADA — foydalanuvchi sabablarni birma-bir emas,
+    # hammasini birdan ko'radi (services/problems.py).
+    violations = collect_waypoint_violations(
+        order,
+        waypoint,
+        new_status,
+        coords=coords,
+        coords_violation=coords_violation,
+        override_reason=override_reason,
+    )
+    if violations:
+        raise WaypointProblem(violations)
 
     is_override = bool(override_reason)
     now = datetime.now(timezone.utc)
@@ -193,10 +380,8 @@ async def apply_waypoint_progress(
         waypoint.override_by_user_id = override_by_user_id
         waypoint.override_reason = override_reason
     elif new_status != WaypointStatus.SKIPPED:
-        # SKIPPED faqat admin tomonidan (override bilan) qo'yiladi — pastdagi routerda
-        # ham tekshiriladi, shuning uchun bu yerga geofence'siz tushmaydi.
-        if coords is None:
-            raise OrderFlowError("Joylashuv aniqlanmadi — qayta urinib ko'ring.")
+        # Yuqoridagi yig'uvchi geofence'ni allaqachon tekshirdi va o'tdi — bu yerda
+        # faqat audit qiymatlarini olish uchun qayta hisoblanadi (sof funksiya).
         result = geofence.verify_at_point(
             coords,
             float(waypoint.latitude) if waypoint.latitude is not None else None,

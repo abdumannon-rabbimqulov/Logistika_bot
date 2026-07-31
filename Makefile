@@ -37,6 +37,20 @@ ps: ## Xizmatlar holati
 logs: ## Barcha loglar (Ctrl-C bilan chiqish)
 	$(COMPOSE) logs -f
 
+# ── Dispatch worker (RabbitMQ navbati) ──────────────────────────────────────
+
+worker-logs: ## Haydovchi qidirish worker'ining loglari
+	$(COMPOSE) logs -f dispatch-worker
+
+worker-restart: ## Worker'ni qayta ishga tushirish
+	$(COMPOSE) restart dispatch-worker
+
+worker-scale: ## Worker'lar sonini o'zgartirish: make worker-scale n=3
+	$(COMPOSE) up -d --scale dispatch-worker=$(n) dispatch-worker
+
+mq-ui: ## RabbitMQ boshqaruv panelini brauzerda ochish (guest/guest)
+	open http://localhost:15672
+
 # ── Frontend bilan ishlash ──────────────────────────────────────────────────
 
 fe-logs: ## Frontend loglari

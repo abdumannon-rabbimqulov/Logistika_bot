@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ApiError } from '../api/client';
+import { ApiError, type ApiProblem } from '../api/client';
 import { getOrder, updateWaypoint } from '../api/orders';
 import { BackIcon, PhoneIcon, SendIcon, WeightIcon } from '../components/icons';
 import { useLiveLocation } from '../hooks/useLiveLocation';
@@ -56,6 +56,8 @@ export function DriverActiveOrderPage() {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Backend bir so'rovga bir nechta sabab qaytarishi mumkin (services/problems.py).
+  const [problems, setProblems] = useState<ApiProblem[]>([]);
   const [showLocationSettingsHint, setShowLocationSettingsHint] = useState(false);
   const [updating, setUpdating] = useState(false);
 
@@ -89,6 +91,7 @@ export function DriverActiveOrderPage() {
 
     setUpdating(true);
     setError(null);
+    setProblems([]);
     setShowLocationSettingsHint(false);
     try {
       // Qadam tasdiqlanishidan oldin aynan shu lahzadagi joylashuv olinadi — server
@@ -105,8 +108,13 @@ export function DriverActiveOrderPage() {
       if (err instanceof PositionError) {
         setError(err.message);
         setShowLocationSettingsHint(err.canOpenSettings);
+      } else if (err instanceof ApiError) {
+        setError(err.message);
+        setProblems(err.problems);
+        // Joylashuv aniqlanmagan bo'lsa — sozlamalar tugmasi ham foydali bo'ladi.
+        setShowLocationSettingsHint(err.problems.some((p) => p.code === 'LOCATION_UNKNOWN'));
       } else {
-        setError(err instanceof ApiError ? err.message : "Qadamni belgilab bo'lmadi");
+        setError("Qadamni belgilab bo'lmadi");
       }
     } finally {
       setUpdating(false);
@@ -260,7 +268,18 @@ export function DriverActiveOrderPage() {
 
         {error && (
           <div className={styles.errorBanner}>
-            {error}
+            {/* Bitta so'rov bir nechta sababdan rad etilishi mumkin (masofa, noto'g'ri
+                nuqta, holat) — hammasi alohida qatorda ko'rsatiladi, aks holda ular
+                bitta uzun gapga qo'shilib o'qilmay qolardi. */}
+            {problems.length > 1 ? (
+              <ul className={styles.errorList}>
+                {problems.map((problem) => (
+                  <li key={problem.code}>{problem.message}</li>
+                ))}
+              </ul>
+            ) : (
+              error
+            )}
             {showLocationSettingsHint && (
               <button
                 type="button"

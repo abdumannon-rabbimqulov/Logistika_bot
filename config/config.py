@@ -54,6 +54,22 @@ REDIS_HOST = get_optional_env('REDIS_HOST', 'logistika_redis')
 REDIS_PORT = int(get_optional_env('REDIS_PORT', '6379'))
 REDIS_DB = int(get_optional_env('REDIS_DB', '2'))
 
+# ── RabbitMQ: haydovchi qidirish vazifalari navbati ──────────────────────────
+# Qidiruv (services/dispatch.py) endi so'rov ichida emas, alohida worker jarayonida
+# bajariladi (workers/dispatch_worker.py). API/bot faqat vazifani navbatga qo'yadi.
+RABBITMQ_URL = get_optional_env('RABBITMQ_URL', 'amqp://guest:guest@rabbitmq:5672/')
+# Rejalashtirilgan buyurtma uchun haydovchi qidiruvi yuklashdan shuncha vaqt oldin
+# boshlanadi. Ilgari qidiruv buyurtma yaratilishi bilanoq ketardi — 2 kundan keyingi
+# yuk uchun ham — va haydovchi shuncha vaqtga band bo'lib qolardi.
+DISPATCH_LEAD_HOURS = int(get_optional_env('DISPATCH_LEAD_HOURS', '24'))
+# Sana bo'yicha taqqoslashlar (haydovchining "qachondan yuk olaman" sanasi) shu
+# mintaqada bajariladi — UTC'da emas. docker-compose'dagi `TZ` bilan bir xil bo'lishi kerak.
+APP_TIMEZONE = get_optional_env('APP_TIMEZONE', 'Asia/Tashkent')
+# Worker bir vaqtning o'zida nechta buyurtmani qidirishi (AMQP prefetch). Aynan shu
+# raqam "birdaniga hamma buyurtmani qidirib tashlamaslik" cheklovini beradi: qolgan
+# xabarlar navbatda kutib turadi, ya'ni DB/Telegram/OSRM yuki bir tekis taqsimlanadi.
+DISPATCH_PREFETCH = int(get_optional_env('DISPATCH_PREFETCH', '5'))
+
 # Yandex Geocoder — manzil qidirish/aniqlash (order/router.py, services/yandex_geocoder.py)
 API_YANDEX_KEY = get_optional_env('API_YANDEX_KEY')
 
@@ -111,7 +127,8 @@ ROLE_INSTRUCTIONS = {
         "Roleingiz — YUK BERUVCHI (mijoz). "
         "Buyurtma yarating (narx OSRM masofasi va tanlangan mashina turi tarifiga qarab "
         "avtomatik hisoblanadi), o'z buyurtmalaringizni ko'ring, tahrirlang yoki bekor qiling. "
-        "Agar tizim hech qanday haydovchi topolmasa, narxni oshirishingiz mumkin (+10% yoki +20%). "
+        "Agar tizim hech qanday haydovchi topolmasa, narxni tayyor tugmalar orqali "
+        "oshirishingiz mumkin (+100 000 dan +500 000 UZS gacha). "
         "Buyurtma yakunlangach haydovchini baholang. "
         "Boshqa rolelar uchun mo'ljallangan amallarni bajara olmaysiz."
     ),

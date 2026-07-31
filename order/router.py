@@ -13,10 +13,10 @@ from config.config import ADMIN_IDS, async_session, get_db
 from driver.crud import get_driver, get_driver_by_user_id
 from users.crud import get_user_by_id
 from order import crud, schemas
-from order.dispatch_models import DispatchAttempt, DispatchAttemptStatus
 from order.models import Order, OrderStatus, WaypointStatus
 from services import dispatch as dispatch_service
 from services import geofence, live_location, notifications, order_flow, osrm_client, pricing, yandex_geocoder
+from services.problems import WaypointProblem
 from users.auth import get_current_active_user, get_current_sender, verify_token
 from users.models import User, UserRole
 
@@ -306,10 +306,10 @@ async def update_order_status(
             ),
         )
 
-    try:
-        return await crud.update_order_status(db, order, data.status)
-    except order_flow.OrderFlowError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    # `OrderFlowError` bu yerda ATAYLAB tutilmaydi — uni global handler 400 Bad Request
+    # qilib qaytaradi (`middlewares/error_handler.py`). Shu bilan barcha endpointlarda
+    # bir xil javob bo'ladi va yangi chaqiruv joyi qo'shilganda 500 berish xavfi yo'q.
+    return await crud.update_order_status(db, order, data.status)
 
 
 @router.patch("/{order_id}/waypoints/{waypoint_id}", response_model=schemas.OrderDetailResponse,
@@ -359,33 +359,32 @@ async def update_order_waypoint(
             detail="Nuqtani tashlab ketishni faqat administrator belgilay oladi",
         )
 
-    try:
-        coords = None
-        if not override_reason:
-            # Admin SKIPPED qo'yayotgan bo'lsa sabab majburiy (yuqorida override_reason
-            # bo'lmasa bu yerga tushadi) — koordinata baribir kerak emas.
-            if data.status == WaypointStatus.SKIPPED:
-                raise HTTPException(
-                    status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="Nuqtani tashlab ketish uchun sabab (override_reason) ko'rsatilishi shart",
-                )
-            driver_id = order.driver_id
-            if driver_id is None:
-                raise HTTPException(
-                    status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="Buyurtmaga haydovchi biriktirilmagan",
-                )
-            coords = await geofence.resolve_driver_coords(
-                driver_id, data.latitude, data.longitude, data.accuracy
-            )
+    # Koordinata darhol yiqilmaydigan usulda olinadi: joylashuv aniqlanmagani ham
+    # boshqa sabablar bilan BIRGA qaytishi kerak, ularni to'sib qo'ymasligi emas.
+    coords = None
+    coords_violation = None
+    if not override_reason and data.status != WaypointStatus.SKIPPED:
+        coords, coords_violation = await geofence.try_resolve_driver_coords(
+            order.driver_id, data.latitude, data.longitude, data.accuracy
+        )
 
+    try:
         order = await order_flow.apply_waypoint_progress(
             db, order, waypoint, data.status,
             coords=coords,
+            coords_violation=coords_violation,
             override_by_user_id=current_user.id if override_reason else None,
             override_reason=override_reason,
         )
-    except (order_flow.OrderFlowError, geofence.GeofenceError) as exc:
+    except WaypointProblem as exc:
+        # Strukturali 422: barcha sabablar bir javobda, har biri kodi va aniq
+        # raqamlari bilan (masofa, ruxsat etilgan radius, kutilayotgan nuqta ID si).
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.as_detail()
+        ) from exc
+    except geofence.GeofenceError as exc:
+        # Zaxira: geofence bitta sabab bilan yiqilgan yo'l (matn `detail` bo'lib qaytadi).
+        # `OrderFlowError` bu yerda tutilmaydi — global handler uni 400 qiladi.
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
     return schemas.OrderDetailResponse.from_order(order)
@@ -633,31 +632,17 @@ async def cancel_order(
     cargo_name = order.cargo_name
     assigned_driver_id = order.driver_id
 
-    pending_chat_id: Optional[int] = None
-    pending_message_id: Optional[int] = None
-    if assigned_driver_id is None and order.status == OrderStatus.PENDING:
-        result = await db.execute(
-            select(DispatchAttempt)
-            .where(
-                DispatchAttempt.order_id == order.id,
-                DispatchAttempt.status == DispatchAttemptStatus.PENDING,
-            )
-            .order_by(DispatchAttempt.sent_at.desc())
-        )
-        pending_attempt = result.scalars().first()
-        if pending_attempt is not None:
-            pending_chat_id = pending_attempt.bot_chat_id
-            pending_message_id = pending_attempt.bot_message_id
+    # Ochiq taklif xabarining manzili — bekor qilishdan OLDIN o'qiladi (keyin urinish
+    # CANCELLED bo'lib, so'rov uni topmay qoladi). Bot handleri ham shu yordamchini
+    # ishlatadi (`handlers/dispatch.py`), shuning uchun mantiq bir joyda.
+    pending_offer = await dispatch_service.get_pending_offer_message(db, order)
 
     # Bekor qilish (commit bilan). Faqat shu muvaffaqiyatli tugagach xabar yuboramiz —
     # aks holda DB xatosida buyurtma bekor bo'lmay qoladi-yu, haydovchi "bekor qilindi"
     # xabarini olib ishni to'xtatadi (mos kelmaydigan holat).
-    try:
-        await crud.cancel_order(
-            db, order, cancelled_by_user_id=current_user.id, reason=reason
-        )
-    except order_flow.OrderFlowError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    # Terminal holatdagi buyurtmani bekor qilib bo'lmasligi `OrderFlowError` bilan
+    # bildiriladi va global handler uni 400 qilib qaytaradi (yuqoridagi kabi).
+    await crud.cancel_order(db, order, cancelled_by_user_id=current_user.id, reason=reason)
 
     # Xabarnoma (Telegram xatosi bo'lsa ham bekor qilish allaqachon yakunlangan —
     # notifications.* funksiyalari exception tashlamaydi, faqat log yozadi).
@@ -666,11 +651,7 @@ async def cancel_order(
         await notifications.notify_drivers_order_deleted(
             db, assigned_driver_id, cargo_name, deleted_by=deleted_by
         )
-    elif pending_chat_id is not None:
+    else:
         # PENDING — faol taklif yuborilgan haydovchining bot xabarini tahrirlaymiz
         # (urinishning o'zi `cancel_order` ichida CANCELLED qilib yopilgan).
-        await notifications.edit_telegram_message(
-            pending_chat_id,
-            pending_message_id,
-            "Bu buyurtma bekor qilindi",
-        )
+        await dispatch_service.notify_offer_cancelled(pending_offer)

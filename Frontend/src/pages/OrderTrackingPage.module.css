@@ -1,14 +1,73 @@
+/* Sahifa endi ikki qatlamli: xarita — fon, ma'lumotlar esa uning ustidagi
+   sudraladigan panelda (components/BottomSheet.tsx). Shuning uchun sahifaning
+   o'zi aylanmaydi — aylanish panel ichida kechadi. */
 .page {
-  min-height: 100vh;
-  min-height: 100dvh;
-  padding-bottom: 32px;
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+.mapLayer {
+  position: absolute;
+  inset: 0;
+}
+
+.mapPlaceholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-gray-50);
+  color: var(--color-text-secondary);
+  font-size: 13px;
 }
 
 .topBar {
+  position: relative;
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 60px 20px 8px;
+}
+
+/* Xarita ustidagi tugma/sarlavha o'qilishi uchun fon beriladi. */
+.topBar .backBtn {
+  background: var(--color-bg);
+  box-shadow: 0 2px 8px rgba(15, 19, 25, 0.18);
+}
+
+.topBar .title {
+  background: var(--color-bg);
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  box-shadow: 0 2px 8px rgba(15, 19, 25, 0.14);
+}
+
+/* ── Panel sarlavhasi (tutqich yonida doim ko'rinadi) ─────────────────────── */
+
+.sheetTitle {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--color-text-primary);
+}
+
+.sheetPrice {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--color-accent);
+}
+
+.sectionTitle {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
 }
 
 .backBtn {
@@ -28,8 +87,9 @@
   font-size: 17px;
 }
 
+/* Panel ichidagi bo'limlar — gorizontal padding endi panelning o'zida. */
 .section {
-  padding: 16px 20px 0;
+  padding: 16px 0 0;
 }
 
 .statusCard {
@@ -113,19 +173,7 @@
   flex-shrink: 0;
 }
 
-.priceRow {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--color-border);
-}
 
-.priceLabel {
-  font-size: 13px;
-  color: var(--color-text-secondary);
-}
 
 .priceValue {
   font-family: var(--font-display);
@@ -148,11 +196,15 @@
 
 .bumpButtons {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
+/* 5 ta variant bir qatorga sig'maydi — `min-width` bilan ikki qatorga taqsimlanadi
+   (ilgari 2 ta tugma bor edi va `flex: 1` yetarli edi). */
 .bumpBtn {
-  flex: 1;
+  flex: 1 1 calc(50% - 4px);
+  min-width: 130px;
   padding: 10px;
   border-radius: var(--radius-md);
   background: var(--color-accent);
@@ -171,12 +223,65 @@
   margin-top: 8px;
 }
 
-/* ── Haydovchini jonli kuzatish xaritasi ── */
-.mapCard {
-  height: 260px;
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  border: var(--border-w) solid var(--color-border);
+/* ── Buyurtmani bekor qilish ────────────────────────────────────────────────
+   Asosiy amal emas — shuning uchun neytral, "ghost" ko'rinish. Tasdiqlangandan
+   keyingi tugma esa qizil: bu qaytarib bo'lmaydigan qadam. */
+
+.cancelBtn {
+  margin-top: 14px;
+  width: 100%;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cancelBtn:disabled {
+  opacity: 0.6;
+}
+
+.cancelConfirm {
+  margin-top: 14px;
+}
+
+.cancelConfirmText {
+  font-size: 13.5px;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+}
+
+.cancelConfirmActions {
+  display: flex;
+  gap: 8px;
+}
+
+.cancelConfirmBtn {
+  flex: 1;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.cancelBackBtn {
+  flex: 1;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cancelConfirmBtn:disabled,
+.cancelBackBtn:disabled {
+  opacity: 0.6;
 }
 
 .mapHint {
@@ -186,17 +291,6 @@
   text-align: center;
 }
 
-/* ── Haydovchi kontakt kartasi ── */
-.contactCard {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  background: var(--color-bg);
-  border: var(--border-w) solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: 14px 16px;
-}
 
 .contactInfo {
   min-width: 0;
@@ -220,18 +314,189 @@
   white-space: nowrap;
 }
 
-.contactActions {
+
+
+/* ── Haydovchi kartasi (panel ichida) ────────────────────────────────────────
+   `contactCard` dan farqi: bu yerda ism/reyting va aloqa havolalari yonma-yon
+   emas, ustma-ust joylashadi — panelda kenglik cheklangan va telefon raqami
+   hamda username to'liq matn bilan ko'rsatiladi (faqat ikona emas). */
+.driverCard {
+  background: var(--color-bg);
+  border: var(--border-w) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+}
+
+.contactLinks {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  margin-top: 12px;
+}
+
+.contactLink {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 140px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-accent-tint);
+  color: var(--color-accent-pressed);
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.contactLinkText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Yo'l bosqichlari (waypoint statuslari) ───────────────────────────────── */
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.timelineItem {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding-bottom: 16px;
+}
+
+/* Nuqtalarni bog'laydigan vertikal chiziq — oxirgisidan keyin chizilmaydi. */
+.timelineItem:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 16px;
+  bottom: 0;
+  width: 2px;
+  background: var(--color-border);
+}
+
+.timelineDot {
+  position: relative;
+  z-index: 1;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-top: 3px;
+  flex-shrink: 0;
+  background: var(--color-bg);
+  border: 2px solid var(--color-gray-200);
+}
+
+.timelineDotDone {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.timelineDotSkipped {
+  background: var(--color-gray-200);
+  border-color: var(--color-gray-200);
+}
+
+.timelineActive .timelineDot {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 4px var(--color-accent-tint);
+}
+
+.timelineBody {
+  min-width: 0;
+  flex: 1;
+}
+
+.timelineHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.timelineType {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.timelineStatus {
+  font-size: 12px;
+  color: var(--color-text-secondary);
   flex-shrink: 0;
 }
 
-.contactBtn {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  background: var(--color-accent);
+.timelineActive .timelineStatus {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.timelineAddress {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.35;
+}
+
+.timelineTime,
+.timelineContact {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.timelinePhone {
+  margin-left: 6px;
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* ── Buyurtma tafsilotlari ro'yxati ──────────────────────────────────────── */
+
+.detailList {
+  margin: 14px 0 0;
+  padding: 14px 0 0;
+  border-top: var(--border-w) solid var(--color-border);
+}
+
+.detailRow {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+}
+
+.detailRow dt {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.detailRow dd {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: right;
+  min-width: 0;
+}
+
+.detailMuted {
+  color: var(--color-text-secondary);
+  text-decoration: line-through;
+  font-weight: 500;
+}
+
+/* Kelajakka rejalashtirilgan buyurtma: qidiruv qachon boshlanishi haqida eslatma.
+   `statusCard` (to'q fon) ichida turadi, shuning uchun matn oq rangda. */
+.scheduledNote {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.75);
 }

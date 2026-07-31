@@ -44,6 +44,32 @@ async def claim_notice_slot(key: str, ttl_seconds: int) -> bool:
         return False
 
 
+async def acquire_lock(key: str, ttl_seconds: int) -> bool:
+    """Qisqa muddatli qulf: `True` — qulf shu chaqiruvda olindi.
+
+    `claim_notice_slot` bilan bir xil `SET NX EX`, lekin XATO PAYTIDAGI xulqi teskari:
+    Redis ishlamay qolsa `True` qaytadi ("fail-open"). Sabab — bu qulf faqat bir xil
+    vazifa ikki marta yetkazilganda ortiqcha ish qilmaslik uchun optimallashtirish;
+    to'g'rilikni baribir DB holati ta'minlaydi (`status`/`driver_id` tekshiruvi va
+    `UPDATE ... WHERE status='pending'`). Redis o'chgani uchun qidiruvni butunlay
+    to'xtatib qo'yish esa buyurtmalarni haydovchisiz qoldirardi.
+    """
+    try:
+        r = get_redis()
+        return bool(await r.set(key, "1", nx=True, ex=ttl_seconds))
+    except Exception:
+        logger.exception("Qulfni olishda xato (fail-open): %s", key)
+        return True
+
+
+async def release_lock(key: str) -> None:
+    """Qulfni muddatidan oldin bo'shatadi (vazifa tugagach)."""
+    try:
+        await get_redis().delete(key)
+    except Exception:
+        logger.exception("Qulfni bo'shatishda xato: %s", key)
+
+
 def _current_utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 

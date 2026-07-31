@@ -81,8 +81,16 @@ class Order(Base):
     dispatch_round: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")
     # Narx oshirilishidan oldingi asl narx (tarix uchun, birinchi bump'da to'ldiriladi)
     original_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
-    # Barcha 5 urinish rad etilgan/tugagan payt — senderga narx oshirish so'ralganini bildiradi
+    # Haydovchi topilmagan payt — senderga narx oshirish so'ralganini bildiradi. Sender
+    # narxni oshirganda qayta `None` bo'ladi: WebApp va bot aynan shu ustunga qarab
+    # "narxni oshirasizmi?" panelini ko'rsatadi (services/dispatch.py `_request_price_bump`).
     price_bump_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Sender narxni necha marta oshirgani. `MAX_PRICE_BUMPS` bilan cheklanadi — aks holda
+    # haydovchisiz yo'nalishda "oshir → topilmadi → oshir" sikli cheksiz aylanardi.
+    price_bump_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")
+    # Qidiruv vazifasi oxirgi marta RabbitMQ navbatiga qo'yilgan payt (kuzatuv/debug uchun:
+    # navbat qotib qolganda buyurtma qachondan beri kutayotgani shu ustundan ko'rinadi).
+    last_dispatch_enqueued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Yuk og'irligi/hajmi tanlangan mashina sig'imidan oshsa shu yerga yoziladi (order bloklanmaydi,
     # faqat sender/haydovchi/admin ko'radigan ogohlantirish — O'zbekiston bozorida haydovchilar
     # ko'pincha "5 tonnalik"ga 6 tonna ham yuklaydi, shuning uchun majburiy taqiq qo'yilmagan)

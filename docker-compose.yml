@@ -31,7 +31,35 @@ services:
     volumes:
       - redis_data:/data
 
-  # 3. OSRM Router (Xarita serveri)
+  # 3. RabbitMQ — haydovchi qidirish vazifalari navbati
+  #
+  # Qidiruv (services/dispatch.py) endi HTTP so'rov ichida emas, `dispatch-worker`
+  # jarayonida bajariladi. `-management` tegi boshqaruv UI'ni qo'shadi:
+  # http://localhost:15672 (guest/guest) — navbat uzunligi va "Unacked" sonini
+  # shu yerdan kuzatish mumkin.
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: logistika_rabbitmq
+    restart: always
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-guest}
+      - TZ=Asia/Tashkent
+    ports:
+      - "5672:5672"      # AMQP
+      - "15672:15672"    # boshqaruv UI
+    volumes:
+      # Navbatlar `durable`, xabarlar `persistent` — broker qayta ishga tushganda
+      # kutayotgan vazifalar yo'qolmasligi uchun ma'lumot volume'da saqlanadi.
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+  # 4. OSRM Router (Xarita serveri)
   #
   # Ma'lumot fayllari `osrm-data/` da (git'ga kirmaydi, ~1 GB). Nomi doim "uzbekistan"
   # — sanasiz, shuning uchun xaritani yangilaganda bu faylni tahrirlash SHART EMAS
@@ -69,7 +97,7 @@ services:
       start_period: 60s        # katta xarita sekin ochilsa ulgurishi uchun
       retries: 3
 
-  # 4. FastAPI Web dasturi
+  # 5. FastAPI Web dasturi
   web:
     build: .
     container_name: fastapi_web_app
@@ -99,12 +127,14 @@ services:
         condition: service_healthy
       logistika-redis:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
       osrm:
         # service_started emas: konteyner ko'tarilishi bilan OSRM hali marshrut
         # bera olmasligi mumkin — healthcheck o'tguncha kutiladi.
         condition: service_healthy
 
-  # 5. Frontend (Vite dev server — hot reload) → http://localhost:5173
+  # 6. Frontend (Vite dev server — hot reload) → http://localhost:5173
   #
   # `src/` host'dan bind-mount qilingan, shuning uchun faylni saqlash bilanoq HMR orqali
   # brauzerda aks etadi — image'ni qayta build qilish shart emas. Kundalik ish shu.
@@ -172,7 +202,7 @@ services:
     # Endi `docker compose up -d frontend` bir necha soniyada tayyor bo'ladi;
     # backend keyinroq ko'tarilsa ham frontend uni o'zi topadi.
 
-  # 6. Telegram Bot
+  # 7. Telegram Bot
   bot:
     build: .
     container_name: aiogram_telegram_bot
@@ -189,12 +219,46 @@ services:
         condition: service_healthy
       logistika-redis:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
       osrm:
         # service_started emas: konteyner ko'tarilishi bilan OSRM hali marshrut
         # bera olmasligi mumkin — healthcheck o'tguncha kutiladi.
+        condition: service_healthy
+
+  # 8. Dispatch worker — haydovchi qidirish navbatini qayta ishlaydi
+  #
+  # `web` va `bot` faqat vazifani navbatga qo'yadi, qidiruvning o'zi shu yerda ketadi.
+  # Yuk oshsa `--scale dispatch-worker=N` bilan ko'paytirish mumkin: navbat bitta,
+  # xabarlar worker'lar orasida taqsimlanadi, bir order ikki marta qidirilib
+  # ketmasligini Redis qulfi + DB holati ta'minlaydi (services/dispatch.py).
+  #
+  # Bu yerda ham `--reload` YO'Q va bo'lmasligi kerak: reloader qayta yuklanganda
+  # ochiq AMQP kanali uziladi va ishlov berilayotgan xabarlar ack qilinmay qoladi.
+  dispatch-worker:
+    build: .
+    container_name: logistika_dispatch_worker
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Tashkent
+    command: python -m workers.dispatch_worker
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      logistika-redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      osrm:
+        # Yo'lga chiqish vaqtini hisoblash uchun OSRM kerak (resolve_departure_plan).
         condition: service_healthy
 
 # Barcha volume'lar bitta joyda jamlandi
 volumes:
   postgres_data:
   redis_data:
+  rabbitmq_data:

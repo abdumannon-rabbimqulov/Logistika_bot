@@ -31,17 +31,115 @@ export function clearTokens(): void {
   localStorage.removeItem(REFRESH_KEY);
 }
 
+/** Bitta pydantic validatsiya xatosi (FastAPI 422 javobidagi element). */
+interface ValidationIssue {
+  loc?: unknown[];
+  msg?: string;
+}
+
+/** Buzilgan biznes qoidasi: kod, o'zbekcha sabab va aniq raqamlar.
+ *  Backend `services/problems.py Violation` bilan bir xil (kontekst maydonlari
+ *  `code`/`message` yoniga yoyilgan holda keladi: `distance_m`, `allowed_radius_m`,
+ *  `expected_waypoint_id` va h.k.). */
+export interface ApiProblem {
+  code: string;
+  message: string;
+  [key: string]: unknown;
+}
+
+/** `detail` obyektidan sabablar ro'yxatini ajratadi (bo'lmasa — bo'sh massiv). */
+function extractProblems(detail: unknown): ApiProblem[] {
+  if (typeof detail !== 'object' || detail === null) return [];
+  const errors = (detail as { errors?: unknown }).errors;
+  if (!Array.isArray(errors)) return [];
+  return errors.filter(
+    (item): item is ApiProblem =>
+      typeof item === 'object' &&
+      item !== null &&
+      typeof (item as ApiProblem).code === 'string' &&
+      typeof (item as ApiProblem).message === 'string',
+  );
+}
+
+/** Backend xato javobidan o'qiladigan matnni ajratib oladi.
+ *
+ *  Backend uch xil shaklda javob berishi mumkin va ilgari faqat BIRINCHISI
+ *  o'qilardi — qolganlarida foydalanuvchi "So'rov xato qaytardi (422)" degan
+ *  ma'nosiz xabarni ko'rardi:
+ *
+ *  1. `{"detail": "matn"}` — `HTTPException(...)` (geofence, order_flow va h.k.);
+ *  2. `{"detail": [{"loc": ["body","status"], "msg": "..."}]}` — FastAPI'ning
+ *     so'rov validatsiyasi (422). `String()` bu massivni "[object Object]" ga
+ *     aylantirardi — aynan shu "tushunarsiz 422" ning sababi edi;
+ *  3. `{"message": "...", "details": {"errors": [{"field","message"}]}}` —
+ *     `middlewares/error_handler.py` dagi standart shakl (DB/JWT xatolari);
+ *  4. `{"detail": {"message": "...", "errors": [{"code","message",...}]}}` —
+ *     biznes qoidalari buzilganda BARCHA sabablar birdan (`services/problems.py`),
+ *     masalan `PATCH /orders/{id}/waypoints/{wp}`.
+ */
+function extractErrorMessage(status: number, body: unknown): string {
+  const fallback = `So'rov xato qaytardi (${status})`;
+  if (typeof body !== 'object' || body === null) return fallback;
+
+  const { detail, message, details } = body as {
+    detail?: unknown;
+    message?: unknown;
+    details?: { errors?: { field?: string; message?: string }[] };
+  };
+
+  if (typeof detail === 'string' && detail.trim()) return detail;
+
+  const problems = extractProblems(detail);
+  if (problems.length) return problems.map((p) => p.message).join(' ');
+
+  if (typeof detail === 'object' && detail !== null) {
+    const detailMessage = (detail as { message?: unknown }).message;
+    if (typeof detailMessage === 'string' && detailMessage.trim()) return detailMessage;
+  }
+
+  if (Array.isArray(detail)) {
+    const parts = (detail as ValidationIssue[])
+      .map((issue) => {
+        // `loc` odatda ["body", "maydon"] — foydalanuvchiga maydon nomi bilan ko'rsatamiz.
+        const field = Array.isArray(issue.loc) ? issue.loc.slice(1).join('.') : '';
+        const text = issue.msg ?? '';
+        if (!text) return '';
+        return field ? `${field}: ${text}` : text;
+      })
+      .filter(Boolean);
+    if (parts.length) return parts.join('; ');
+  }
+
+  const fieldErrors = details?.errors;
+  if (Array.isArray(fieldErrors) && fieldErrors.length) {
+    const parts = fieldErrors
+      .map((e) => (e.field ? `${e.field}: ${e.message ?? ''}` : e.message ?? ''))
+      .filter(Boolean);
+    if (parts.length) return parts.join('; ');
+  }
+
+  if (typeof message === 'string' && message.trim()) return message;
+
+  return fallback;
+}
+
 export class ApiError extends Error {
   status: number;
   detail: unknown;
+  /** Buzilgan qoidalar ro'yxati (backend bergan bo'lsa). `message` — ularning
+   *  birlashmasi; bu maydon esa sabablarni alohida ko'rsatish yoki `code` bo'yicha
+   *  amal taklif qilish uchun (masalan `WRONG_WAYPOINT` da kerakli nuqtaga o'tish). */
+  problems: ApiProblem[];
 
   constructor(status: number, detail: unknown) {
-    const message = typeof detail === 'object' && detail !== null && 'detail' in detail
-      ? String((detail as { detail: unknown }).detail)
-      : `So'rov xato qaytardi (${status})`;
-    super(message);
+    super(extractErrorMessage(status, detail));
     this.status = status;
     this.detail = detail;
+    this.problems = extractProblems(
+      typeof detail === 'object' && detail !== null
+        ? (detail as { detail?: unknown }).detail ?? detail
+        : detail,
+    );
   }
 }
 

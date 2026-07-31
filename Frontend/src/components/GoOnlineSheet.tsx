@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toLocalDateValue } from '../utils/pickupTime';
 import { BottomSheetModal } from './BottomSheetModal';
 import styles from './GoOnlineSheet.module.css';
 
@@ -21,11 +22,18 @@ interface Props {
   submitting: boolean;
 }
 
+/** N kundan keyingi sana (`YYYY-MM-DD`), "hoziroq" bo'lsa `null`.
+ *
+ *  Sana MAHALLIY mintaqada hisoblanadi. Ilgari bu yerda `toISOString().slice(0, 10)`
+ *  turardi — u UTC sanani beradi va Toshkent vaqti bilan 00:00–05:00 orasida bir kun
+ *  orqaga surilardi: haydovchi "1 kundan keyin" desa ham tizimga BUGUNGI sana yozilib,
+ *  unga darhol hozirgi yuklar kela boshlardi (backend `available_from_date` filtri).
+ */
 function isoDateInDays(days: number): string | null {
   if (days === 0) return null;
   const d = new Date();
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return toLocalDateValue(d);
 }
 
 // Liniyaga chiqishda haydovchi qachondan yuk qabul qilishini belgilaydi (hoziroq yoki

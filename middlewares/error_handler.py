@@ -200,9 +200,54 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         )
 
 
+async def order_flow_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Biznes qoidasi buzilishi (`OrderFlowError`) → **400 Bad Request**.
+
+    Ilgari bunday handler yo'q edi va `OrderFlowError` tutib olinmagan har qanday
+    joyda (masalan `Admin_panel/router.py` dagi status o'zgartirish) yuqoridagi
+    `Exception` handleriga tushib, mijozga **500 Internal Server Error** qaytarardi.
+    Holbuki bu server nosozligi emas — mijoz noto'g'ri o'tish so'ragan.
+
+    Javob shakli `services/problems.py` dagi bilan bir xil (`detail.message` +
+    `detail.errors[]`), shunda WebApp'dagi bitta parser hamma joyda ishlaydi
+    (`Frontend/src/api/client.ts`).
+    """
+    request_id = str(uuid.uuid4())
+    message = str(exc)
+
+    logger.info(
+        f"[{request_id}] Order flow rejected",
+        extra={
+            "request_id": request_id,
+            "method": request.method,
+            "path": request.url.path,
+            "code": getattr(exc, "code", "ORDER_FLOW_ERROR"),
+        },
+    )
+
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={
+            "detail": {
+                "message": message,
+                "errors": [
+                    {
+                        "code": getattr(exc, "code", "ORDER_FLOW_ERROR"),
+                        "message": message,
+                        **(exc.context() if hasattr(exc, "context") else {}),
+                    }
+                ],
+            },
+            "request_id": request_id,
+        },
+    )
+
+
 def setup_error_handlers(app: FastAPI):
     """FastAPI'ga error handlers'ni qo'shish."""
     from starlette.middleware.base import BaseHTTPMiddleware
+
+    from services.order_flow import OrderFlowError
     
     class RequestIdMiddleware(BaseHTTPMiddleware):
         """Har javobga X-Request-ID qo'shadi; access log uvicorn'da chiqadi."""
@@ -225,6 +270,9 @@ def setup_error_handlers(app: FastAPI):
                 )
                 raise
     
+    # Aniqroq handler oldin qidiriladi (Starlette istisno MRO'si bo'yicha tanlaydi),
+    # shuning uchun `OrderFlowError` umumiy `Exception` handleriga tushmaydi.
+    app.add_exception_handler(OrderFlowError, order_flow_exception_handler)
     app.add_exception_handler(Exception, global_exception_handler)
     app.add_middleware(RequestIdMiddleware)
 

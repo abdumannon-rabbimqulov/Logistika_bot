@@ -339,6 +339,16 @@
   line-height: 1.4;
 }
 
+/* Bir nechta sabab bo'lganda ular alohida qatorlarda ko'rsatiladi. */
+.errorList {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.errorList li + li {
+  margin-top: 6px;
+}
+
 .settingsLink {
   display: block;
   margin-top: 8px;

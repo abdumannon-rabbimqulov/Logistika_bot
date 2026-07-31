@@ -1,5 +1,4 @@
 import logging
-import asyncio
 from contextlib import asynccontextmanager
 
 
@@ -36,48 +35,31 @@ from fastapi.staticfiles import StaticFiles
 logger = logging.getLogger(__name__)
 
 
-DISPATCH_SWEEP_INTERVAL_SEC = 20
-
-
-async def _dispatch_sweep_loop() -> None:
-    """Muddati o'tgan-u hali `pending` qolgan dispatch urinishlarini davriy tozalaydi.
-
-    `services/dispatch.py`dagi har bir urinish uchun alohida `asyncio.create_task` bilan
-    60s timeout ham bor, lekin process qayta ishga tushsa (deploy/crash) o'sha tasklar
-    yo'qoladi — shu sweep zaxira sifatida ishlaydi va navbatni tiklaydi.
-    """
-    from config.config import async_session
-    from services import dispatch as dispatch_service
-
-    while True:
-        try:
-            async with async_session() as db:
-                swept = await dispatch_service.sweep_expired(db)
-                if swept:
-                    logger.info("Dispatch sweep: %s ta muddati o'tgan urinish yopildi", swept)
-
-                # Yo'lga chiqish vaqti kelgan rejalashtirilgan buyurtmalar ACCEPTED bo'ladi
-                # va haydovchi eslatma oladi (services/dispatch.py resolve_departure_plan).
-                promoted = await dispatch_service.promote_due_scheduled(db)
-                if promoted:
-                    logger.info("Dispatch sweep: %s ta rejalashtirilgan buyurtma faollashtirildi", promoted)
-        except Exception:
-            logger.exception("Dispatch sweep xatosi")
-        await asyncio.sleep(DISPATCH_SWEEP_INTERVAL_SEC)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: jadval sxemasini yaratish (production'da alembic migratsiyasi tavsiya etiladi).
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    sweep_task = asyncio.create_task(_dispatch_sweep_loop())
+    # Dispatch navbatining topologiyasi (exchange + navbatlar) shu yerda ham e'lon
+    # qilinadi: worker'dan oldin ko'tarilsa ham birinchi publish yo'qolmasin. Broker
+    # hali tayyor bo'lmasa API baribir ishlayveradi — publish paytida qayta uriniladi.
+    from services import queue as dispatch_queue
+
+    try:
+        await dispatch_queue.declare_topology()
+    except dispatch_queue.QueueUnavailable:
+        logger.warning("RabbitMQ hozircha mavjud emas — navbat birinchi so'rovda ulanadi")
+
     yield
-    # Shutdown: dispatch sweep tasklarini va Redis ulanishini yopish.
-    sweep_task.cancel()
+
+    # Shutdown: RabbitMQ va Redis ulanishlarini yopish.
+    #
+    # DIQQAT: dispatch sweep loop'i endi bu yerda EMAS — u `workers/dispatch_worker.py`
+    # ga ko'chirildi. Web jarayoni sof API bo'lib qoldi, fon ishlari worker'da.
     from services.live_location import close_redis
 
+    await dispatch_queue.close_queue()
     await close_redis()
 
 

@@ -12,19 +12,26 @@ Ushbu modul FastAPI endpointlaridan (`order/router.py`, WebApp uchun) HAM, aiogr
 callback handleridan (`handlers/dispatch.py`, Telegram tugmalari uchun) HAM chaqiriladi —
 mantiq bir joyda, ikki marta yozilmaydi (docs/DISPATCH_SYSTEM_PLAN.md 8-bo'lim).
 
-Timer: alohida scheduler/Redis job store o'rniga (yangi og'ir bog'liqlik kerak bo'lardi)
-har bir urinish uchun `asyncio.create_task` bilan 60s kutish tasklari ishlatiladi, va
-`config/main.py`dagi FastAPI lifespan'da davriy "sweep" (muddati o'tgan-u hali pending
-qolganlarni tozalaydi) — process qayta ishga tushsa ham tiklanish uchun zaxira.
+Bajarilish joyi: chaqiruvchi (API/bot) faqat vazifani RabbitMQ navbatiga qo'yadi
+(`_dispatch_next` → `services/queue.py`), haqiqiy qidiruv esa alohida jarayonda —
+`workers/dispatch_worker.py` `run_dispatch_job()` ni chaqiradi. Shu sababli sender
+narxni oshirganda HTTP javob darhol qaytadi, va bir vaqtda qidirilayotgan buyurtmalar
+soni worker'ning `DISPATCH_PREFETCH` cheklovi bilan chegaralanadi (hammasi birdaniga
+qidirilib DB/Telegram/OSRM ni bo'g'ib qo'ymaydi).
+
+Timer: haydovchiga berilgan 60 soniya `dispatch.delayed` navbati (TTL + dead-letter)
+orqali kutiladi — jarayon qayta ishga tushsa yo'qoladigan `asyncio` taymerlari o'rniga.
+Zaxira sifatida worker'da davriy "sweep" ishlaydi (muddati o'tgan-u hali pending
+qolgan urinishlarni yopadi) — broker xabari yo'qolgan holat uchun.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,16 +39,31 @@ from sqlalchemy.orm import selectinload
 
 import driver.crud as driver_crud
 import order.crud as order_crud
+from config.config import APP_TIMEZONE, DISPATCH_LEAD_HOURS
 from driver.models import Driver
 from order.dispatch_models import DispatchAttempt, DispatchAttemptStatus, DispatchMatchType
 from order.models import Order, OrderStatus
-from services import live_location, navigation, notifications, osrm_client, pricing
+from services import live_location, navigation, notifications, osrm_client, pricing, queue
 from utils.geo import calculate_distance_km
 
 logger = logging.getLogger(__name__)
 
 MAX_ROUNDS = 5
 RESPONSE_TIMEOUT_SEC = 60
+
+# Rejalashtirilgan buyurtma uchun qidiruv yuklashdan shuncha oldin boshlanadi.
+# DIQQAT: bu quyidagi `SCHEDULED_LEAD_SEC` EMAS — u haydovchi allaqachon topilgandan
+# keyin SCHEDULED→ACCEPTED o'tishi uchun (30 daqiqa). Bu esa qidiruvning O'ZI qachon
+# boshlanishini belgilaydi.
+DISPATCH_START_LEAD_SEC = DISPATCH_LEAD_HOURS * 3600
+
+# Sender narxni ko'pi bilan shuncha marta oshira oladi. Cheklovsiz bo'lsa haydovchisi
+# yo'q yo'nalishda "oshir → topilmadi → yana oshir" sikli cheksiz aylanardi.
+MAX_PRICE_BUMPS = 3
+
+# Bir order uchun bir vaqtda ikkita qidiruv vazifasi ishlamasligi uchun qulf muddati
+# (takroriy yetkazishda ortiqcha ish qilmaslik uchun; to'g'rilikni DB holati saqlaydi).
+DISPATCH_LOCK_TTL_SEC = 30
 
 # Jonli GPS o'chgan bo'lsa, DB'dagi oxirgi koordinata shu muddat ichida yozilgan bo'lsa
 # hali ham ishonchli deb qaraladi (haydovchi ilovani yopgan, lekin uzoqqa ketmagan).
@@ -63,6 +85,24 @@ class DispatchError(Exception):
     def __init__(self, message: str, *, status_code: int = 409):
         super().__init__(message)
         self.status_code = status_code
+
+
+_LOCAL_TZ = ZoneInfo(APP_TIMEZONE)
+
+
+def local_pickup_date(order: Order) -> date:
+    """Yuklash sanasi FOYDALANUVCHI mintaqasida (UTC'da emas).
+
+    Haydovchi "2-avgustdan yuk olaman" deganda mahalliy kalendar sanani nazarda tutadi.
+    `pickup_at` esa UTC saqlanadi: 2-avgust 03:00 (Toshkent, UTC+5) UTC'da 1-avgust
+    22:00 bo'ladi va `.date()` `08-01` qaytaradi. Shunda 2-avgustdan liniyaga chiqqan
+    haydovchi aynan 2-avgustdagi yukni olmay qolardi. Taqqoslash bir mintaqada
+    bajarilishi shart.
+    """
+    pickup_at = order.pickup_at
+    if pickup_at.tzinfo is None:
+        pickup_at = pickup_at.replace(tzinfo=timezone.utc)
+    return pickup_at.astimezone(_LOCAL_TZ).date()
 
 
 def _pickup_info(order: Order) -> tuple[Optional[float], Optional[float], Optional[str]]:
@@ -200,7 +240,12 @@ async def _find_next_candidate(
                     Driver.is_available.is_(True),
                     Driver.is_blocked.is_(False),
                     Driver.docs_verified.is_(True),
-                    or_(Driver.available_from_date.is_(None), Driver.available_from_date <= order.pickup_at.date()),
+                    # Sana MAHALLIY mintaqada taqqoslanadi (UTC'da emas) — izoh:
+                    # `local_pickup_date`.
+                    or_(
+                        Driver.available_from_date.is_(None),
+                        Driver.available_from_date <= local_pickup_date(order),
+                    ),
                 )
             )
             eligible = {d.id: d for d in result.scalars().all()}
@@ -216,7 +261,11 @@ async def _find_next_candidate(
         Driver.is_available.is_(True),
         Driver.is_blocked.is_(False),
         Driver.docs_verified.is_(True),
-        or_(Driver.available_from_date.is_(None), Driver.available_from_date <= order.pickup_at.date()),
+        # Sana MAHALLIY mintaqada (izoh: `local_pickup_date`).
+        or_(
+            Driver.available_from_date.is_(None),
+            Driver.available_from_date <= local_pickup_date(order),
+        ),
     )
     if exclude_driver_ids:
         query = query.where(Driver.id.notin_(exclude_driver_ids))
@@ -359,16 +408,115 @@ async def _send_navigation_links(order: Order, chat_id: int) -> None:
 
 
 async def _previously_attempted_driver_ids(db: AsyncSession, order_id: int) -> set[int]:
-    result = await db.execute(select(DispatchAttempt.driver_id).where(DispatchAttempt.order_id == order_id))
+    """Shu buyurtma bo'yicha allaqachon taklif olgan haydovchilar (qayta yubormaslik uchun).
+
+    CANCELLED urinishlar hisobga OLINMAYDI: narx oshirilganda oldingi raundlar aynan shu
+    status bilan yopiladi (`apply_price_bump`), ya'ni avval rad etgan haydovchi yangi
+    narx bilan qayta taklif oladi — narx oshirishning butun ma'nosi shunda.
+    """
+    result = await db.execute(
+        select(DispatchAttempt.driver_id).where(
+            DispatchAttempt.order_id == order_id,
+            DispatchAttempt.status != DispatchAttemptStatus.CANCELLED,
+        )
+    )
     return set(result.scalars().all())
 
 
+def dispatch_starts_at(order: Order) -> datetime:
+    """Shu buyurtma uchun qidiruv boshlanishi kerak bo'lgan payt.
+
+    Yuklash vaqtidan `DISPATCH_START_LEAD_SEC` ayriladi. Yuklash yaqin bo'lsa
+    (yoki allaqachon o'tgan bo'lsa) natija o'tmishda bo'ladi — ya'ni "hoziroq".
+    """
+    pickup_at = order.pickup_at
+    if pickup_at.tzinfo is None:
+        pickup_at = pickup_at.replace(tzinfo=timezone.utc)
+    return pickup_at - timedelta(seconds=DISPATCH_START_LEAD_SEC)
+
+
+def is_dispatch_due(order: Order, *, now: Optional[datetime] = None) -> bool:
+    """Qidiruvni boshlash vaqti keldimi."""
+    return dispatch_starts_at(order) <= (now or datetime.now(timezone.utc))
+
+
 async def start_dispatch(db: AsyncSession, order: Order) -> None:
-    """Order yaratilgandan keyin chaqiriladi — 1-urinishni boshlaydi."""
-    await _dispatch_next(db, order)
+    """Order yaratilgandan keyin chaqiriladi.
+
+    Yuklash vaqti hali uzoq bo'lsa qidiruv BOSHLANMAYDI — buyurtma `PENDING` va
+    `last_dispatch_enqueued_at = NULL` holatida kutadi, worker'dagi davriy
+    `enqueue_due_orders` uni vaqti kelganda o'zi navbatga qo'yadi.
+
+    Sabab: ilgari 2 kundan keyingi yuk uchun ham haydovchilarga darhol taklif
+    ketardi va qabul qilgan haydovchi shuncha vaqtga band bo'lib qolardi.
+    """
+    if not is_dispatch_due(order):
+        logger.info(
+            "Order #%s uchun qidiruv %s da boshlanadi (yuklash: %s)",
+            order.id,
+            dispatch_starts_at(order).isoformat(),
+            order.pickup_at.isoformat(),
+        )
+        return
+
+    await _dispatch_next(db, order, reason="created")
 
 
-async def _dispatch_next(db: AsyncSession, order: Order) -> None:
+async def _dispatch_next(db: AsyncSession, order: Order, *, reason: str) -> None:
+    """Keyingi qidiruv urinishini RabbitMQ navbatiga qo'yadi (o'zi qidirmaydi).
+
+    Broker ishlamayotgan bo'lsa xato YUTILADI: buyurtma yaratish yoki narx oshirish
+    navbat tufayli yiqilmasligi kerak. Bunday buyurtma PENDING holatda qoladi va
+    worker'dagi davriy sweep uni keyinroq baribir qidiruvga qaytaradi.
+    """
+    if order.status != OrderStatus.PENDING or order.driver_id is not None:
+        return
+
+    order.last_dispatch_enqueued_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(order, attribute_names=["last_dispatch_enqueued_at", "updated_at"])
+
+    try:
+        await queue.publish_dispatch_job(order.id, reason)
+    except queue.QueueUnavailable:
+        logger.exception(
+            "Order #%s uchun qidiruv vazifasi navbatga qo'yilmadi (sabab: %s)", order.id, reason
+        )
+
+
+async def run_dispatch_job(db: AsyncSession, order_id: int, reason: str = "job") -> None:
+    """Bitta qidiruv urinishini bajaradi — FAQAT worker chaqiradi.
+
+    Takroriy yetkazishga chidamli: qulf olinmasa yoki buyurtma endi PENDING bo'lmasa
+    (haydovchi topilgan / bekor qilingan) hech narsa qilinmaydi.
+    """
+    lock_key = f"dispatch_job:{order_id}"
+    if not await live_location.acquire_lock(lock_key, DISPATCH_LOCK_TTL_SEC):
+        logger.info("Order #%s uchun qidiruv allaqachon ishlamoqda — o'tkazib yuborildi", order_id)
+        return
+
+    try:
+        # Kechiktirilgan ("expired") xabar aynan javob muddati tugagach keladi — avval
+        # o'sha urinish yopiladi. `continue_dispatch=False`: keyingi raundni shu yerda
+        # o'zimiz davom ettiramiz, aks holda yana bitta xabar navbatga tushib ketardi.
+        for attempt_id in await _overdue_attempt_ids(db, order_id):
+            await expire_attempt(db, attempt_id, continue_dispatch=False)
+
+        # Haydovchi hali javob berish muddati ichida bo'lsa — aralashmaymiz. Aks holda
+        # bitta order uchun ikkita ochiq taklif paydo bo'lardi.
+        if await _has_live_attempt(db, order_id):
+            return
+
+        order = await order_crud.get_order(db, order_id)
+        if order is None:
+            logger.warning("Qidiruv vazifasi: order #%s topilmadi", order_id)
+            return
+        await _run_dispatch_round(db, order)
+    finally:
+        await live_location.release_lock(lock_key)
+
+
+async def _run_dispatch_round(db: AsyncSession, order: Order) -> None:
     if order.status != OrderStatus.PENDING or order.driver_id is not None:
         return
 
@@ -420,21 +568,50 @@ async def _dispatch_next(db: AsyncSession, order: Order) -> None:
         attempt.bot_message_id = message_id
         await db.commit()
 
-    asyncio.create_task(_expire_after_timeout(attempt.id))
+    # Javob muddati tugashini kutish: `dispatch.delayed` navbatiga xabar qo'yiladi va
+    # TTL tugagach ishlov navbatiga qaytadi. O'shanda `run_dispatch_job` avval muddati
+    # o'tgan taklifni yopadi, so'ng keyingi nomzodga o'tadi. Kutilayotgani ATAYLAB
+    # attempt emas, order — vazifa mazmuni doim bir xil: "shu buyurtmani qayta ko'r".
+    try:
+        await queue.publish_dispatch_job(order.id, "expired", delay=True)
+    except queue.QueueUnavailable:
+        logger.exception(
+            "Order #%s uchun kechiktirilgan tekshiruv navbatga qo'yilmadi", order.id
+        )
 
 
-async def _expire_after_timeout(attempt_id: int) -> None:
-    from config.config import async_session
+async def _overdue_attempt_ids(db: AsyncSession, order_id: int) -> list[int]:
+    """Shu order uchun muddati o'tgan-u hali `pending` qolgan urinishlar."""
+    result = await db.execute(
+        select(DispatchAttempt.id).where(
+            DispatchAttempt.order_id == order_id,
+            DispatchAttempt.status == DispatchAttemptStatus.PENDING,
+            DispatchAttempt.expires_at <= datetime.now(timezone.utc),
+        )
+    )
+    return list(result.scalars().all())
 
-    await asyncio.sleep(RESPONSE_TIMEOUT_SEC + 2)
-    async with async_session() as db:
-        try:
-            await expire_attempt(db, attempt_id)
-        except Exception:
-            logger.exception("Dispatch attempt #%s muddati tugashini qayta ishlashda xato", attempt_id)
+
+async def _has_live_attempt(db: AsyncSession, order_id: int) -> bool:
+    """Shu order bo'yicha haydovchi hali javob kutayotgan taklif bormi."""
+    result = await db.execute(
+        select(DispatchAttempt.id)
+        .where(
+            DispatchAttempt.order_id == order_id,
+            DispatchAttempt.status == DispatchAttemptStatus.PENDING,
+            DispatchAttempt.expires_at > datetime.now(timezone.utc),
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
 
 
-async def expire_attempt(db: AsyncSession, attempt_id: int) -> None:
+async def expire_attempt(db: AsyncSession, attempt_id: int, *, continue_dispatch: bool = True) -> None:
+    """Urinishni EXPIRED qiladi va (standart holatda) keyingi raundni navbatga qo'yadi.
+
+    `continue_dispatch=False` — chaqiruvchi keyingi raundni o'zi bajaradigan holat
+    (`run_dispatch_job`): xabar ikki marta navbatga tushmasligi uchun.
+    """
     result = await db.execute(
         update(DispatchAttempt)
         .where(DispatchAttempt.id == attempt_id, DispatchAttempt.status == DispatchAttemptStatus.PENDING)
@@ -452,14 +629,20 @@ async def expire_attempt(db: AsyncSession, attempt_id: int) -> None:
             row.bot_chat_id, row.bot_message_id, "⏱ Vaqt tugadi — buyurtma boshqa haydovchiga yuborildi"
         )
 
+    if not continue_dispatch:
+        return
+
     order = await order_crud.get_order(db, row.order_id)
     if order:
-        await _dispatch_next(db, order)
+        await _dispatch_next(db, order, reason="expired")
 
 
 async def sweep_expired(db: AsyncSession) -> int:
     """Muddati o'tgan-u hali `pending` qolgan urinishlarni topib yopadi va navbatni davom
-    ettiradi. Process qayta ishga tushganda (asyncio tasklari yo'qolganda) tiklanish uchun."""
+    ettiradi (worker'da davriy ishlaydi).
+
+    Zaxira mexanizmi: odatda buni `dispatch.delayed` navbatidan qaytgan xabar bajaradi,
+    lekin broker o'chgan paytda qo'yilmay qolgan vazifalar shu yerda tiklanadi."""
     now = datetime.now(timezone.utc)
     result = await db.execute(
         select(DispatchAttempt.id).where(
@@ -470,6 +653,96 @@ async def sweep_expired(db: AsyncSession) -> int:
     for attempt_id in attempt_ids:
         await expire_attempt(db, attempt_id)
     return len(attempt_ids)
+
+
+# Buyurtma qidiruvsiz qolgan deb hisoblanadigan muddat (oxirgi navbatga qo'yishdan beri).
+STUCK_ORDER_AFTER_SEC = 3 * RESPONSE_TIMEOUT_SEC
+
+
+def _live_attempt_order_ids():
+    """Hozir javob kutilayotgan takliflar bog'langan buyurtma ID lari (subquery)."""
+    return (
+        select(DispatchAttempt.order_id)
+        .where(
+            DispatchAttempt.status == DispatchAttemptStatus.PENDING,
+            DispatchAttempt.expires_at > datetime.now(timezone.utc),
+        )
+        .scalar_subquery()
+    )
+
+
+async def enqueue_due_orders(db: AsyncSession) -> int:
+    """Qidiruv vaqti kelgan rejalashtirilgan buyurtmalarni navbatga qo'yadi.
+
+    `start_dispatch` yuklash vaqti uzoq bo'lsa buyurtmani ataylab boshlamaydi. Bu
+    funksiya (worker'dagi davriy sweep chaqiradi) yuklashgacha
+    `DISPATCH_START_LEAD_SEC` qolganda qidiruvni ishga tushiradi.
+
+    Faqat HALI BOSHLANMAGAN buyurtmalar olinadi (`last_dispatch_enqueued_at IS NULL`
+    va `dispatch_round == 0`) — allaqachon qidirilayotganini qayta qo'zg'atish
+    `requeue_stuck_orders` ning ishi.
+    """
+    now = datetime.now(timezone.utc)
+    due_before = now + timedelta(seconds=DISPATCH_START_LEAD_SEC)
+
+    result = await db.execute(
+        select(Order)
+        .options(selectinload(Order.waypoints))
+        .where(
+            Order.status == OrderStatus.PENDING,
+            Order.driver_id.is_(None),
+            Order.dispatch_round == 0,
+            Order.last_dispatch_enqueued_at.is_(None),
+            Order.price_bump_requested_at.is_(None),
+            Order.pickup_at <= due_before,
+            Order.id.notin_(_live_attempt_order_ids()),
+        )
+    )
+    orders = list(result.scalars().all())
+    for order in orders:
+        await _dispatch_next(db, order, reason="scheduled_start")
+    if orders:
+        logger.info("%s ta rejalashtirilgan buyurtma uchun qidiruv boshlandi", len(orders))
+    return len(orders)
+
+
+async def requeue_stuck_orders(db: AsyncSession) -> int:
+    """Navbatga tushmay qolgan PENDING buyurtmalarni qayta qo'yadi.
+
+    Broker publish paytida o'chiq bo'lsa `_dispatch_next` xatoni yutadi va buyurtma
+    hech kimga taklif qilinmay qolib ketardi. Bu funksiya aynan shunday buyurtmalarni
+    topadi: ochiq taklifi yo'q, narx oshirish ham so'ralmagan, lekin oxirgi urinishdan
+    beri `STUCK_ORDER_AFTER_SEC` o'tgan.
+    """
+    now = datetime.now(timezone.utc)
+    threshold = now - timedelta(seconds=STUCK_ORDER_AFTER_SEC)
+    due_before = now + timedelta(seconds=DISPATCH_START_LEAD_SEC)
+
+    result = await db.execute(
+        select(Order)
+        .options(selectinload(Order.waypoints))
+        .where(
+            Order.status == OrderStatus.PENDING,
+            Order.driver_id.is_(None),
+            Order.price_bump_requested_at.is_(None),
+            Order.dispatch_round < MAX_ROUNDS,
+            or_(
+                Order.last_dispatch_enqueued_at.is_(None),
+                Order.last_dispatch_enqueued_at <= threshold,
+            ),
+            # Kelajakdagi buyurtma "qidiruvsiz qolgan" EMAS — u ataylab kutmoqda.
+            # Bu shartsiz sweep uni darhol qidiruvga tashlab, butun kechiktirishni
+            # bekor qilib qo'yardi.
+            Order.pickup_at <= due_before,
+            Order.id.notin_(_live_attempt_order_ids()),
+        )
+    )
+    orders = list(result.scalars().all())
+    for order in orders:
+        await _dispatch_next(db, order, reason="requeue")
+    if orders:
+        logger.warning("%s ta qidiruvsiz qolgan buyurtma navbatga qaytarildi", len(orders))
+    return len(orders)
 
 
 async def accept_attempt(db: AsyncSession, attempt_id: int, *, acting_user_id: int) -> Order:
@@ -606,7 +879,7 @@ async def reject_attempt(db: AsyncSession, attempt_id: int, *, acting_user_id: i
 
     order = await order_crud.get_order(db, row.order_id)
     if order:
-        await _dispatch_next(db, order)
+        await _dispatch_next(db, order, reason="rejected")
 
 
 async def get_active_attempt(db: AsyncSession, driver_id: int) -> Optional[DispatchAttempt]:
@@ -632,6 +905,66 @@ async def get_active_attempt(db: AsyncSession, driver_id: int) -> Optional[Dispa
     return result.scalars().first()
 
 
+async def get_pending_offer_message(db: AsyncSession, order: Order) -> Optional[tuple[int, int]]:
+    """Shu buyurtma bo'yicha haydovchiga yuborilgan ochiq taklif xabarining manzili.
+
+    Buyurtma bekor qilinishidan OLDIN chaqirilishi shart: `order/crud.py cancel_order`
+    ochiq urinishlarni CANCELLED qilib yopadi va keyin bu so'rov hech narsa topmaydi.
+
+    `notify_offer_cancelled` bilan juftlikda ishlatiladi — WebApp (`order/router.py`)
+    va bot (`handlers/dispatch.py`) bekor qilish oqimlari bir xil bo'lishi uchun.
+    """
+    if order.driver_id is not None or order.status != OrderStatus.PENDING:
+        return None
+
+    result = await db.execute(
+        select(DispatchAttempt)
+        .where(
+            DispatchAttempt.order_id == order.id,
+            DispatchAttempt.status == DispatchAttemptStatus.PENDING,
+        )
+        .order_by(DispatchAttempt.sent_at.desc())
+    )
+    attempt = result.scalars().first()
+    if attempt is None or attempt.bot_chat_id is None or attempt.bot_message_id is None:
+        return None
+    return attempt.bot_chat_id, attempt.bot_message_id
+
+
+async def notify_offer_cancelled(offer_ref: Optional[tuple[int, int]]) -> None:
+    """Taklif olgan haydovchining bot xabarini "bekor qilindi" ga tahrirlaydi.
+
+    Buyurtma haqiqatan bekor qilingandan KEYIN chaqiriladi: aks holda DB xatosida
+    haydovchi "bekor qilindi" xabarini olib, buyurtma esa faol qolib ketardi.
+    """
+    if offer_ref is None:
+        return
+    chat_id, message_id = offer_ref
+    await notifications.edit_telegram_message(chat_id, message_id, "Bu buyurtma bekor qilindi")
+
+
+def price_bump_keyboard(order: Order):
+    """"Haydovchi topilmadi" xabarining tugmalari: narxni oshirish yoki bekor qilish.
+
+    Alohida funksiya, chunki bot handleri (`handlers/dispatch.py`) bekor qilishdan
+    voz kechilganda shu klaviaturani qayta tiklaydi.
+
+    5 ta belgilangan variant (+100 000 ... +500 000 UZS) — WebApp'dagi narx tahrirlash
+    ekrani bilan aynan bir xil ro'yxat (`services/pricing.py`). Oxirgi qator — voz
+    kechish yo'li: narx oshirish yagona chiqish bo'lib qolmasligi kerak.
+    """
+    return notifications.inline_keyboard(
+        [
+            [(
+                f"+{option['increment']:,.0f} ({option['price']:,.0f} {order.currency})".replace(",", " "),
+                f"pricebump:{order.id}:{option['price']}",
+            )]
+            for option in pricing.quick_price_options(order.price)
+        ]
+        + [[("❌ Buyurtmani bekor qilish", f"ordercancel:{order.id}")]]
+    )
+
+
 async def _request_price_bump(db: AsyncSession, order: Order) -> None:
     if order.price_bump_requested_at is not None:
         return  # allaqachon so'ralgan — qayta-qayta yubormaslik uchun
@@ -640,30 +973,49 @@ async def _request_price_bump(db: AsyncSession, order: Order) -> None:
     # _dispatch_next dagi kabi: UPDATE'dan keyin `updated_at` expired qoladi.
     await db.refresh(order, attribute_names=["price_bump_requested_at", "updated_at"])
 
+    # Nomzod umuman topilmagan bo'lsa raund soni 0 bo'lishi mumkin — "0 ta haydovchi
+    # javob bermadi" degan g'alati matn chiqmasligi uchun ikki xil jumla.
+    if order.dispatch_round > 0:
+        reason_text = (
+            f"'{order.cargo_name}' buyurtmangiz uchun {order.dispatch_round} ta "
+            "haydovchidan hech biri javob bermadi."
+        )
+    else:
+        reason_text = f"'{order.cargo_name}' buyurtmangiz uchun mos haydovchi topilmadi."
+
     text = (
-        f"😔 '{order.cargo_name}' buyurtmangiz uchun {order.dispatch_round} ta haydovchidan "
-        f"hech biri javob bermadi.\n\nJoriy narx: {order.price} {order.currency}\n"
+        f"😔 {reason_text}\n\nJoriy narx: {order.price} {order.currency}\n"
         f"Narxni oshirib qidiruvni davom ettiramizmi?"
     )
-    # 5 ta belgilangan variant (+100 000 ... +500 000 UZS) — WebApp'dagi narx tahrirlash
-    # ekrani bilan aynan bir xil ro'yxat (services/pricing.py).
-    keyboard = notifications.inline_keyboard(
-        [
-            [(
-                f"+{option['increment']:,.0f} ({option['price']:,.0f} {order.currency})".replace(",", " "),
-                f"pricebump:{order.id}:{option['price']}",
-            )]
-            for option in pricing.quick_price_options(order.price)
-        ]
+    await notifications.send_telegram_message(
+        order.customer_id, text, reply_markup=price_bump_keyboard(order)
     )
-    await notifications.send_telegram_message(order.customer_id, text, reply_markup=keyboard)
 
 
 async def apply_price_bump(db: AsyncSession, order: Order, new_price: Decimal) -> Order:
+    """Sender narxni oshiradi — buyurtma qayta qidiruvga (PENDING) qaytadi.
+
+    Qidiruvning o'zi shu yerda BAJARILMAYDI: navbatga qo'yiladi va worker ko'taradi,
+    shuning uchun WebApp/bot tugmasi darhol javob oladi.
+    """
     if order.driver_id is not None:
         raise DispatchError("Buyurtmaga allaqachon haydovchi biriktirilgan", status_code=409)
-    if order.dispatch_round < MAX_ROUNDS:
+    if order.status in (OrderStatus.COMPLETED, OrderStatus.CANCELLED):
+        raise DispatchError(
+            "Yakunlangan yoki bekor qilingan buyurtma narxini oshirib bo'lmaydi", status_code=409
+        )
+    # DIQQAT: shart `dispatch_round >= MAX_ROUNDS` EMAS. Haydovchi umuman topilmaganda
+    # (`_run_dispatch_round` da nomzod yo'q) narx oshirish 1-raunddayoq taklif qilinadi —
+    # eski shart o'sha holatda tugmani 409 bilan rad etardi, ya'ni taklif ko'rinardi-yu
+    # ishlamasdi. Yagona to'g'ri mezon — taklif haqiqatan yuborilganmi.
+    if order.price_bump_requested_at is None:
         raise DispatchError("Bu buyurtma uchun narx oshirish hali taklif qilinmagan", status_code=409)
+    if order.price_bump_count >= MAX_PRICE_BUMPS:
+        raise DispatchError(
+            f"Narxni {MAX_PRICE_BUMPS} martadan ko'p oshirib bo'lmaydi — "
+            "iltimos qo'llab-quvvatlash xizmatiga murojaat qiling",
+            status_code=409,
+        )
 
     # Bu endpoint narxni oshirish uchun, lekin qiymat mijozdan keladi — qo'lda tahrirlash
     # bilan bir xil chegara (SENDER_MAX_DISCOUNT_PERCENT) shu yerda ham tekshiriladi.
@@ -676,14 +1028,41 @@ async def apply_price_bump(db: AsyncSession, order: Order, new_price: Decimal) -
     if order.original_price is None:
         order.original_price = order.price
     order.price = new_price
+    order.price_bump_count += 1
+    # Qidiruv noldan boshlanadi: avval rad etgan haydovchilarga ham yangi narx bilan
+    # qayta taklif chiqishi kerak (`_previously_attempted_driver_ids` DispatchAttempt
+    # bo'yicha ishlaydi, shuning uchun eski urinishlar tarixi ham tozalanadi).
     order.dispatch_round = 0
     order.price_bump_requested_at = None
+    # "Qidirilmoqda" holatiga qaytarish. Bump paytida order odatda allaqachon PENDING,
+    # lekin buni aniq yozib qo'yish shart — WebApp aynan shu statusga qarab qidiruv
+    # ko'rsatkichini chizadi va so'rovni davom ettiradi.
+    order.status = OrderStatus.PENDING
+    await db.execute(
+        update(DispatchAttempt)
+        .where(
+            DispatchAttempt.order_id == order.id,
+            DispatchAttempt.status.in_(
+                [DispatchAttemptStatus.REJECTED, DispatchAttemptStatus.EXPIRED]
+            ),
+        )
+        .values(status=DispatchAttemptStatus.CANCELLED)
+    )
     await db.commit()
     await db.refresh(
-        order, attribute_names=["price", "original_price", "dispatch_round", "price_bump_requested_at", "updated_at"]
+        order,
+        attribute_names=[
+            "price",
+            "original_price",
+            "price_bump_count",
+            "dispatch_round",
+            "price_bump_requested_at",
+            "status",
+            "updated_at",
+        ],
     )
 
-    await _dispatch_next(db, order)
+    await _dispatch_next(db, order, reason="price_bump")
     return order
 
 

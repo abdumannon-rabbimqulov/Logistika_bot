@@ -190,6 +190,9 @@ export interface Order {
   status: OrderStatus;
   dispatch_round: number;
   price_bump_requested_at: string | null;
+  /** To'ldirilgan bo'lsa — haydovchi qidiruvi hali boshlanmagan va shu paytda
+   *  boshlanadi (kelajakka rejalashtirilgan yuk). `null` — qidiruv ketmoqda. */
+  dispatch_starts_at: string | null;
   overload_warning: string | null;
   completed_at: string | null;
   created_at: string;
@@ -489,6 +492,25 @@ export interface PriceEstimateLocation {
   address?: string;
   latitude?: number;
   longitude?: number;
+}
+
+/** Bitta "narxni oshirish" tugmasi — qiymatlarni backend beradi
+ *  (services/pricing.py QUICK_PRICE_INCREMENTS), frontend hisoblamaydi. */
+export interface QuickPriceOption {
+  increment: number;
+  price: number;
+  currency: string;
+}
+
+/** GET /orders/{id}/price-options javobi. */
+export interface OrderPriceOptionsResponse {
+  order_id: number;
+  currency: string;
+  base_price: number;
+  current_price: number;
+  min_allowed_price: number;
+  max_discount_percent: number;
+  quick_price_options: QuickPriceOption[];
 }
 
 export interface PriceEstimateOption {

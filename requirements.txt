@@ -13,9 +13,13 @@ uvicorn>=0.23.0
 alembic==1.13.1
 python-multipart>=0.0.12
 redis==5.0.4
+# RabbitMQ (dispatch navbati). `pika` emas — loyiha to'liq async, sinxron pika
+# publish paytida event loop'ni bloklardi. Broker va protokol o'sha-o'sha (AMQP 0-9-1).
+aio-pika==9.5.7
 phonenumbers==9.0.32
 aiofiles>=23.2.1
 geoalchemy2
 shapely
 httpx>=0.27.0
 pytest>=8.0.0
+pytest-asyncio>=0.24.0

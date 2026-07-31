@@ -145,7 +145,19 @@ Bu qismning texnik yechimi eng muhim arxitektura qarori:
 
 **Nega Celery emas:** loyiha allaqachon aiogram+FastAPI asosida single-process async arxitekturaga qurilgan (Redis faqat pub/sub va cache uchun ishlatiladi, alohida worker/broker yo'q). APScheduler shu arxitekturaga tabiiy qo'shiladi, Celery esa alohida worker process, broker konfiguratsiyasi va operatsion murakkablik qo'shadi — hozirgi masshtab uchun ortiqcha.
 
-**Muqobil (kelajakda, agar yuk oshsa):** Redis TTL + keyspace notification (`notify-keyspace-events Ex`) — key expire bo'lganda event kelib, worker darhol reaksiya qiladi, polling shart emas. Bu ko'proq gorizontal scale qilish kerak bo'lganda (bir nechta backend instance) foydali, chunki job APScheduler'da bitta process xotirasida emas, Redis'da markazlashgan bo'ladi.
+> **YANGILANDI (2026-07-31): yuqoridagi qaror o'zgardi — endi RabbitMQ ishlatiladi.**
+>
+> Sabab: buyurtmalar ko'payganda qidiruvning HTTP so'rov ichida bajarilishi web
+> jarayonini bo'g'ar edi va barcha buyurtmalar bir vaqtda qidirilardi. Hozirgi holat:
+>
+> - `services/queue.py` — aio-pika publisher (Celery emas: bizga vazifa navbati kerak,
+>   Celery'ning butun task freymvorki emas; aio-pika loyihaning async yadrosiga to'g'ri keladi).
+> - `workers/dispatch_worker.py` — alohida jarayon (`docker-compose` xizmati
+>   `dispatch-worker`), `prefetch_count=DISPATCH_PREFETCH` bilan bir vaqtdagi qidiruvlar
+>   sonini cheklaydi. `--scale` bilan gorizontal kengaytiriladi.
+> - 60 soniyalik javob taymeri — APScheduler/Redis job store emas, `dispatch.delayed`
+>   navbati (`x-message-ttl` + dead-letter). Jarayon qayta ishga tushsa ham yo'qolmaydi.
+> - FastAPI lifespan'dagi sweep loop worker'ga ko'chdi; web jarayoni sof API bo'lib qoldi.
 
 ---
 

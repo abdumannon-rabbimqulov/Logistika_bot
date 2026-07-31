@@ -60,6 +60,49 @@ class WaypointProgressUpdate(BaseModel):
     accuracy: Optional[float] = Field(None, ge=0, description="GPS aniqligi, metrda")
     override_reason: Optional[str] = Field(None, max_length=300)
 
+    @field_validator("status", mode="before")
+    @classmethod
+    def _normalize_status(cls, value):
+        """`"arrived"` ham, `"ARRIVED"` ham qabul qilinadi.
+
+        Enum qiymatlari BOSH harflarda, shuning uchun kichik harfli qiymat yuborgan
+        klient (Postman/curl bilan qo'lda sinash yoki boshqa integratsiya) tushunarsiz
+        422 olardi. Registr bu yerda mazmunga ta'sir qilmaydi — normallashtiramiz.
+        """
+        if isinstance(value, str):
+            return value.strip().upper()
+        return value
+
+    @field_validator("status")
+    @classmethod
+    def _reject_pending(cls, value: WaypointStatus) -> WaypointStatus:
+        """`PENDING` — boshlang'ich holat, unga QAYTIB bo'lmaydi.
+
+        Sxema darajasida rad etiladi: aks holda so'rov `services/order_flow.py` gacha
+        yetib borib, u yerdan "bu holatga o'tkazib bo'lmaydi" degan noaniqroq xato
+        qaytarardi.
+        """
+        if value == WaypointStatus.PENDING:
+            raise ValueError(
+                "Nuqtani 'PENDING' holatiga qaytarib bo'lmaydi — "
+                "'ARRIVED', 'COMPLETED' yoki 'SKIPPED' yuboring"
+            )
+        return value
+
+    @model_validator(mode="after")
+    def _coords_together(self) -> "WaypointProgressUpdate":
+        """Koordinata to'liq bo'lishi shart: faqat bittasi geofence uchun yaroqsiz.
+
+        Ilgari `latitude` yolg'iz kelsa ham so'rov o'tib ketardi va `longitude` yo'qligi
+        sababli server jimgina Redis'dagi eski nuqtaga tayanardi — haydovchi qayerdaligi
+        noto'g'ri baholanardi.
+        """
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError("latitude va longitude birga yuborilishi kerak")
+        if self.accuracy is not None and self.latitude is None:
+            raise ValueError("accuracy koordinatasiz ma'noga ega emas")
+        return self
+
 
 class OrderWaypointResponse(OrderWaypointBase):
     model_config = ConfigDict(from_attributes=True)
@@ -82,11 +125,49 @@ class OrderWaypointResponse(OrderWaypointBase):
 #  Order sxemalari
 # ============================================================
 
+# ── Yuk tayyor bo'lish vaqti chegaralari ────────────────────────────────────
+# Mijoz buyurtmani kelajakka rejalashtira oladi ("2 kundan keyin"), lekin cheksiz
+# emas: yuqori chegara terish xatolarini ushlaydi (masalan yil 2025 o'rniga 2205
+# yozilib qolsa, buyurtma navbatda abadiy osilib qolardi).
+MAX_PICKUP_DAYS_AHEAD = 90
+# Mijoz "hozir" tanlaganda so'rov tarmoqda kechikishi mumkin — shuncha imtiyoz beriladi.
+PICKUP_PAST_TOLERANCE = timedelta(minutes=1)
+
+
+def validate_pickup_time(value: datetime) -> datetime:
+    """Yuk tayyor bo'lish vaqti o'tmishda ham, juda uzoq kelajakda ham bo'lmasligi kerak.
+
+    Yaratishda ham (`OrderCreate`), tahrirlashda ham (`OrderUpdate`) bir xil qoida —
+    ilgari tahrirlashda umuman tekshiruv yo'q edi va mijoz mavjud buyurtmaning
+    yuklash vaqtini o'tmishga surib qo'ya olardi.
+
+    Soat mintaqasiz (naive) qiymat UTC deb qabul qilinadi (DB ustuni `timezone=True`).
+    """
+    aware_value = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
+
+    if aware_value < now - PICKUP_PAST_TOLERANCE:
+        raise ValueError("Yuk tayyor bo'lish vaqti o'tmishda bo'lishi mumkin emas")
+
+    if aware_value > now + timedelta(days=MAX_PICKUP_DAYS_AHEAD):
+        raise ValueError(
+            f"Yuk tayyor bo'lish vaqtini {MAX_PICKUP_DAYS_AHEAD} kundan uzoqqa "
+            "belgilab bo'lmaydi"
+        )
+    return value
+
+
 class OrderBase(BaseModel):
     cargo_name: str = Field(..., max_length=200)
     weight: Decimal = Field(..., gt=0, description="Yuk og'irligi, tonna")
     volume: Optional[Decimal] = Field(None, gt=0, description="Yuk hajmi, m³")
-    pickup_at: datetime
+    pickup_at: datetime = Field(
+        ...,
+        description=(
+            "Yuk tayyor bo'ladigan payt (ISO 8601, soat mintaqasi bilan). Hozirgi vaqt "
+            f"yoki kelajak; ko'pi bilan {MAX_PICKUP_DAYS_AHEAD} kun oldinga."
+        ),
+    )
     required_truck_type_id: int
 
 
@@ -102,13 +183,8 @@ class OrderCreate(OrderBase):
 
     @field_validator("pickup_at")
     @classmethod
-    def validate_pickup_at_not_in_past(cls, value: datetime) -> datetime:
-        # Soat mintaqasiz (naive) qiymat kelsa UTC deb qabul qilinadi (DB ustuni timezone=True).
-        aware_value = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
-        # 1 daqiqalik imtiyoz — mijoz "hozir" tanlaganda so'rov tarmoqda kechikishi mumkin.
-        if aware_value < datetime.now(timezone.utc) - timedelta(minutes=1):
-            raise ValueError("Yuklash vaqti (pickup_at) o'tmishda bo'lishi mumkin emas")
-        return value
+    def validate_pickup_at(cls, value: datetime) -> datetime:
+        return validate_pickup_time(value)
 
     @field_validator("waypoints")
     @classmethod
@@ -153,6 +229,16 @@ class OrderUpdate(BaseModel):
     volume: Optional[Decimal] = Field(None, gt=0)
     pickup_at: Optional[datetime] = None
     required_truck_type_id: Optional[int] = None
+
+    @field_validator("pickup_at")
+    @classmethod
+    def validate_pickup_at(cls, value: Optional[datetime]) -> Optional[datetime]:
+        """Yaratishdagi bilan bir xil qoida — ilgari bu yerda tekshiruv YO'Q edi.
+
+        Ya'ni mijoz buyurtmani yaratgandan keyin uni tahrirlab, yuklash vaqtini
+        o'tmishga surib qo'ya olardi (yoki 100 yil keyinga).
+        """
+        return validate_pickup_time(value) if value is not None else None
 
 
 class OrderStatusUpdate(BaseModel):
@@ -236,7 +322,13 @@ class OrderResponse(OrderBase):
     currency: str
     status: OrderStatus
     dispatch_round: int = 0
+    # To'ldirilgan bo'lsa — haydovchi topilmadi, WebApp/bot narx oshirish taklifini ko'rsatadi
     price_bump_requested_at: Optional[datetime] = None
+    # Narx necha marta oshirilgani (limit: services/dispatch.py MAX_PRICE_BUMPS)
+    price_bump_count: int = 0
+    # To'ldirilgan bo'lsa — haydovchi qidiruvi HALI boshlanmagan va shu paytda
+    # boshlanadi (rejalashtirilgan buyurtma). `None` — qidiruv allaqachon ketmoqda.
+    dispatch_starts_at: Optional[datetime] = None
     overload_warning: Optional[str] = None
     completed_at: Optional[datetime] = None
     created_at: datetime
@@ -285,6 +377,20 @@ class OrderDetailResponse(OrderResponse):
         base.current_waypoint = (
             OrderWaypointResponse.model_validate(order.current_waypoint) if order.current_waypoint else None
         )
+
+        # Qidiruv qachon boshlanishi — faqat hali boshlanmagan buyurtma uchun.
+        # Qiymatni server hisoblaydi, shunda `DISPATCH_LEAD_HOURS` sozlamasi
+        # frontendda dublikat qilinmaydi.
+        if (
+            order.status == OrderStatus.PENDING
+            and order.driver_id is None
+            and order.last_dispatch_enqueued_at is None
+        ):
+            from services import dispatch as dispatch_service  # aylanma importni oldini olish
+
+            starts_at = dispatch_service.dispatch_starts_at(order)
+            if starts_at > datetime.now(timezone.utc):
+                base.dispatch_starts_at = starts_at
 
         if order.driver is not None and order.driver.user is not None:
             driver_user = order.driver.user

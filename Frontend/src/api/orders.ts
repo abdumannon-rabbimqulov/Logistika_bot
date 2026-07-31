@@ -7,6 +7,7 @@ import type {
   OrderDetail,
   OrderDriverLocation,
   OrderListItem,
+  OrderPriceOptionsResponse,
   OrderStatus,
   PriceEstimateLocation,
   PriceEstimateResponse,
@@ -41,8 +42,23 @@ export function estimatePrice(
   return api.post<PriceEstimateResponse>('/orders/estimate-price', { origin, destination });
 }
 
+/** Narx oshirish variantlari (chegara + tayyor summalar) — botdagi tugmalar bilan bir xil. */
+export function getPriceOptions(orderId: number): Promise<OrderPriceOptionsResponse> {
+  return api.get<OrderPriceOptionsResponse>(`/orders/${orderId}/price-options`);
+}
+
+/** Narxni oshirib qidiruvni davom ettirish. Javob darhol qaytadi — qidiruvning
+ *  o'zi RabbitMQ navbati orqali fon worker'ida ketadi (workers/dispatch_worker.py). */
 export function bumpPrice(orderId: number, price: number): Promise<OrderDetail> {
   return api.post<OrderDetail>(`/orders/${orderId}/price-bump`, { price });
+}
+
+/** Buyurtmani bekor qilish (egasi). Haydovchi biriktirilgan bo'lsa ham ishlaydi,
+ *  faqat IN_PROGRESS da backend 422 qaytaradi (yuk yo'lda — admin ishi).
+ *  Javob 204: ochiq taklif yopiladi va taklif olgan haydovchi xabar oladi. */
+export function cancelOrder(orderId: number, reason?: string): Promise<void> {
+  const query = reason ? `?reason=${encodeURIComponent(reason)}` : '';
+  return api.delete<void>(`/orders/${orderId}${query}`);
 }
 
 // ── Haydovchi dispatch oqimi ────────────────────────────────────────────────────────
