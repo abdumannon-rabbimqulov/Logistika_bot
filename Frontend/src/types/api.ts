@@ -440,6 +440,23 @@ export interface AdminOrderUpdate {
   currency?: string;
 }
 
+/** "Daromad" ekranidagi bitta qator (GET /drivers/me/earnings).
+ *
+ *  `commission_amount` — platforma ushlab qolgan summa, MUSBAT son (bazada u
+ *  manfiy saqlanadi, chunki balansdan yechiladi). `net_amount` — haydovchi
+ *  qo'liga tushadigan sof summa. */
+export interface DriverEarning {
+  order_id: number;
+  cargo_name: string;
+  origin_address: string | null;
+  destination_address: string | null;
+  gross_amount: number;
+  commission_amount: number;
+  net_amount: number;
+  currency: string;
+  completed_at: string | null;
+}
+
 /** Balans harakati (GET /system/users/{id}/balance/transactions) */
 export interface BalanceTransaction {
   id: number;

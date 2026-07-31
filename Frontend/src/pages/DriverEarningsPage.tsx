@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ApiError } from '../api/client';
-import { listMyOrders } from '../api/orders';
+import { listMyEarnings } from '../api/drivers';
 import { DriverBottomNav } from '../components/DriverBottomNav';
 import { StarIcon } from '../components/icons';
-import type { OrderListItem } from '../types/api';
+import type { DriverEarning } from '../types/api';
 import { formatPrice } from '../utils/format';
 import { useDriverCabinet } from './DriverCabinetContext';
 import styles from './DriverEarningsPage.module.css';
 
 const DAY_LABELS = ['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya']; // Dushanba..Yakshanba
+// Ro'yxatda va haftalik grafikda ishlatiladigan yozuvlar soni.
+const EARNINGS_LIMIT = 50;
 
 interface DayBucket {
   label: string;
@@ -18,14 +20,14 @@ interface DayBucket {
 // Buyurtma daromadi YAKUNLANGAN sana bo'yicha hisoblanadi (created_at emas): 10 kun
 // oldin yaratilib bugun yakunlangan yuk aynan shu haftaga tegishli. Eski yozuvlarda
 // completed_at NULL bo'lishi mumkin — ular haftalik hisobga qo'shilmaydi.
-function completionDate(order: OrderListItem): Date | null {
-  if (!order.completed_at) return null;
-  const d = new Date(order.completed_at);
+function completionDate(item: DriverEarning): Date | null {
+  if (!item.completed_at) return null;
+  const d = new Date(item.completed_at);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
 // Oxirgi 7 kunni (bugundan orqaga) Dushanba-boshli hafta indeksiga joylaydi.
-function buildWeek(completed: OrderListItem[]): { buckets: DayBucket[]; weekTotal: number; weekCount: number } {
+function buildWeek(completed: DriverEarning[]): { buckets: DayBucket[]; weekTotal: number; weekCount: number } {
   const now = new Date();
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
@@ -40,42 +42,52 @@ function buildWeek(completed: OrderListItem[]): { buckets: DayBucket[]; weekTota
 
   let weekTotal = 0;
   let weekCount = 0;
-  for (const order of completed) {
-    const done = completionDate(order);
+  for (const item of completed) {
+    const done = completionDate(item);
     if (!done) continue;
     const dayIndex = Math.floor((done.getTime() - start.getTime()) / 86_400_000);
     if (dayIndex >= 0 && dayIndex < 7) {
-      buckets[dayIndex].total += Number(order.price);
-      weekTotal += Number(order.price);
+      // Grafikda SOF daromad ko'rsatiladi (komissiya ayrilgan) — pastdagi ro'yxat
+      // bilan bir xil raqam bo'lsin, aks holda "shu hafta" summasi qo'lga tushgan
+      // puldan katta ko'rinib, chalg'itardi.
+      buckets[dayIndex].total += Number(item.net_amount);
+      weekTotal += Number(item.net_amount);
       weekCount += 1;
     }
   }
   return { buckets, weekTotal, weekCount };
 }
 
+/** Sana + vaqt: "12-noyabr, 14:30". */
+function formatCompletedAt(item: DriverEarning): string {
+  const done = completionDate(item);
+  if (!done) return 'Sana noma’lum';
+  return `${done.toLocaleDateString('uz-UZ', { day: 'numeric', month: 'long' })}, ${done.toLocaleTimeString(
+    'uz-UZ',
+    { hour: '2-digit', minute: '2-digit' },
+  )}`;
+}
+
 export function DriverEarningsPage() {
   const { cabinet } = useDriverCabinet();
-  const [orders, setOrders] = useState<OrderListItem[] | null>(null);
+  // Server allaqachon YAKUNLANGAN buyurtmalarni, yakunlanish sanasi bo'yicha
+  // saralab beradi va har biriga komissiyani bog'laydi — bu yerda filtrlash/saralash
+  // kerak emas (ilgari hammasi `listMyOrders` dan olinib, komissiya umuman yo'q edi).
+  const [earnings, setEarnings] = useState<DriverEarning[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    listMyOrders()
-      .then(setOrders)
+    listMyEarnings({ limit: EARNINGS_LIMIT })
+      .then(setEarnings)
       .catch((err) => {
         setError(err instanceof ApiError ? err.message : 'Ma’lumot yuklanmadi');
-        setOrders([]);
+        setEarnings([]);
       });
   }, []);
 
-  // Yakunlangan buyurtmalar — eng oxirgi yakunlangani birinchi bo'lib ("Oxirgi to'lovlar"
-  // ro'yxati uchun). completed_at yo'q eski yozuvlar oxiriga tushadi.
-  const completed = useMemo(
-    () =>
-      (orders ?? [])
-        .filter((o) => o.status === 'COMPLETED')
-        .sort((a, b) => (completionDate(b)?.getTime() ?? 0) - (completionDate(a)?.getTime() ?? 0)),
-    [orders],
-  );
+  // `earnings ?? []` to'g'ridan-to'g'ri yozilsa har renderda yangi massiv bo'lib,
+  // quyidagi `useMemo` hech qachon keshdan foydalanmasdi.
+  const completed = useMemo(() => earnings ?? [], [earnings]);
   const { buckets, weekTotal, weekCount } = useMemo(() => buildWeek(completed), [completed]);
   const maxBucket = Math.max(1, ...buckets.map((b) => b.total));
   const recent = completed.slice(0, 8);
@@ -128,25 +140,46 @@ export function DriverEarningsPage() {
 
         {/* Oxirgi to'lovlar */}
         <div className={styles.sectionTitle}>Oxirgi to'lovlar</div>
-        {orders === null ? (
+        {earnings === null ? (
           <div className={styles.spinner} />
         ) : recent.length === 0 ? (
           <div className={styles.empty}>Hali yakunlangan buyurtma yo'q</div>
         ) : (
           <div className={styles.payList}>
-            {recent.map((order) => (
-              <div key={order.id} className={styles.payRow}>
-                <div className={styles.payIcon}>+</div>
-                <div className={styles.payInfo}>
-                  <div className={styles.payCargo}>{order.cargo_name}</div>
-                  <div className={styles.payDate}>
-                    {(completionDate(order) ?? new Date(order.created_at)).toLocaleDateString('uz-UZ', {
-                      day: 'numeric',
-                      month: 'long',
-                    })}
+            {recent.map((item) => (
+              <div key={item.order_id} className={styles.payRow}>
+                <div className={styles.payHead}>
+                  <div className={styles.payInfo}>
+                    <div className={styles.payCargo}>
+                      {item.cargo_name}
+                      <span className={styles.payOrderId}>#{item.order_id}</span>
+                    </div>
+                    {(item.origin_address || item.destination_address) && (
+                      <div className={styles.payRoute}>
+                        {item.origin_address ?? '?'} → {item.destination_address ?? '?'}
+                      </div>
+                    )}
+                    <div className={styles.payDate}>{formatCompletedAt(item)}</div>
+                  </div>
+                  {/* Asosiy raqam — haydovchi qo'liga tushgan SOF summa. */}
+                  <div className={styles.payAmount}>
+                    +{formatPrice(item.net_amount)} {item.currency}
                   </div>
                 </div>
-                <div className={styles.payAmount}>+{formatPrice(order.price)} {order.currency}</div>
+
+                {/* Hisob-kitobning ochiq ko'rinishi: buyurtma narxi va undan
+                    ushlab qolingan komissiya. Komissiya 0 bo'lsa qator ko'rsatilmaydi
+                    (masalan tizim ishga tushishidan oldin yakunlangan buyurtmalar). */}
+                <div className={styles.payBreakdown}>
+                  <span className={styles.payBreakdownItem}>
+                    Buyurtma: {formatPrice(item.gross_amount)}
+                  </span>
+                  {Number(item.commission_amount) > 0 && (
+                    <span className={styles.payCommission}>
+                      Komissiya: −{formatPrice(item.commission_amount)}
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
           </div>

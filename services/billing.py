@@ -14,12 +14,13 @@ import logging
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from Admin_panel.models import PlatformSettings
 from driver.models import Driver
-from order.models import Order
+from order.models import Order, OrderStatus
 from users.models import BalanceTransaction, BalanceTransactionType, User
 
 logger = logging.getLogger(__name__)
@@ -151,6 +152,74 @@ async def adjust_user_balance(
     await db.commit()
     await db.refresh(transaction)
     return transaction
+
+
+async def list_driver_earnings(
+    db: AsyncSession, user_id: int, *, skip: int = 0, limit: int = 20
+) -> list[dict]:
+    """Haydovchining yakunlangan buyurtmalari va ularning har biridan olingan komissiya.
+
+    Nima uchun alohida so'rov: "Daromad" ekrani ilgari faqat buyurtmalar ro'yxatidan
+    quriladi va komissiyani UMUMAN ko'rsatmasdi — haydovchi qo'liga qancha tushganini
+    bilmasdi. Komissiya `balance_transactions` jadvalida (`ORDER_COMMISSION` turi,
+    `order_id` bilan bog'langan), shuning uchun ikkalasi bitta so'rovda birlashtiriladi
+    — aks holda har bir qator uchun alohida so'rov kerak bo'lardi (N+1).
+
+    `LEFT JOIN` ataylab: komissiya yozuvi bo'lmagan (masalan tizim ishga tushishidan
+    oldin yakunlangan) buyurtma ham ro'yxatdan tushib qolmasligi kerak — u
+    `commission_amount = 0` bilan ko'rsatiladi.
+
+    Bir buyurtma bo'yicha bir nechta komissiya yozuvi bo'lishi nazariy jihatdan mumkin
+    (qo'lda tuzatish), shuning uchun `SUM` olinadi.
+    """
+    commission = (
+        select(
+            BalanceTransaction.order_id.label("order_id"),
+            func.sum(BalanceTransaction.amount).label("signed_total"),
+        )
+        .where(
+            BalanceTransaction.user_id == user_id,
+            BalanceTransaction.type == BalanceTransactionType.ORDER_COMMISSION,
+            BalanceTransaction.order_id.is_not(None),
+        )
+        .group_by(BalanceTransaction.order_id)
+        .subquery()
+    )
+
+    result = await db.execute(
+        select(Order, commission.c.signed_total)
+        .options(selectinload(Order.waypoints))
+        .join(Driver, Driver.id == Order.driver_id)
+        .outerjoin(commission, commission.c.order_id == Order.id)
+        .where(Driver.user_id == user_id, Order.status == OrderStatus.COMPLETED)
+        # Yakunlanish sanasi bo'yicha (eng yangisi birinchi). Eski yozuvlarda
+        # `completed_at` NULL bo'lishi mumkin — ular oxiriga tushadi.
+        .order_by(Order.completed_at.desc().nullslast(), Order.id.desc())
+        .offset(max(skip, 0))
+        .limit(min(max(limit, 1), 100))
+    )
+
+    items: list[dict] = []
+    for order, signed_total in result.all():
+        # Komissiya balansdan YECHILADI, ya'ni manfiy saqlanadi. Interfeysda musbat
+        # miqdor ko'rsatiladi ("Komissiya: −50 000"), shuning uchun ishorasi olib tashlanadi.
+        commission_amount = abs(_round(Decimal(signed_total))) if signed_total is not None else Decimal("0.00")
+        gross = _round(Decimal(order.price))
+        items.append(
+            {
+                "order_id": order.id,
+                "cargo_name": order.cargo_name,
+                "origin_address": order.origin.address if order.origin else None,
+                "destination_address": order.destination.address if order.destination else None,
+                "gross_amount": gross,
+                "commission_amount": commission_amount,
+                # Haydovchi qo'liga tushadigan sof summa — ekranning asosiy raqami.
+                "net_amount": _round(gross - commission_amount),
+                "currency": order.currency,
+                "completed_at": order.completed_at,
+            }
+        )
+    return items
 
 
 async def list_balance_transactions(db: AsyncSession, user_id: int, *, skip: int = 0, limit: int = 50):

@@ -3,6 +3,7 @@ import type {
   BalanceTransaction,
   DriverCabinet,
   DriverCreateInput,
+  DriverEarning,
   DriverProfile,
   GoOnlineInput,
 } from '../types/api';
@@ -23,6 +24,18 @@ export async function getMyDriverCabinetOrNull(): Promise<DriverCabinet | null> 
 
 export function updateDriverAvailability(data: GoOnlineInput): Promise<DriverCabinet> {
   return api.patch<DriverCabinet>('/drivers/me', data);
+}
+
+/** "Daromad" ekrani uchun: har bir yakunlangan buyurtma, uning summasi va undan
+ *  ushlab qolingan komissiya. Komissiya `balance_transactions` dan olinadi va
+ *  serverda buyurtmaga bog'lanadi — bu yerda qo'shimcha so'rov kerak emas. */
+export function listMyEarnings(
+  params: { skip?: number; limit?: number } = {},
+): Promise<DriverEarning[]> {
+  return api.get<DriverEarning[]>('/drivers/me/earnings', {
+    skip: params.skip,
+    limit: params.limit,
+  });
 }
 
 /** Profil sahifasidagi balans tarixi — komissiya yechilishi va to'ldirishlar. */

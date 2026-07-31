@@ -168,6 +168,27 @@ async def get_my_driver_profile(
 
 
 @router.get(
+    "/me/earnings",
+    response_model=List[schemas.DriverEarningItem],
+    summary="Mening daromadlarim: har bir yakunlangan buyurtma va undan olingan komissiya",
+)
+async def list_my_earnings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """"Daromad" ekrani uchun: buyurtma nomi/manzillari, summa va ushlab qolingan komissiya.
+
+    Komissiya `balance_transactions` jadvalidan (`ORDER_COMMISSION`) olinadi va bitta
+    so'rovda buyurtmaga bog'lanadi — frontend har qator uchun alohida so'rov
+    yubormasligi kerak.
+    """
+    await _require_driver(db, current_user)
+    return await billing.list_driver_earnings(db, current_user.id, skip=skip, limit=limit)
+
+
+@router.get(
     "/me/balance/transactions",
     response_model=List[schemas.BalanceTransactionItem],
     summary="Mening balans tarixim (komissiya yechilishi va to'ldirishlar)",

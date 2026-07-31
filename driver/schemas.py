@@ -144,6 +144,30 @@ class DriverProfileResponse(BaseModel):
     is_blocked: bool = False
 
 
+class DriverEarningItem(BaseModel):
+    """"Daromad" ekranidagi bitta qator: qaysi buyurtma, qancha va qancha komissiya.
+
+    Ilgari bu ekran faqat buyurtmalar ro'yxatidan qurilardi va komissiyani umuman
+    ko'rsatmasdi — haydovchi qo'liga qancha tushganini bilmasdi. Endi buyurtma va
+    `balance_transactions` dagi `ORDER_COMMISSION` yozuvi bitta so'rovda birlashtiriladi
+    (`services/billing.py list_driver_earnings`).
+    """
+
+    order_id: int
+    cargo_name: str
+    origin_address: Optional[str] = None
+    destination_address: Optional[str] = None
+
+    gross_amount: Decimal = Field(..., description="Buyurtma narxi (komissiyagacha)")
+    commission_amount: Decimal = Field(
+        ..., description="Platforma ushlab qolgan komissiya (musbat son)"
+    )
+    net_amount: Decimal = Field(..., description="Haydovchi qo'liga tushadigan sof summa")
+    currency: str = "UZS"
+
+    completed_at: Optional[datetime] = None
+
+
 class BalanceTransactionItem(BaseModel):
     """Haydovchining o'z balans harakati (kabinetdagi tarix uchun).
 
