@@ -1,10 +1,20 @@
-import { ChevronRightIcon, DocIcon, ShieldIcon, StarIcon, UserLineIcon } from '../components/icons';
+import { useNavigate } from 'react-router-dom';
+import {
+  ChevronRightIcon,
+  DocIcon,
+  MessagesNavIcon,
+  ShieldIcon,
+  StarIcon,
+  UserLineIcon,
+} from '../components/icons';
+import { AccountSettingsSection } from '../components/AccountSettingsSection';
 import { BalanceCard } from '../components/BalanceCard';
 import { DriverBottomNav } from '../components/DriverBottomNav';
 import { useDriverCabinet } from './DriverCabinetContext';
 import styles from './DriverProfilePage.module.css';
 
 export function DriverProfilePage() {
+  const navigate = useNavigate();
   const { cabinet } = useDriverCabinet();
   const reliability = Math.round(cabinet.on_time_percent);
   const initials = cabinet.name?.trim().charAt(0).toUpperCase() || 'H';
@@ -81,9 +91,21 @@ export function DriverProfilePage() {
             </span>
             <ChevronRightIcon />
           </button>
+          {/* Haydovchi pastki menyusida "Xabarlar" yo'q (4 ta bo'lim to'la), shuning
+              uchun murojaatlarga kirish shu yerdan beriladi. */}
+          <button className={styles.row} onClick={() => navigate('/messages')}>
+            <span className={styles.rowIcon}><MessagesNavIcon size={20} /></span>
+            <span className={styles.rowText}>
+              <span className={styles.rowTitle}>Murojaatlar</span>
+              <span className={styles.rowSub}>Yordam xizmatiga savol yoki shikoyat</span>
+            </span>
+            <ChevronRightIcon />
+          </button>
         </div>
 
         <div className={styles.note}>Hujjatlar va shaxsiy ma'lumotlarni tahrirlash tez orada qo'shiladi.</div>
+
+        <AccountSettingsSection />
       </div>
 
       <DriverBottomNav />

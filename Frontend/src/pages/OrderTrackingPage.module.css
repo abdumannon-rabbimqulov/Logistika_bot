@@ -500,3 +500,43 @@
   line-height: 1.45;
   color: rgba(255, 255, 255, 0.75);
 }
+
+/* Tahrirlash / narx belgilash — haydovchi biriktirilmaguncha ko'rinadi */
+.editRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.editBtn {
+  flex: 1;
+  border: 1px solid var(--color-gray-200);
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 11px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.editBtn:active {
+  background: var(--color-gray-50);
+}
+
+.supportBtn {
+  width: 100%;
+  margin-top: 14px;
+  border: 1px solid var(--color-gray-200);
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.supportBtn:active {
+  background: var(--color-gray-50);
+}

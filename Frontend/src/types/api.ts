@@ -388,6 +388,13 @@ export interface CommissionSettings {
   updated_at: string;
 }
 
+/** GET/PATCH /system/settings/pricing — sender narxni qo'lda qancha tushira olishi.
+ *  Bu chegara `PATCH /orders/{id}/price` da tekshiriladi: undan past narx 400 qaytaradi. */
+export interface PricingSettings {
+  sender_max_discount_percent: number;
+  updated_at: string;
+}
+
 /** GET /system/drivers — balans va blok holati bilan (Admin_panel AdminDriverListItem) */
 export interface AdminDriverListItem {
   driver_id: number;
@@ -550,4 +557,140 @@ export interface PriceEstimateResponse {
   // OSRM marshrut chizig'i: [[latitude, longitude], ...] — xaritada ko'rsatiladi
   route_geometry: [number, number][];
   options: PriceEstimateOption[];
+}
+
+// ─── Support mikroservisi (murojaatlar) ──────────────────────────────────────
+// Manba: support_service/schemas.py va support_service/models.py.
+// DIQQAT: bu xizmat asosiy app'dan alohida — yo'llari `/api` ostida emas, `/support`
+// prefiksida va u faqat `SECRET_KEY` hamda RabbitMQ orqali bog'langan.
+
+export type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
+export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent';
+
+/** Ticket ichidagi bitta xabar. `is_system: true` bo'lganda muallif yo'q — bu
+ *  `order.*` hodisasidan avtomatik tushgan yozuv (support RabbitMQ'dan oladi). */
+export interface TicketMessage {
+  id: number;
+  ticket_id: number;
+  author_user_id: number | null;
+  author_role: string | null;
+  is_system: boolean;
+  body: string;
+  created_at: string;
+}
+
+export interface TicketListItem {
+  id: number;
+  user_id: number;
+  user_role: string | null;
+  order_id: number | null;
+  subject: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TicketDetail extends TicketListItem {
+  body: string;
+  messages: TicketMessage[];
+}
+
+export interface TicketCreateInput {
+  subject: string;
+  body: string;
+  order_id?: number;
+  priority?: TicketPriority;
+}
+
+// ─── Menejer paneli ──────────────────────────────────────────────────────────
+// Manba: manager/schemas.py. DIQQAT: bu sxemalarda NARX MAYDONLARI ATAYLAB YO'Q —
+// menejer moliyaviy ma'lumotni ko'rmasligi kerak va backend uni uch qatlamda
+// (endpoint, sxema, `strip_finance_fields`) kesib tashlaydi. Shuning uchun bu
+// yerga ham price/commission kabi maydonlar QO'SHILMASIN.
+
+export interface ManagerOrderListItem {
+  id: number;
+  cargo_name: string;
+  weight: number;
+  status: OrderStatus;
+  pickup_at: string;
+  customer_id: number;
+  driver_id: number | null;
+  required_truck_type_id: number;
+  overload_warning: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface ManagerWaypoint {
+  id: number;
+  sequence: number;
+  type: WaypointType;
+  status: WaypointStatus;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  contact_name: string | null;
+  contact_phone: string | null;
+  arrived_at: string | null;
+  completed_at: string | null;
+}
+
+export interface ManagerOrderDetail {
+  id: number;
+  customer_id: number;
+  driver_id: number | null;
+  cargo_name: string;
+  weight: number;
+  volume: number | null;
+  status: OrderStatus;
+  required_truck_type_id: number;
+  pickup_at: string;
+  departure_at: string | null;
+  total_distance_km: number | null;
+  dispatch_round: number;
+  overload_warning: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  created_at: string;
+  updated_at: string;
+  waypoints: ManagerWaypoint[];
+}
+
+/** Buyurtmaga biriktirish mumkin bo'lgan mashina. Alohida `trucks` jadvali yo'q —
+ *  mashina haydovchi profilining bir qismi, shuning uchun kalit `driver_id`. */
+export interface AvailableTruck {
+  driver_id: number;
+  truck_number: string;
+  truck_type_id: number;
+  truck_type_name: string;
+  truck_year: number | null;
+  max_weight: number | null;
+  max_volume: number | null;
+  rating: number;
+  total_trips: number;
+  is_available: boolean;
+  is_blocked: boolean;
+  verification_status: string;
+  current_city: string | null;
+  current_region: string | null;
+}
+
+export interface AssignTruckResponse {
+  order: ManagerOrderDetail;
+  truck: AvailableTruck;
+}
+
+/** PATCH /orders/{id} — buyurtma egasi tahrirlay oladigan maydonlar.
+ *  Manba: order/schemas.py OrderUpdate. Tizim boshqaradigan maydonlar (status, narx,
+ *  driver_id, masofa) ATAYLAB yo'q va serverda `extra="forbid"` bilan taqiqlangan —
+ *  bu yerga ham qo'shilmasin. */
+export interface OrderUpdateInput {
+  cargo_name?: string;
+  weight?: number;
+  volume?: number;
+  pickup_at?: string;
+  required_truck_type_id?: number;
 }

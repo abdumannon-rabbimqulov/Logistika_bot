@@ -9,6 +9,7 @@ import type {
   AdminUserUpdate,
   BalanceTransaction,
   CommissionSettings,
+  PricingSettings,
   DriverLocationItem,
   DriverMonitorItem,
   DriverUnblockPayload,
@@ -186,5 +187,18 @@ export function getCommissionSettings(): Promise<CommissionSettings> {
 export function updateCommission(commissionPercent: number): Promise<CommissionSettings> {
   return api.patch<CommissionSettings>('/system/settings/commission', {
     commission_percent: commissionPercent,
+  });
+}
+
+// ── Narx sozlamasi ──────────────────────────────────────────────────────────────
+// Sender buyurtma narxini qo'lda qancha tushira olishi (`PATCH /orders/{id}/price`
+// aynan shu chegarani tekshiradi). Oshirish cheklanmagan — faqat chegirma cheklanadi.
+export function getPricingSettings(): Promise<PricingSettings> {
+  return api.get<PricingSettings>('/system/settings/pricing');
+}
+
+export function updatePricingSettings(maxDiscountPercent: number): Promise<PricingSettings> {
+  return api.patch<PricingSettings>('/system/settings/pricing', {
+    sender_max_discount_percent: maxDiscountPercent,
   });
 }

@@ -3,6 +3,7 @@ import { getMe, updateMe } from '../api/auth';
 import { ApiError } from '../api/client';
 import { listMyOrders } from '../api/orders';
 import { useAuth } from '../auth/AuthProvider';
+import { AccountSettingsSection } from '../components/AccountSettingsSection';
 import { BottomNav } from '../components/BottomNav';
 import { ChevronRightIcon, PhoneIcon, UserLineIcon, WalletIcon } from '../components/icons';
 import type { OrderListItem, UserProfile } from '../types/api';
@@ -159,6 +160,8 @@ export function ProfilePage() {
           </div>
         )}
         {saved && <div className={styles.savedHint}>Saqlandi</div>}
+
+        <AccountSettingsSection />
 
         <button className={styles.logoutBtn} onClick={handleLogout} disabled={loggingOut}>
           {loggingOut ? 'Chiqilmoqda...' : 'Chiqish'}

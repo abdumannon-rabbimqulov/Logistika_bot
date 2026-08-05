@@ -5,8 +5,10 @@ import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { DriverGate } from './pages/DriverGate';
 import { HomePage } from './pages/HomePage';
 import { LocalLoginPage } from './pages/LocalLoginPage';
+import { ManagerApp } from './manager/ManagerApp';
 import { MessagesPage } from './pages/MessagesPage';
 import { OrderPage } from './pages/OrderPage';
+import { TicketPage } from './pages/TicketPage';
 import { OrderTrackingPage } from './pages/OrderTrackingPage';
 import { OrdersListPage } from './pages/OrdersListPage';
 import { ProfilePage } from './pages/ProfilePage';
@@ -20,6 +22,7 @@ function SenderApp() {
       <Route path="/orders" element={<OrdersListPage />} />
       <Route path="/orders/:orderId" element={<OrderTrackingPage />} />
       <Route path="/messages" element={<MessagesPage />} />
+      <Route path="/messages/:ticketId" element={<TicketPage />} />
       <Route path="/profile" element={<ProfilePage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -62,6 +65,9 @@ function AuthGate() {
 
     case 'admin':
       return <AdminApp />;
+
+    case 'manager':
+      return <ManagerApp />;
 
     case 'unsupported':
       return (

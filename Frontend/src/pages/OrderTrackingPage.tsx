@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { bumpPrice, cancelOrder, getOrder, getPriceOptions } from '../api/orders';
 import { BottomSheet } from '../components/BottomSheet';
+import { CustomPriceSheet } from '../components/CustomPriceSheet';
+import { OrderEditSheet } from '../components/OrderEditSheet';
 import { BackIcon, PhoneIcon, SendIcon, StarIcon } from '../components/icons';
 import { YandexMap } from '../components/YandexMap';
 import { useOrderDriverLocation } from '../hooks/useOrderDriverLocation';
@@ -55,6 +57,9 @@ export function OrderTrackingPage() {
   const [error, setError] = useState<string | null>(null);
   // Narx oshirish tugmalari — qiymatlarni backend beradi (bot bilan bir xil ro'yxat)
   const [priceOptions, setPriceOptions] = useState<QuickPriceOption[]>([]);
+  // Tahrirlash va narx belgilash — ikkalasi ham faqat haydovchi biriktirilmaguncha ochiq.
+  const [editingOrder, setEditingOrder] = useState(false);
+  const [editingPrice, setEditingPrice] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
@@ -179,6 +184,10 @@ export function OrderTrackingPage() {
   // Haydovchi biriktirilmagan bo'lsa mijoz buyurtmadan voz kecha oladi. Backend ham
   // shu shartni qo'llaydi (`DELETE /orders/{id}` IN_PROGRESS da 422 qaytaradi).
   const canCancel = order.status === 'PENDING' && order.driver_id == null;
+  // Haydovchi biriktirilgach yuk ma'lumotini ham, narxni ham o'zgartirib bo'lmaydi —
+  // kelishuv allaqachon tuzilgan. Backend ham aynan shu shartni qo'llaydi.
+  const canEdit =
+    (order.status === 'PENDING' || order.status === 'SCHEDULED') && order.driver_id == null;
   const progressPercent = Math.min(100, (order.dispatch_round / MAX_ROUNDS) * 100);
   const driverLocation = driverPoint
     ? { latitude: driverPoint.latitude, longitude: driverPoint.longitude }
@@ -268,6 +277,17 @@ export function OrderTrackingPage() {
               xabarini kutib o'tirmasdan ham buyurtmadan qaytishi mumkin. Haydovchi
               biriktirilgach tugma yo'qoladi (kelishilgan ishni bir tomonlama bekor
               qilish — alohida masala, backend uni IN_PROGRESS da taqiqlaydi). */}
+          {canEdit && (
+            <div className={styles.editRow}>
+              <button className={styles.editBtn} onClick={() => setEditingOrder(true)}>
+                Buyurtmani tahrirlash
+              </button>
+              <button className={styles.editBtn} onClick={() => setEditingPrice(true)}>
+                Narxni belgilash
+              </button>
+            </div>
+          )}
+
           {canCancel && !confirmingCancel && (
             <button
               className={styles.cancelBtn}
@@ -484,9 +504,41 @@ export function OrderTrackingPage() {
           </dl>
 
           {order.overload_warning && <div className={styles.errorText}>{order.overload_warning}</div>}
+
+          {/* Shu buyurtma bo'yicha yordam so'rash — murojaat support mikroservisida
+              ochiladi va buyurtma raqami bog'lanadi. Shundan keyin buyurtma holati
+              o'zgarganda ticketga avtomatik yozuv tushib turadi. */}
+          <button
+            className={styles.supportBtn}
+            onClick={() => navigate('/messages', { state: { newTicketForOrderId: order.id } })}
+          >
+            Muammo bormi? Yordam so'rash
+          </button>
         </div>
       </div>
       </BottomSheet>
+
+      {editingOrder && (
+        <OrderEditSheet
+          order={order}
+          onClose={() => setEditingOrder(false)}
+          onSaved={(updated) => {
+            setOrder(updated);
+            setEditingOrder(false);
+          }}
+        />
+      )}
+
+      {editingPrice && (
+        <CustomPriceSheet
+          order={order}
+          onClose={() => setEditingPrice(false)}
+          onSaved={(updated) => {
+            setOrder(updated);
+            setEditingPrice(false);
+          }}
+        />
+      )}
     </div>
   );
 }

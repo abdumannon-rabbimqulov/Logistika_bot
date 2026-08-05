@@ -122,3 +122,12 @@ export function CloseIconAdmin({ size = 20, color = 'var(--color-gray-600)', str
     </svg>
   );
 }
+
+export function TicketsIcon({ size = 20, color = 'currentColor', strokeWidth = 1.8 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...base(color, strokeWidth)}>
+      <path d="M21 11.5a8.4 8.4 0 01-9 8.4 8.9 8.9 0 01-3.8-.9L3 20.5l1.5-4.4A8.4 8.4 0 013.6 12a8.4 8.4 0 018.4-8.5h.5a8.4 8.4 0 018.5 8z" />
+      <path d="M8.5 10.5h7M8.5 14h4.5" />
+    </svg>
+  );
+}

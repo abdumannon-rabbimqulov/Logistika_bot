@@ -10,8 +10,18 @@ import type { UserRole } from '../types/api';
 // 'sender'  — to'liq sender ilovasi
 // 'driver'  — haydovchi (DriverGate o'zi profil borligini tekshiradi)
 // 'admin'   — desktop admin panel (Mini App emas, alohida to'liq ekran)
-// 'unsupported' — dispatcher/manager kabi Mini App uchun mo'ljallanmagan rol
-type AuthStatus = 'loading' | 'local-login' | 'guest' | 'sender' | 'driver' | 'admin' | 'unsupported' | 'error';
+// 'manager' — menejer paneli: buyurtmalarni boshqaradi, lekin moliyaviy ma'lumot ko'rmaydi
+// 'unsupported' — dispatcher kabi Mini App uchun mo'ljallanmagan rol
+type AuthStatus =
+  | 'loading'
+  | 'local-login'
+  | 'guest'
+  | 'sender'
+  | 'driver'
+  | 'admin'
+  | 'manager'
+  | 'unsupported'
+  | 'error';
 
 interface AuthState {
   status: AuthStatus;
@@ -31,6 +41,7 @@ function statusForRole(role: UserRole): AuthStatus {
   if (role === 'sender') return 'sender';
   if (role === 'driver') return 'driver';
   if (role === 'admin') return 'admin';
+  if (role === 'manager') return 'manager';
   return 'unsupported';
 }
 

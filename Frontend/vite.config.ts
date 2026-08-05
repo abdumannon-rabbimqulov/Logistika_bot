@@ -6,6 +6,10 @@ import react from '@vitejs/plugin-react'
 // o'zgartirish mumkin: `VITE_DEV_API_TARGET=http://localhost:8003 npm run dev`.
 const API_TARGET = process.env.VITE_DEV_API_TARGET || 'http://localhost:8000'
 
+// Support — alohida mikroservis (o'z konteyneri, o'z bazasi). Docker tarmog'ida
+// "support" nomi bilan 8000-portda, host'dan esa 8010-portda ochiq (SUPPORT_SERVICE_PORT).
+const SUPPORT_TARGET = process.env.VITE_DEV_SUPPORT_TARGET || 'http://localhost:8010'
+
 // ngrok orqali ishlatishda `VITE_TUNNEL=1 npm run dev` deb yoqiladi. Faqat shu holatda
 // HMR websocket'i 443-portga (ngrok HTTPS) yo'naltiriladi. Oddiy local `npm run dev` da
 // buni YOQMASLIK kerak — aks holda brauzer wss://localhost:443 ga urinib, HMR buziladi.
@@ -41,6 +45,14 @@ export default defineConfig({
         // (`/api/drivers/ws/location`) va admin xaritasi (`/api/system/drivers/locations/stream`).
         // `ws: true` bo'lmasa upgrade so'rovi oddiy HTTP sifatida uzatilib, ulanish uzilardi.
         ws: true,
+      },
+      // Support mikroservisi — yo'llari `/api` ostida EMAS, o'zining `/support` prefiksida
+      // (support_service/router.py). Shu proxy bo'lmasa SPA unga umuman yeta olmaydi:
+      // brauzer `/support/tickets` ni Vite'dan so'rab, SPA index.html olardi.
+      // WebSocket yo'q — `ws: true` kerak emas.
+      '/support': {
+        target: SUPPORT_TARGET,
+        changeOrigin: true,
       },
       // Backend yuklangan fayllarni `/static/uploads/...` ostida beradi (masalan admin
       // panelda yuklangan transport turi rasmi). Bu proxy bo'lmasa dev serverda rasm

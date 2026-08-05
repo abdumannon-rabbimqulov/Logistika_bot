@@ -5,6 +5,14 @@
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api').replace(/\/$/, '');
 
+// Support — yagona ALOHIDA mikroservis (o'z image'i, o'z bazasi, port 8010). U asosiy
+// app'ning `/api` prefiksi ostida EMAS, yo'llari to'g'ridan-to'g'ri `/support/...` bo'ladi.
+// Standart holatda bo'sh satr: brauzer `/support/tickets` ni frontend bilan bir originda
+// so'raydi va uni proxy backendga uzatadi (dev — vite.config.ts, prod — nginx.conf).
+// Shu sababli CORS ham, alohida domen ham kerak emas. Xizmatga to'g'ridan-to'g'ri
+// (proxy'siz) murojaat qilish kerak bo'lsagina `VITE_SUPPORT_BASE_URL` beriladi.
+const SUPPORT_BASE_URL = (import.meta.env.VITE_SUPPORT_BASE_URL ?? '').replace(/\/$/, '');
+
 const ACCESS_KEY = 'yuk_access_token';
 const REFRESH_KEY = 'yuk_refresh_token';
 
@@ -183,14 +191,16 @@ interface RequestOptions {
   body?: unknown;
   query?: Record<string, string | number | boolean | undefined>;
   skipAuth?: boolean;
+  /** Boshqa xizmat bazasi (masalan support). Berilmasa asosiy `BASE_URL` ishlatiladi. */
+  baseUrl?: string;
 }
 
-function buildUrl(path: string, query?: RequestOptions['query']): string {
+function buildUrl(path: string, query?: RequestOptions['query'], baseUrl?: string): string {
   // Ikkinchi argument (base) BASE_URL nisbiy ("/api", nginx proxy uchun) bo'lganda kerak —
   // `new URL()` bazasiz nisbiy manzilni sinxron ravishda tashlaydi (hech qanday tarmoq
   // so'rovi yuborilmasdan), BASE_URL absolyut bo'lganda esa bu argument shunchaki e'tiborga
   // olinmaydi (URL spetsifikatsiyasi bo'yicha), shuning uchun ikkala holatda ham xavfsiz.
-  const url = new URL(`${BASE_URL}${path}`, window.location.origin);
+  const url = new URL(`${baseUrl ?? BASE_URL}${path}`, window.location.origin);
   if (query) {
     for (const [key, value] of Object.entries(query)) {
       if (value !== undefined) url.searchParams.set(key, String(value));
@@ -204,7 +214,7 @@ async function request<T>(path: string, options: RequestOptions = {}, allowRetry
   const token = getAccessToken();
   if (token && !options.skipAuth) headers.set('Authorization', `Bearer ${token}`);
 
-  const res = await fetch(buildUrl(path, options.query), {
+  const res = await fetch(buildUrl(path, options.query, options.baseUrl), {
     method: options.method ?? 'GET',
     headers,
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
@@ -238,4 +248,19 @@ export const api = {
     request<T>(path, { method: 'POST', body, skipAuth }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+};
+
+/** Support mikroservisiga so'rovlar — `api` bilan bir xil wrapper, faqat boshqa baza.
+ *
+ *  Token AYNAN o'sha access token: support uni asosiy app bilan umumiy `SECRET_KEY`
+ *  orqali lokal tekshiradi (`support_service/auth.py`), ya'ni xizmatlararo hech qanday
+ *  chaqiruv yo'q. Shuning uchun 401 kelganda ham refresh asosiy app'ning
+ *  `/auth/refresh` iga boradi — token beruvchi faqat o'sha. */
+export const supportApi = {
+  get: <T>(path: string, query?: RequestOptions['query']) =>
+    request<T>(path, { method: 'GET', query, baseUrl: SUPPORT_BASE_URL }),
+  post: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: 'POST', body, baseUrl: SUPPORT_BASE_URL }),
+  patch: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: 'PATCH', body, baseUrl: SUPPORT_BASE_URL }),
 };

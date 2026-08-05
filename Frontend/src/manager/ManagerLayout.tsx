@@ -1,25 +1,12 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { clearTokens } from '../api/client';
-import {
-  DashboardIcon,
-  DriversIcon,
-  LogoutIcon,
-  OrdersIcon,
-  SettingsIcon,
-  TicketsIcon,
-  TruckTypesIcon,
-  UsersIcon,
-} from './icons';
-import styles from './AdminLayout.module.css';
+import { LogoutIcon, OrdersIcon, TicketsIcon } from '../admin/icons';
+// Qobiq uslublari admin panel bilan aynan bir xil — nusxa ko'chirmasdan qayta ishlatamiz.
+import styles from '../admin/AdminLayout.module.css';
 
 const NAV = [
-  { to: '/admin', label: 'Dashboard', Icon: DashboardIcon, end: true },
-  { to: '/admin/orders', label: 'Buyurtmalar', Icon: OrdersIcon, end: false },
-  { to: '/admin/drivers', label: 'Haydovchilar', Icon: DriversIcon, end: false },
-  { to: '/admin/users', label: 'Foydalanuvchilar', Icon: UsersIcon, end: false },
-  { to: '/admin/truck-types', label: 'Transport turlari', Icon: TruckTypesIcon, end: false },
-  { to: '/admin/tickets', label: 'Murojaatlar', Icon: TicketsIcon, end: false },
-  { to: '/admin/settings', label: 'Sozlamalar', Icon: SettingsIcon, end: false },
+  { to: '/manager/orders', label: 'Buyurtmalar', Icon: OrdersIcon, end: false },
+  { to: '/manager/tickets', label: 'Murojaatlar', Icon: TicketsIcon, end: false },
 ];
 
 function handleLogout() {
@@ -27,13 +14,13 @@ function handleLogout() {
   window.location.reload();
 }
 
-export function AdminLayout() {
+export function ManagerLayout() {
   return (
     <div className={styles.shell}>
       <aside className={styles.sidebar}>
         <div className={styles.brand}>
           <span className={styles.brandMark}>YUK</span>
-          <span className={styles.brandSub}>Admin</span>
+          <span className={styles.brandSub}>Menejer</span>
         </div>
 
         <nav className={styles.nav}>

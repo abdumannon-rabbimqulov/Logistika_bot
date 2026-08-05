@@ -9,6 +9,7 @@ import type {
   OrderListItem,
   OrderPriceOptionsResponse,
   OrderStatus,
+  OrderUpdateInput,
   PriceEstimateLocation,
   PriceEstimateResponse,
   ReverseGeocodeResponse,
@@ -35,11 +36,32 @@ export function reverseGeocode(latitude: number, longitude: number): Promise<Rev
   return api.get<ReverseGeocodeResponse>('/orders/geocode/reverse', { latitude, longitude });
 }
 
+/** Haydovchi uchun: hali haydovchisi topilmagan buyurtmalar. Faqat ko'rish uchun —
+ *  qabul qilish dispatch taklifi orqali ketadi (`/orders/dispatch/...`), chunki
+ *  navbat va 60 soniyalik taklif oynasi server tomonida boshqariladi. */
+export function listAvailableOrders(truckTypeId?: number): Promise<OrderListItem[]> {
+  return api.get<OrderListItem[]>('/orders/available/list', { truck_type_id: truckTypeId });
+}
+
 export function estimatePrice(
   origin: PriceEstimateLocation,
   destination: PriceEstimateLocation,
 ): Promise<PriceEstimateResponse> {
   return api.post<PriceEstimateResponse>('/orders/estimate-price', { origin, destination });
+}
+
+/** Buyurtmani tahrirlash (faqat egasi). Sxemada ATAYLAB faqat yuk ma'lumotlari bor —
+ *  status/narx/haydovchi bu yerdan o'zgartirilmaydi (order/schemas.py OrderUpdate izohi).
+ *  Server `extra="forbid"` qo'ygan, ya'ni ortiqcha maydon 422 qaytaradi. */
+export function updateOrder(orderId: number, data: OrderUpdateInput): Promise<OrderDetail> {
+  return api.patch<OrderDetail>(`/orders/${orderId}`, data);
+}
+
+/** Sender narxni qo'lda belgilaydi. Oshirish cheklanmagan; pasaytirish admin
+ *  sozlamasidagi chegirma chegarasi bilan cheklangan — undan past narxda 400,
+ *  buyurtma bu amalga yaroqsiz holatda bo'lsa 409 keladi. */
+export function setCustomPrice(orderId: number, price: number): Promise<OrderDetail> {
+  return api.patch<OrderDetail>(`/orders/${orderId}/price`, { price });
 }
 
 /** Narx oshirish variantlari (chegara + tayyor summalar) — botdagi tugmalar bilan bir xil. */

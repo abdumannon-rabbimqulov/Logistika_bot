@@ -67,6 +67,20 @@ export function selectRole(role: Extract<UserRole, 'sender' | 'driver'>): Promis
   return api.post<UserProfile>('/auth/select-role', { role });
 }
 
+/** Parolni o'zgartirish. Eski parol noto'g'ri bo'lsa backend 400 qaytaradi. */
+export function changePassword(oldPassword: string, newPassword: string): Promise<{ detail: string }> {
+  return api.patch<{ detail: string }>('/auth/me/password', {
+    old_password: oldPassword,
+    new_password: newPassword,
+  });
+}
+
+/** Akkauntni o'chirish. Aslida deaktivatsiya (`is_active=false`) — ma'lumot o'chmaydi,
+ *  buyurtmalar tarixi saqlanadi, lekin foydalanuvchi tizimga kira olmaydi. */
+export function deleteAccount(): Promise<{ detail: string }> {
+  return api.delete<{ detail: string }>('/auth/me');
+}
+
 export function logout(): Promise<void> {
   return api.post<void>('/auth/logout');
 }

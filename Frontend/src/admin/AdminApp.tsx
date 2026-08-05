@@ -7,6 +7,7 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { AdminDrivers } from './pages/AdminDrivers';
 import { AdminOrders } from './pages/AdminOrders';
 import { AdminSettings } from './pages/AdminSettings';
+import { AdminTickets } from './pages/AdminTickets';
 import { AdminTruckTypes } from './pages/AdminTruckTypes';
 import { AdminUsers } from './pages/AdminUsers';
 
@@ -26,6 +27,7 @@ export function AdminApp() {
           <Route path="drivers" element={<AdminDrivers />} />
           <Route path="users" element={<AdminUsers />} />
           <Route path="truck-types" element={<AdminTruckTypes />} />
+          <Route path="tickets" element={<AdminTickets />} />
           <Route path="settings" element={<AdminSettings />} />
         </Route>
         <Route path="*" element={<Navigate to="/admin" replace />} />
