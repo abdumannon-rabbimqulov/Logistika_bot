@@ -6,6 +6,7 @@ import logging
 from typing import List, NoReturn, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +20,8 @@ from services import geofence, live_location, notifications, order_flow, osrm_cl
 from services.problems import WaypointProblem
 from users.auth import get_current_active_user, get_current_sender, verify_token
 from users.models import User, UserRole
+from users.permissions import is_admin_user, is_manager, is_staff
+from manager import schemas as manager_schemas
 
 logger = logging.getLogger(__name__)
 
@@ -43,16 +46,42 @@ def _raise_dispatch_error(exc: dispatch_service.DispatchError) -> NoReturn:
 
 
 def _is_admin(user: User) -> bool:
-    return user.role == UserRole.ADMIN or user.id in ADMIN_IDS
+    """Rol qoidalari `users/permissions.py` da markazlashtirilgan — bu shunchaki taxallus."""
+    return is_admin_user(user)
+
+
+def _finance_scrubbed(payload, current_user: User):
+    """Menejer uchun javobdan moliyaviy maydonlarni olib tashlaydi.
+
+    `response_model` hamma rol uchun bitta bo'lgani sababli maydonni sxemadan
+    o'chirib bo'lmaydi — javob tayyor bo'lgach tozalanadi. `JSONResponse` qaytarilsa
+    FastAPI `response_model` validatsiyasini o'tkazib yuboradi, aks holda olib
+    tashlangan majburiy maydonlar uchun 500 chiqardi.
+
+    Menejer bo'lmaganlar uchun obyekt o'zgarishsiz qaytadi va odatdagi yo'l bilan
+    serializatsiya qilinadi.
+    """
+    if not is_manager(current_user):
+        return payload
+
+    if isinstance(payload, list):
+        data = [item.model_dump(mode="json") for item in payload]
+    else:
+        data = payload.model_dump(mode="json")
+    return JSONResponse(content=manager_schemas.strip_finance_fields(data))
 
 
 async def _require_order_access(db: AsyncSession, order_id: int, current_user: User) -> Order:
-    """Buyurtmani topadi va faqat egasi/biriktirilgan haydovchi/admin ko'ra olishini tekshiradi."""
+    """Buyurtmani topadi va faqat egasi/biriktirilgan haydovchi/xodim ko'ra olishini tekshiradi.
+
+    Xodim = admin yoki menejer. Menejer buyurtmani ko'ra oladi, lekin javobidan narx
+    maydonlari `_finance_scrubbed()` bilan olib tashlanadi.
+    """
     order = await crud.get_order(db, order_id)
     if not order:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Buyurtma topilmadi")
 
-    if _is_admin(current_user) or order.customer_id == current_user.id:
+    if is_staff(current_user) or order.customer_id == current_user.id:
         return order
 
     driver = await get_driver_by_user_id(db, current_user.id)
@@ -88,7 +117,15 @@ async def list_my_orders(
         if not driver:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Haydovchi profili topilmadi")
         return await crud.list_orders_by_driver(db, driver.id)
-    return await crud.list_orders_by_customer(db, current_user.id)
+
+    orders = await crud.list_orders_by_customer(db, current_user.id)
+    if is_manager(current_user):
+        # Menejerning o'z buyurtmalari bo'lmasa ham ro'yxat bo'sh qaytadi; narx
+        # maydonlari baribir tozalanadi (kelajakda menejer sender bo'lib qolsa ham).
+        return _finance_scrubbed(
+            [schemas.OrderListItem.model_validate(o) for o in orders], current_user
+        )
+    return orders
 
 
 @router.get("/available/list", response_model=List[schemas.OrderListItem],
@@ -149,7 +186,7 @@ async def get_order(
     current_user: User = Depends(get_current_active_user),
 ):
     order = await _require_order_access(db, order_id, current_user)
-    return schemas.OrderDetailResponse.from_order(order)
+    return _finance_scrubbed(schemas.OrderDetailResponse.from_order(order), current_user)
 
 
 @router.get(

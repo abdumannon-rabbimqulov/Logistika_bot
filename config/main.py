@@ -28,6 +28,7 @@ from driver.router import router as driver_router
 from order.router import router as order_router
 from users.router import router as auth_router
 from Admin_panel.router import router as admin_router
+from manager.router import router as manager_router
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -41,9 +42,10 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    # Dispatch navbatining topologiyasi (exchange + navbatlar) shu yerda ham e'lon
-    # qilinadi: worker'dan oldin ko'tarilsa ham birinchi publish yo'qolmasin. Broker
-    # hali tayyor bo'lmasa API baribir ishlayveradi — publish paytida qayta uriniladi.
+    # Navbat topologiyasi (dispatch vazifalari + `logistika.events` biznes hodisalari)
+    # shu yerda ham e'lon qilinadi: worker/support'dan oldin ko'tarilsa ham birinchi
+    # publish yo'qolmasin. Broker hali tayyor bo'lmasa API baribir ishlayveradi —
+    # publish paytida qayta uriniladi.
     from services import queue as dispatch_queue
 
     try:
@@ -112,6 +114,9 @@ def _register_api_routers(
         include_in_schema=include_in_schema,
     )
     target.include_router(admin_router, **kwargs)
+    # `/manager` — moliyasiz operativ panel. `/system` (admin, moliya) dan ATAYLAB
+    # alohida router: menejerga admin endpointlaridan birortasi ham ochilmasligi kerak.
+    target.include_router(manager_router, **kwargs)
 
 
 _register_api_routers(app)

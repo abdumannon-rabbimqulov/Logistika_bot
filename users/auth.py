@@ -35,6 +35,19 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = 10
 
 
+def token_payload_for(user: User) -> dict:
+    """Token ichiga tushadigan claim'lar.
+
+    `role` claim tashqi mikroserviz (`support_service/`) uchun qo'shildi: u asosiy
+    bazaga ulanmaydi, shuning uchun foydalanuvchining rolini tokendan boshqa joydan
+    bila olmaydi. Asosiy ilova esa rolni HAMON bazadan o'qiydi (`get_current_user`) —
+    admin rolni o'zgartirsa yoki foydalanuvchi banlansa, hali muddati tugamagan token
+    bilan eski huquqlar ishlab qolmasligi uchun. Ya'ni claim — qulaylik, manba
+    haqiqat emas.
+    """
+    return {"sub": str(user.id), "role": user.role.value if user.role else None}
+
+
 def create_access_token(data: dict):
     to_encode=data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)

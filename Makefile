@@ -11,7 +11,8 @@ COMPOSE      := docker compose
 COMPOSE_PROD := docker compose -f docker-compose.yml -f docker-compose.prod.yml
 
 .DEFAULT_GOAL := help
-.PHONY: help fe dev up down logs ps fe-logs fe-restart fe-rebuild fe-install fe-add fe-shell fe-build fe-lint prod-up prod-down
+.PHONY: help fe dev up down logs ps fe-logs fe-restart fe-rebuild fe-install fe-add fe-shell fe-build fe-lint prod-up prod-down \
+        worker-logs worker-restart worker-scale mq-ui support-logs support-ui support-db events-logs migrate test
 
 help: ## Shu ro'yxatni ko'rsatadi
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -50,6 +51,28 @@ worker-scale: ## Worker'lar sonini o'zgartirish: make worker-scale n=3
 
 mq-ui: ## RabbitMQ boshqaruv panelini brauzerda ochish (guest/guest)
 	open http://localhost:15672
+
+# ── Support mikroservizi va hodisalar ───────────────────────────────────────
+
+support-logs: ## Support mikroservizi loglari
+	$(COMPOSE) logs -f support
+
+support-ui: ## Support Swagger UI (murojaatlar API si)
+	open http://localhost:8010/docs
+
+events-logs: ## Support hodisalarini adminlarga yetkazuvchi worker loglari
+	$(COMPOSE) logs -f events-worker
+
+support-db: ## Support bazasiga psql bilan kirish
+	$(COMPOSE) exec db psql -U postgres -d support_db
+
+# ── Migratsiya va testlar ───────────────────────────────────────────────────
+
+migrate: ## Alembic migratsiyalarini qo'llash (manager roli shu yerda qo'shiladi)
+	$(COMPOSE) exec web alembic upgrade head
+
+test: ## Unit testlar (baza talab qilmaydi)
+	$(COMPOSE) exec web pytest tests/ -q
 
 # ── Frontend bilan ishlash ──────────────────────────────────────────────────
 

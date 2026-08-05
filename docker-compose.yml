@@ -15,6 +15,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Support mikroservizi uchun alohida baza (`support_db`) shu skript bilan
+      # yaratiladi. DIQQAT: `/docker-entrypoint-initdb.d` FAQAT bo'sh volume'da,
+      # ya'ni birinchi ishga tushishda bajariladi. Bazasi allaqachon bor bo'lsa:
+      #   docker compose exec db psql -U postgres -c "CREATE DATABASE support_db"
+      - ./scripts/init-support-db.sh:/docker-entrypoint-initdb.d/10-support-db.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d logistika_db"]
       interval: 5s
@@ -255,6 +260,65 @@ services:
         condition: service_healthy
       osrm:
         # Yo'lga chiqish vaqtini hisoblash uchun OSRM kerak (resolve_departure_plan).
+        condition: service_healthy
+
+  # 9. Support (Yordam) mikroservizi → http://localhost:8010/docs
+  #
+  # ALOHIDA xizmat: o'z image'i (`support_service/Dockerfile`, ichida faqat
+  # `support_service/` papkasi), o'z bazasi (`support_db`) va o'z bog'liqliklari.
+  # Asosiy ilova bilan faqat ikki narsani baham ko'radi:
+  #   1. `SECRET_KEY` — JWT ni mahalliy tekshirish uchun (rol tokendagi `role` claim'ida)
+  #   2. RabbitMQ `logistika.events` exchange'i — hodisalar almashinuvi
+  # Asosiy bazaga ulanmaydi va `web` ga HTTP so'rov yubormaydi, shuning uchun
+  # `depends_on: web` ham yo'q — ikkalasi mustaqil ko'tariladi.
+  support:
+    build:
+      context: .
+      dockerfile: support_service/Dockerfile
+    container_name: logistika_support
+    ports:
+      - "${SUPPORT_SERVICE_PORT:-8010}:8000"
+    environment:
+      - SUPPORT_DB_URL=postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD}@db:5432/${SUPPORT_DB_NAME:-support_db}
+      # Asosiy ilova bilan BIR XIL bo'lishi shart, aks holda token tekshiruvi yiqiladi.
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=${ALGORITHM:-HS256}
+      - RABBITMQ_URL=${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TZ=Asia/Tashkent
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  # 10. Events worker — support hodisalarini adminlarga yetkazadi
+  #
+  # `support.notifications` navbatini o'qiydi va yangi murojaat / javob haqida
+  # Telegram orqali adminlarga xabar beradi. Nega support o'zi yubormaydi: unda
+  # `BOT_TOKEN` ham, adminlar ro'yxati ham yo'q va bo'lmasligi kerak.
+  events-worker:
+    build: .
+    container_name: logistika_events_worker
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Tashkent
+    command: python -m workers.events_worker
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
 # Barcha volume'lar bitta joyda jamlandi

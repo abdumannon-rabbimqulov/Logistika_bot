@@ -29,6 +29,7 @@ from users.auth import (
     create_refresh_token,
     get_current_user,
     hash_password,
+    token_payload_for,
     verify_password,
     verify_token,
 )
@@ -90,7 +91,10 @@ async def _rate_limit_ok(key: str, max_hits: int, window_sec: int) -> bool:
     response_model=Token,
     summary="Refresh token orqali yangi tokenlar olish",
 )
-async def refresh_tokens(data: RefreshTokenRequest):
+async def refresh_tokens(
+    data: RefreshTokenRequest,
+    db: AsyncSession = Depends(get_db),
+):
 
     payload = verify_token(data.refresh_token)
 
@@ -130,7 +134,13 @@ async def refresh_tokens(data: RefreshTokenRequest):
             detail="Vaqtincha xizmat mavjud emas, keyinroq urinib ko'ring.",
         ) from exc
 
-    token_payload = {"sub": str(user_id)}
+    # Rolni yangi tokenga qo'yish uchun foydalanuvchi bazadan o'qiladi: admin rolni
+    # o'zgartirgan bo'lsa, refresh'dan keyingi tokenda YANGI rol turishi kerak.
+    user = await get_user_by_id(db, int(user_id))
+    if user is None:
+        raise HTTPException(status_code=401, detail="Foydalanuvchi topilmadi")
+
+    token_payload = token_payload_for(user)
     return Token(
         access_token=create_access_token(token_payload),
         refresh_token=create_refresh_token(token_payload),
@@ -224,15 +234,15 @@ async def login(
         existing_driver = await get_driver_by_user_id(db, user.id)
         if not existing_driver:
             return {
-                "access_token": create_access_token({"sub": str(user.id)}),
-                "refresh_token": create_refresh_token({"sub": str(user.id)}),
+                "access_token": create_access_token(token_payload_for(user)),
+                "refresh_token": create_refresh_token(token_payload_for(user)),
                 "role": user.role,
                 "user_id": user.id,
                 "status": "need_driver_profile",
                 "message": "Haydovchi rolini tanlagansiz, lekin profil ma'lumotlaringiz to'liq emas.",
             }
 
-    token_payload = {"sub": str(user.id)}
+    token_payload = token_payload_for(user)
 
     return {
         "access_token": create_access_token(token_payload),

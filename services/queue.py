@@ -22,6 +22,18 @@ Topologiya (`declare_topology`, ikkala jarayonda ham idempotent chaqiriladi):
 
 Kutubxona `pika` emas, `aio-pika`: broker bir xil (AMQP 0-9-1), lekin loyiha
 to'liq async — sinxron `pika` publish paytida event loop'ni bloklab qo'yardi.
+
+Ikkinchi topologiya — `logistika.events` (topic, `EVENTS_*` konstantalari):
+mikroservizlar o'rtasidagi biznes hodisalari. Farqi shundaki `dispatch` — bu
+"shu ishni bajar" degan VAZIFA (bitta iste'molchi oladi), `events` esa "shunday
+bo'ldi" degan XABAR: uni nechta xizmat tinglashi oldindan noma'lum, shuning uchun
+topic exchange va har bir iste'molchi uchun alohida navbat.
+
+    logistika.events (topic, durable)
+        ├── order.status_changed  ─┬→ support.order_events   (support_service o'qiydi)
+        ├── order.truck_assigned  ─┘
+        ├── support.ticket_created ─┬→ support.notifications (workers/events_worker.py o'qiydi)
+        └── support.ticket_replied ─┘
 """
 
 from __future__ import annotations
@@ -29,7 +41,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Optional
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Optional
 
 import aio_pika
 from aio_pika.abc import AbstractRobustChannel, AbstractRobustConnection, AbstractRobustExchange
@@ -45,6 +59,28 @@ DEAD_QUEUE = "dispatch.dead"
 
 ROUTING_KEY_JOBS = "dispatch"
 ROUTING_KEY_DEAD = "dispatch.dead"
+
+# --- Biznes hodisalari (mikroservizlararo) ---------------------------------
+
+EVENTS_EXCHANGE = "logistika.events"
+
+# Routing key'lar SHARTNOMA: ularni o'zgartirish support mikroservizini ham
+# buzadi, shuning uchun `tests/test_event_contract.py` ularni qotirib qo'ygan.
+EVENT_ORDER_STATUS_CHANGED = "order.status_changed"
+EVENT_ORDER_TRUCK_ASSIGNED = "order.truck_assigned"
+EVENT_SUPPORT_TICKET_CREATED = "support.ticket_created"
+EVENT_SUPPORT_TICKET_REPLIED = "support.ticket_replied"
+
+# Support mikroservizi buyurtma hodisalarini tinglaydi (ochiq murojaatlarga
+# "buyurtma holati o'zgardi" degan tizim izohini qo'shish uchun).
+SUPPORT_EVENTS_QUEUE = "support.order_events"
+SUPPORT_EVENTS_PATTERN = "order.*"
+
+# Asosiy ilova esa support hodisalarini tinglaydi (adminlarga bildirishnoma).
+SUPPORT_NOTIFICATIONS_QUEUE = "support.notifications"
+SUPPORT_NOTIFICATIONS_PATTERN = "support.*"
+
+_events_exchange: Optional[AbstractRobustExchange] = None
 
 # Kechiktirilgan navbatning TTL'i (millisekund). Xabar shu muddat kutib, so'ng
 # `dispatch.jobs` ga o'tadi. Bitta navbat bo'lgani uchun TTL ham bitta —
@@ -66,7 +102,7 @@ class QueueUnavailable(RuntimeError):
 
 async def get_channel() -> AbstractRobustChannel:
     """Jarayon uchun yagona (lazy) kanal. `connect_robust` uzilishda o'zi qayta ulanadi."""
-    global _connection, _channel, _exchange
+    global _connection, _channel, _exchange, _events_exchange
 
     if _channel is not None and not _channel.is_closed:
         return _channel
@@ -83,6 +119,7 @@ async def get_channel() -> AbstractRobustChannel:
         except Exception as exc:  # ulanish/deklaratsiya xatosi
             _channel = None
             _exchange = None
+            _events_exchange = None
             raise QueueUnavailable(f"RabbitMQ'ga ulanib bo'lmadi: {exc}") from exc
         return _channel
 
@@ -109,6 +146,31 @@ async def _declare(channel: AbstractRobustChannel) -> AbstractRobustExchange:
             "x-dead-letter-routing-key": ROUTING_KEY_JOBS,
         },
     )
+
+    await _declare_events(channel)
+    return exchange
+
+
+async def _declare_events(channel: AbstractRobustChannel) -> AbstractRobustExchange:
+    """Hodisalar topologiyasi. Idempotent — har bir jarayon startda chaqiradi.
+
+    Navbatlar shu yerda (asosiy ilovada) e'lon qilinadi, iste'molchi hali
+    ko'tarilmagan bo'lsa ham: aks holda support konteyneri kechikib ishga tushsa,
+    o'sha oraliqda chiqqan hodisalar hech qayerga tushmay yo'qolardi.
+    """
+    global _events_exchange
+
+    exchange = await channel.declare_exchange(
+        EVENTS_EXCHANGE, aio_pika.ExchangeType.TOPIC, durable=True
+    )
+
+    support_events = await channel.declare_queue(SUPPORT_EVENTS_QUEUE, durable=True)
+    await support_events.bind(exchange, SUPPORT_EVENTS_PATTERN)
+
+    notifications = await channel.declare_queue(SUPPORT_NOTIFICATIONS_QUEUE, durable=True)
+    await notifications.bind(exchange, SUPPORT_NOTIFICATIONS_PATTERN)
+
+    _events_exchange = exchange
     return exchange
 
 
@@ -163,9 +225,58 @@ async def publish_dispatch_job(
         raise QueueUnavailable(f"Xabar yuborilmadi (order #{order_id}): {exc}") from exc
 
 
+async def declare_events_topology() -> None:
+    """Faqat hodisalar topologiyasini e'lon qiladi (`declare_topology` uni ham qamrab oladi)."""
+    await get_channel()
+
+
+def build_event(event: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Hodisa konverti — barcha xabarlar bir xil ko'rinishda bo'lishi uchun.
+
+    `event_id` iste'molchiga takroriy yetkazishni (at-least-once) aniqlash imkonini
+    beradi, `occurred_at` esa xabar navbatda kutib qolganda ham hodisaning haqiqiy
+    vaqtini saqlaydi.
+    """
+    return {
+        "event": event,
+        "event_id": str(uuid.uuid4()),
+        "occurred_at": datetime.now(timezone.utc).isoformat(),
+        "data": payload,
+    }
+
+
+async def publish_event(event: str, payload: dict[str, Any]) -> bool:
+    """Biznes hodisasini `logistika.events` ga yuboradi. Hech qachon istisno tashlamaydi.
+
+    Ataylab "fire-and-forget": hodisa — asosiy amalning yon ta'siri (buyurtma holati
+    allaqachon bazaga yozilgan). Broker o'chgani uchun foydalanuvchiga 500 qaytarish
+    noto'g'ri bo'lardi — shuning uchun xato faqat logga tushadi va `False` qaytadi.
+    Chaqiruvchi natijani tekshirishi shart emas; `False` asosan testlar va
+    diagnostika uchun.
+    """
+    envelope = build_event(event, payload)
+    message = aio_pika.Message(
+        body=json.dumps(envelope, separators=(",", ":"), default=str).encode(),
+        content_type="application/json",
+        delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+        message_id=envelope["event_id"],
+        type=event,
+    )
+
+    try:
+        await get_channel()  # `_events_exchange` shu yerda to'ldiriladi
+        if _events_exchange is None:
+            raise QueueUnavailable("events exchange e'lon qilinmagan")
+        await _events_exchange.publish(message, routing_key=event)
+        return True
+    except Exception:
+        logger.exception("Hodisa yuborilmadi: %s (payload=%s)", event, payload)
+        return False
+
+
 async def close_queue() -> None:
     """Ulanishni yopadi (FastAPI shutdown va worker to'xtashida)."""
-    global _connection, _channel, _exchange
+    global _connection, _channel, _exchange, _events_exchange
     try:
         if _connection is not None and not _connection.is_closed:
             await _connection.close()
@@ -175,3 +286,4 @@ async def close_queue() -> None:
         _connection = None
         _channel = None
         _exchange = None
+        _events_exchange = None

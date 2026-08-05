@@ -1,0 +1,13 @@
+# Support mikroservizining o'z bog'liqliklari — asosiy loyihaning
+# requirements.txt idan ATAYLAB alohida: bu xizmatga aiogram, geoalchemy2,
+# shapely, google-genai kerak emas. Image ancha yengil chiqadi.
+
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+
+SQLAlchemy==2.0.49
+asyncpg==0.30.0
+
+aio-pika==9.5.7
+python-jose[cryptography]==3.3.0
