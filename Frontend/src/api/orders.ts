@@ -64,6 +64,17 @@ export function setCustomPrice(orderId: number, price: number): Promise<OrderDet
   return api.patch<OrderDetail>(`/orders/${orderId}/price`, { price });
 }
 
+/** Haydovchi qidiruvini vaqtincha to'xtatadi. Ochiq taklif ham bekor qilinadi —
+ *  shundan keyingina narxni o'zgartirish mumkin bo'ladi. */
+export function pauseDispatch(orderId: number): Promise<OrderDetail> {
+  return api.post<OrderDetail>(`/orders/${orderId}/dispatch/pause`, {});
+}
+
+/** To'xtatilgan qidiruvni davom ettiradi — yangi narx bilan qayta tarqatiladi. */
+export function resumeDispatch(orderId: number): Promise<OrderDetail> {
+  return api.post<OrderDetail>(`/orders/${orderId}/dispatch/resume`, {});
+}
+
 /** Narx oshirish variantlari (chegara + tayyor summalar) — botdagi tugmalar bilan bir xil. */
 export function getPriceOptions(orderId: number): Promise<OrderPriceOptionsResponse> {
   return api.get<OrderPriceOptionsResponse>(`/orders/${orderId}/price-options`);

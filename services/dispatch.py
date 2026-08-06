@@ -44,6 +44,7 @@ from driver.models import Driver
 from order.dispatch_models import DispatchAttempt, DispatchAttemptStatus, DispatchMatchType
 from order.models import Order, OrderStatus
 from services import live_location, navigation, notifications, osrm_client, pricing, queue
+from services.problems import Violation
 from utils.geo import calculate_distance_km
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,24 @@ class DispatchError(Exception):
     def __init__(self, message: str, *, status_code: int = 409):
         super().__init__(message)
         self.status_code = status_code
+
+
+class PriceLocked(DispatchError):
+    """Qidiruv ketayotgani uchun narxni hozir o'zgartirib bo'lmaydi.
+
+    Oddiy matnli xatodan farqi — `violation` da MASHINA o'qiy oladigan kod bor
+    (`services/problems.py Violation` naqshi). Frontend shunga qarab aniq amal
+    taklif qiladi: jonli taklif bo'lsa qolgan soniyani ko'rsatadi, aks holda
+    "qidiruvni to'xtatish" tugmasiga yo'naltiradi. Faqat matn qaytarilsa, interfeys
+    "nimadir noto'g'ri" deyishdan nariga o'tolmasdi.
+    """
+
+    def __init__(self, violation: Violation):
+        super().__init__(violation.message, status_code=409)
+        self.violation = violation
+
+    def as_detail(self) -> dict:
+        return {"message": str(self), "errors": [self.violation.as_dict()]}
 
 
 _LOCAL_TZ = ZoneInfo(APP_TIMEZONE)
@@ -472,6 +491,14 @@ async def _dispatch_next(db: AsyncSession, order: Order, *, reason: str) -> None
     if order.status != OrderStatus.PENDING or order.driver_id is not None:
         return
 
+    # Sender qidiruvni to'xtatgan bo'lsa yangi raund umuman navbatga tushmaydi.
+    # Tekshiruv AYNAN shu yerda: bu — navbatga qo'yishning yagona yo'li, ya'ni
+    # rad etish, vaqt tugashi va sweep yo'llarining hammasi shu bitta shart bilan
+    # yopiladi.
+    if order.dispatch_paused_at is not None:
+        logger.info("Order #%s qidiruvi to'xtatilgan — '%s' o'tkazib yuborildi", order.id, reason)
+        return
+
     order.last_dispatch_enqueued_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(order, attribute_names=["last_dispatch_enqueued_at", "updated_at"])
@@ -518,6 +545,13 @@ async def run_dispatch_job(db: AsyncSession, order_id: int, reason: str = "job")
 
 async def _run_dispatch_round(db: AsyncSession, order: Order) -> None:
     if order.status != OrderStatus.PENDING or order.driver_id is not None:
+        return
+
+    # To'xtatilgandan keyin ham allaqachon navbatga tushib bo'lgan kechiktirilgan xabar
+    # kelishi mumkin — uni navbatdan o'chirishning iloji yo'q (services/queue.py).
+    # Shuning uchun holat shu yerda qayta o'qiladi va vazifa no-op bo'ladi: butun
+    # dispatch shu "idempotent-by-DB" tamoyiliga qurilgan.
+    if order.dispatch_paused_at is not None:
         return
 
     if order.dispatch_round >= MAX_ROUNDS:
@@ -592,18 +626,28 @@ async def _overdue_attempt_ids(db: AsyncSession, order_id: int) -> list[int]:
     return list(result.scalars().all())
 
 
-async def _has_live_attempt(db: AsyncSession, order_id: int) -> bool:
-    """Shu order bo'yicha haydovchi hali javob kutayotgan taklif bormi."""
+async def _live_attempt(db: AsyncSession, order_id: int) -> Optional[DispatchAttempt]:
+    """Shu order bo'yicha haydovchi hali javob kutayotgan taklif (bo'lmasa None).
+
+    `_has_live_attempt` shundan foydalanadi; alohida kerak bo'lgani sabab — narx
+    tekshiruvida qolgan soniyani (`expires_at`) foydalanuvchiga ko'rsatamiz.
+    """
     result = await db.execute(
-        select(DispatchAttempt.id)
+        select(DispatchAttempt)
         .where(
             DispatchAttempt.order_id == order_id,
             DispatchAttempt.status == DispatchAttemptStatus.PENDING,
             DispatchAttempt.expires_at > datetime.now(timezone.utc),
         )
+        .order_by(DispatchAttempt.sent_at.desc())
         .limit(1)
     )
-    return result.scalar_one_or_none() is not None
+    return result.scalars().first()
+
+
+async def _has_live_attempt(db: AsyncSession, order_id: int) -> bool:
+    """Shu order bo'yicha haydovchi hali javob kutayotgan taklif bormi."""
+    return await _live_attempt(db, order_id) is not None
 
 
 async def expire_attempt(db: AsyncSession, attempt_id: int, *, continue_dispatch: bool = True) -> None:
@@ -694,6 +738,9 @@ async def enqueue_due_orders(db: AsyncSession) -> int:
             Order.dispatch_round == 0,
             Order.last_dispatch_enqueued_at.is_(None),
             Order.price_bump_requested_at.is_(None),
+            # Sender to'xtatib qo'ygan buyurtma vaqti kelgani bilan o'z-o'zidan
+            # boshlanmasligi kerak — bu uning ataylab qilgan qarori.
+            Order.dispatch_paused_at.is_(None),
             Order.pickup_at <= due_before,
             Order.id.notin_(_live_attempt_order_ids()),
         )
@@ -725,6 +772,10 @@ async def requeue_stuck_orders(db: AsyncSession) -> int:
             Order.status == OrderStatus.PENDING,
             Order.driver_id.is_(None),
             Order.price_bump_requested_at.is_(None),
+            # To'xtatilgan buyurtma "qidiruvsiz qolgan" EMAS — sweep uni qaytarsa,
+            # sender bosgan "to'xtatish" bir necha daqiqadan keyin o'z-o'zidan bekor
+            # bo'lardi.
+            Order.dispatch_paused_at.is_(None),
             Order.dispatch_round < MAX_ROUNDS,
             or_(
                 Order.last_dispatch_enqueued_at.is_(None),
@@ -1064,6 +1115,115 @@ async def apply_price_bump(db: AsyncSession, order: Order, new_price: Decimal) -
 
     await _dispatch_next(db, order, reason="price_bump")
     return order
+
+
+async def pause_dispatch(db: AsyncSession, order: Order) -> Order:
+    """Sender haydovchi qidiruvini vaqtincha to'xtatadi.
+
+    Jonli taklif ham darhol bekor qilinadi: aks holda sender "to'xtatdim" deb narxni
+    o'zgartirar, haydovchi esa qo'lidagi ESKI narxli kartani qabul qilib yuborardi —
+    aynan shu ziddiyat bu o'zgarishning sababi.
+
+    Yon ta'sir: bekor qilingan urinish `_previously_attempted_driver_ids` dan chiqadi,
+    ya'ni o'sha haydovchi davom ettirilganda yangi narx bilan qayta taklif oladi.
+    `dispatch_round` esa ATAYLAB kamaytirilmaydi — aks holda to'xtatish/davom ettirish
+    siklini takrorlab `MAX_ROUNDS` chegarasidan cheksiz aylanib o'tish mumkin bo'lardi.
+    """
+    if order.driver_id is not None:
+        raise DispatchError("Buyurtmaga allaqachon haydovchi biriktirilgan", status_code=409)
+    if order.status != OrderStatus.PENDING:
+        raise DispatchError("Qidiruvni faqat haydovchi qidirilayotgan buyurtmada to'xtatish mumkin")
+    if order.dispatch_paused_at is not None:
+        raise DispatchError("Qidiruv allaqachon to'xtatilgan")
+
+    offer_ref = await get_pending_offer_message(db, order)
+    await db.execute(
+        update(DispatchAttempt)
+        .where(
+            DispatchAttempt.order_id == order.id,
+            DispatchAttempt.status == DispatchAttemptStatus.PENDING,
+        )
+        .values(status=DispatchAttemptStatus.CANCELLED, responded_at=datetime.now(timezone.utc))
+    )
+
+    order.dispatch_paused_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(order, attribute_names=["dispatch_paused_at", "updated_at"])
+
+    # Haydovchiga xabar DB yozuvidan keyin — xato bo'lsa ham qidiruv to'xtagan bo'lib
+    # qolsin, faqat karta eskiligicha qoladi (u baribir taklifni qabul qila olmaydi:
+    # `accept_attempt` `status='pending'` shartini talab qiladi).
+    try:
+        await notify_offer_cancelled(offer_ref)
+    except Exception:
+        logger.exception("Order #%s: to'xtatishda haydovchi kartasi yangilanmadi", order.id)
+
+    logger.info("Order #%s qidiruvi sender tomonidan to'xtatildi", order.id)
+    return order
+
+
+async def resume_dispatch(db: AsyncSession, order: Order) -> Order:
+    """To'xtatilgan qidiruvni davom ettiradi (qidiruvning o'zi navbatga qo'yiladi)."""
+    if order.dispatch_paused_at is None:
+        raise DispatchError("Qidiruv to'xtatilmagan")
+    if order.driver_id is not None:
+        raise DispatchError("Buyurtmaga allaqachon haydovchi biriktirilgan", status_code=409)
+    if order.status != OrderStatus.PENDING:
+        raise DispatchError("Bu buyurtmada qidiruvni davom ettirib bo'lmaydi")
+
+    order.dispatch_paused_at = None
+    await db.commit()
+    await db.refresh(order, attribute_names=["dispatch_paused_at", "updated_at"])
+
+    await _dispatch_next(db, order, reason="resumed")
+    logger.info("Order #%s qidiruvi davom ettirildi", order.id)
+    return order
+
+
+async def ensure_price_editable(db: AsyncSession, order: Order) -> None:
+    """Narxni hozir o'zgartirish mumkinmi — mumkin bo'lmasa `PriceLocked` ko'taradi.
+
+    Qoida: narx faqat qidiruv HAQIQATAN to'xtagan paytda o'zgaradi. Ilgari hech qanday
+    tekshiruv yo'q edi va haydovchining telefonida 60 soniyalik taklif ochiq turganda
+    ham narx o'zgarardi — kartadagi narx esa yuborilgan paytdagi holicha qolardi
+    (`_offer_text`), ya'ni haydovchi eski narxni ko'rib qabul qilardi.
+
+    Ruxsat etilgan uch holat: qidiruv to'xtatilgan, tizim narx oshirishni so'ragan
+    (nomzodlar tugagan) yoki qidiruv hali umuman boshlanmagan (rejalashtirilgan yuk).
+    """
+    if order.dispatch_paused_at is not None:
+        return
+    if order.price_bump_requested_at is not None:
+        return
+    if order.dispatch_round == 0 and order.last_dispatch_enqueued_at is None:
+        return
+
+    attempt = await _live_attempt(db, order.id)
+    if attempt is not None:
+        seconds_left = max(
+            0, int((attempt.expires_at - datetime.now(timezone.utc)).total_seconds())
+        )
+        raise PriceLocked(
+            Violation(
+                code="DISPATCH_OFFER_ACTIVE",
+                message=(
+                    "Hozir haydovchiga taklif yuborilgan va javob kutilmoqda. Narxni "
+                    "o'zgartirish uchun qidiruvni to'xtating yoki taymer tugashini kuting."
+                ),
+                context={"seconds_left": seconds_left},
+            )
+        )
+
+    raise PriceLocked(
+        Violation(
+            code="DISPATCH_IN_PROGRESS",
+            message=(
+                "Buyurtma hozir haydovchilarga tarqatilmoqda. Narxni o'zgartirish uchun "
+                "avval qidiruvni to'xtating."
+            ),
+            context={"dispatch_round": order.dispatch_round},
+        )
+    )
 
 
 async def _notify_sender_driver_found(db: AsyncSession, order: Order, driver: Driver) -> None:

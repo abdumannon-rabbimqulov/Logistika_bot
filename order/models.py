@@ -118,6 +118,14 @@ class Order(Base):
     # Qidiruv vazifasi oxirgi marta RabbitMQ navbatiga qo'yilgan payt (kuzatuv/debug uchun:
     # navbat qotib qolganda buyurtma qachondan beri kutayotgani shu ustundan ko'rinadi).
     last_dispatch_enqueued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Sender qidiruvni QO'LDA to'xtatgan payt. To'ldirilgan bo'lsa yangi raund umuman
+    # navbatga qo'yilmaydi va aynan shu paytda sender narxni o'zgartira oladi.
+    #
+    # Nega alohida ustun kerak: `price_bump_requested_at` ham qidiruvni to'xtatadi, lekin
+    # uni TIZIM qo'yadi (nomzodlar tugagach). Senderning o'z qarori bilan to'xtatishini
+    # undan ajratib turish shart — aks holda "davom ettirish" tugmasi narx oshirish
+    # oqimini ham buzib yuborardi.
+    dispatch_paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Yuk og'irligi/hajmi tanlangan mashina sig'imidan oshsa shu yerga yoziladi (order bloklanmaydi,
     # faqat sender/haydovchi/admin ko'radigan ogohlantirish — O'zbekiston bozorida haydovchilar
     # ko'pincha "5 tonnalik"ga 6 tonna ham yuklaydi, shuning uchun majburiy taqiq qo'yilmagan)

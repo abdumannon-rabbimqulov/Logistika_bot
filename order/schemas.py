@@ -360,6 +360,9 @@ class OrderResponse(OrderBase):
     # To'ldirilgan bo'lsa — haydovchi qidiruvi HALI boshlanmagan va shu paytda
     # boshlanadi (rejalashtirilgan buyurtma). `None` — qidiruv allaqachon ketmoqda.
     dispatch_starts_at: Optional[datetime] = None
+    # To'ldirilgan bo'lsa — sender qidiruvni QO'LDA to'xtatgan: yangi raund yuborilmaydi
+    # va aynan shu paytda narxni o'zgartirish mumkin.
+    dispatch_paused_at: Optional[datetime] = None
     overload_warning: Optional[str] = None
     completed_at: Optional[datetime] = None
     created_at: datetime

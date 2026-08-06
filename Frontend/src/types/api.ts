@@ -199,6 +199,9 @@ export interface Order {
   /** To'ldirilgan bo'lsa — haydovchi qidiruvi hali boshlanmagan va shu paytda
    *  boshlanadi (kelajakka rejalashtirilgan yuk). `null` — qidiruv ketmoqda. */
   dispatch_starts_at: string | null;
+  /** To'ldirilgan bo'lsa — sender qidiruvni qo'lda to'xtatgan: yangi taklif yuborilmaydi
+   *  va aynan shu paytda narxni o'zgartirish mumkin. */
+  dispatch_paused_at: string | null;
   overload_warning: string | null;
   completed_at: string | null;
   created_at: string;

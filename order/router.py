@@ -42,6 +42,11 @@ def _routing_unavailable() -> HTTPException:
 
 
 def _raise_dispatch_error(exc: dispatch_service.DispatchError) -> NoReturn:
+    # `PriceLocked` — kod bilan keladigan maxsus holat: frontend `detail.errors[].code`
+    # ga qarab aniq amal taklif qiladi (masalan qolgan soniyani ko'rsatadi). Qolgan
+    # dispatch xatolari avvalgidek oddiy matn bo'lib qoladi.
+    if isinstance(exc, dispatch_service.PriceLocked):
+        raise HTTPException(exc.status_code, detail=exc.as_detail()) from exc
     raise HTTPException(exc.status_code, detail=str(exc)) from exc
 
 
@@ -609,8 +614,46 @@ async def set_custom_price(
         order = await crud.set_custom_price(db, order, data.price)
     except pricing.PriceValidationError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except dispatch_service.DispatchError as exc:
+        # Qidiruv ketayotganda narx o'zgartirilmaydi (`ensure_price_editable`).
+        _raise_dispatch_error(exc)
     except ValueError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return schemas.OrderDetailResponse.from_order(order)
+
+
+@router.post("/{order_id}/dispatch/pause", response_model=schemas.OrderDetailResponse,
+             summary="Sender haydovchi qidiruvini vaqtincha to'xtatadi")
+async def pause_dispatch(
+    order_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_sender),
+):
+    """Qidiruvni to'xtatadi va ochiq taklifni bekor qiladi.
+
+    To'xtatilgandan keyin sender narxni o'zgartira oladi — qidiruv ketayotganda esa
+    yo'q (`PATCH /orders/{id}/price` 409 qaytaradi).
+    """
+    order = await _require_own_order(db, order_id, current_user)
+    try:
+        order = await dispatch_service.pause_dispatch(db, order)
+    except dispatch_service.DispatchError as exc:
+        _raise_dispatch_error(exc)
+    return schemas.OrderDetailResponse.from_order(order)
+
+
+@router.post("/{order_id}/dispatch/resume", response_model=schemas.OrderDetailResponse,
+             summary="To'xtatilgan qidiruvni davom ettirish")
+async def resume_dispatch(
+    order_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_sender),
+):
+    order = await _require_own_order(db, order_id, current_user)
+    try:
+        order = await dispatch_service.resume_dispatch(db, order)
+    except dispatch_service.DispatchError as exc:
+        _raise_dispatch_error(exc)
     return schemas.OrderDetailResponse.from_order(order)
 
 

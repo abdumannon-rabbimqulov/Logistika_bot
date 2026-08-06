@@ -53,7 +53,20 @@ export function CustomPriceSheet({ order, onClose, onSaved }: Props) {
     try {
       onSaved(await setCustomPrice(order.id, value));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Narxni o'zgartirib bo'lmadi");
+      if (err instanceof ApiError) {
+        // Qidiruv ketayotgani sababli rad etilgan bo'lsa backend kod bilan yuboradi
+        // (`dispatch.ensure_price_editable`). `DISPATCH_OFFER_ACTIVE` da qolgan soniya
+        // ham keladi — foydalanuvchi qancha kutishini bilib tursin.
+        const locked = err.problems.find((p) => p.code === 'DISPATCH_OFFER_ACTIVE');
+        const secondsLeft = typeof locked?.seconds_left === 'number' ? locked.seconds_left : null;
+        setError(
+          secondsLeft != null
+            ? `${locked?.message} (~${secondsLeft} soniya qoldi)`
+            : err.message,
+        );
+      } else {
+        setError("Narxni o'zgartirib bo'lmadi");
+      }
     } finally {
       setSaving(false);
     }

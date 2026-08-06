@@ -524,6 +524,35 @@
   background: var(--color-gray-50);
 }
 
+.editBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Qidiruvni to'xtatish / davom ettirish — `editRow` dan tashqarida, alohida qatorda
+   turadi, shuning uchun `editBtn` dagi `flex: 1` o'rniga to'liq kenglik beriladi. */
+.dispatchBtn {
+  composes: editBtn;
+  width: 100%;
+  margin-top: 8px;
+}
+
+/* Narx tugmasi nega o'chiq ekanining izohi. `statusCard` (to'q fon) ichida —
+   `scheduledNote` bilan bir xil rang. */
+.dispatchNote {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.pausedNote {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.85);
+}
+
 .supportBtn {
   width: 100%;
   margin-top: 14px;

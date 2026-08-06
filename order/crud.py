@@ -423,9 +423,19 @@ async def set_custom_price(db: AsyncSession, order: Order, new_price: Decimal) -
 
     Narx faqat haydovchi biriktirilgunga qadar o'zgartiriladi: kelishilgan narxni
     yo'lda o'zgartirish haydovchi uchun bir tomonlama zarar bo'lardi.
+
+    Bundan tashqari qidiruv KETAYOTGAN paytda ham o'zgartirib bo'lmaydi — buni
+    `dispatch.ensure_price_editable` tekshiradi (u yerdagi izohga qarang).
     """
     if order.driver_id is not None or order.status != OrderStatus.PENDING:
         raise ValueError("Narxni faqat haydovchi biriktirilmagan (PENDING) buyurtmada o'zgartirish mumkin")
+
+    # Kech import: `services/dispatch.py` o'z navbatida shu modulni import qiladi
+    # (yuqoridagi `start_dispatch` chaqiruvidagi kabi) — modul boshida yozilsa
+    # aylanma import bo'lardi.
+    from services import dispatch as dispatch_service
+
+    await dispatch_service.ensure_price_editable(db, order)
 
     base_price = order_base_price(order)
     price = await pricing.validate_custom_price_for_db(db, new_price, base_price)

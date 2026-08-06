@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
-import { bumpPrice, cancelOrder, getOrder, getPriceOptions } from '../api/orders';
+import {
+  bumpPrice,
+  cancelOrder,
+  getOrder,
+  getPriceOptions,
+  pauseDispatch,
+  resumeDispatch,
+} from '../api/orders';
 import { BottomSheet } from '../components/BottomSheet';
 import { CustomPriceSheet } from '../components/CustomPriceSheet';
 import { OrderEditSheet } from '../components/OrderEditSheet';
@@ -60,6 +67,9 @@ export function OrderTrackingPage() {
   // Tahrirlash va narx belgilash — ikkalasi ham faqat haydovchi biriktirilmaguncha ochiq.
   const [editingOrder, setEditingOrder] = useState(false);
   const [editingPrice, setEditingPrice] = useState(false);
+  // Qidiruvni to'xtatish/davom ettirish so'rovi ketayotgan payt — ikkala tugma ham
+  // bloklanadi, aks holda takroriy bosishda 409 chiqardi.
+  const [dispatchBusy, setDispatchBusy] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
@@ -76,14 +86,38 @@ export function OrderTrackingPage() {
     void load();
   }, [load]);
 
+  /** Qidiruvni to'xtatish yoki davom ettirish. Javob to'liq buyurtma bo'lib qaytadi,
+   *  shuning uchun qayta so'rov (`load`) kerak emas. */
+  const changeDispatch = useCallback(
+    async (action: 'pause' | 'resume') => {
+      if (!orderId || dispatchBusy) return;
+      setDispatchBusy(true);
+      setError(null);
+      try {
+        const updated =
+          action === 'pause'
+            ? await pauseDispatch(Number(orderId))
+            : await resumeDispatch(Number(orderId));
+        setOrder(updated);
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : "Amal bajarilmadi, qayta urinib ko'ring");
+      } finally {
+        setDispatchBusy(false);
+      }
+    },
+    [orderId, dispatchBusy],
+  );
+
   useEffect(() => {
     if (!order || order.status !== 'PENDING') {
       if (timerRef.current) clearTimeout(timerRef.current);
       return;
     }
-    // Qidiruv hali boshlanmagan bo'lsa (kelajakdagi yuk) tez-tez so'rash bekor —
-    // holat soatlab o'zgarmaydi. Boshlangach odatdagi tezlikka qaytadi.
-    const interval = order.dispatch_starts_at ? SCHEDULED_POLL_INTERVAL_MS : POLL_INTERVAL_MS;
+    // Qidiruv hali boshlanmagan (kelajakdagi yuk) yoki sender uni to'xtatgan bo'lsa —
+    // tez-tez so'rash bekor, holat o'z-o'zidan o'zgarmaydi. Qidiruv ketayotganda esa
+    // odatdagi tezlikka qaytadi.
+    const idle = order.dispatch_starts_at != null || order.dispatch_paused_at != null;
+    const interval = idle ? SCHEDULED_POLL_INTERVAL_MS : POLL_INTERVAL_MS;
     timerRef.current = setTimeout(load, interval);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -188,6 +222,23 @@ export function OrderTrackingPage() {
   // kelishuv allaqachon tuzilgan. Backend ham aynan shu shartni qo'llaydi.
   const canEdit =
     (order.status === 'PENDING' || order.status === 'SCHEDULED') && order.driver_id == null;
+  const dispatchPaused = order.dispatch_paused_at != null;
+  // Narx faqat qidiruv HAQIQATAN to'xtagan paytda o'zgaradi. Shart backenddagi
+  // `dispatch.ensure_price_editable` bilan bir xil bo'lishi shart — aks holda tugma
+  // ochiq ko'rinib, so'rov 409 bilan qaytardi (ilgari `canEdit` `SCHEDULED` ga ruxsat
+  // berardi, backend esa faqat `PENDING` ni qabul qilardi — o'sha nomuvofiqlik ham
+  // shu yerda tugatildi).
+  const canEditPrice =
+    order.status === 'PENDING' &&
+    order.driver_id == null &&
+    (dispatchPaused || awaitingBump || scheduledStart != null);
+  // Qidiruv ketmoqda: to'xtatish tugmasi shu holatda ko'rinadi.
+  const canPauseDispatch =
+    order.status === 'PENDING' &&
+    order.driver_id == null &&
+    !dispatchPaused &&
+    !awaitingBump &&
+    scheduledStart == null;
   const progressPercent = Math.min(100, (order.dispatch_round / MAX_ROUNDS) * 100);
   const driverLocation = driverPoint
     ? { latitude: driverPoint.latitude, longitude: driverPoint.longitude }
@@ -282,10 +333,50 @@ export function OrderTrackingPage() {
               <button className={styles.editBtn} onClick={() => setEditingOrder(true)}>
                 Buyurtmani tahrirlash
               </button>
-              <button className={styles.editBtn} onClick={() => setEditingPrice(true)}>
+              <button
+                className={styles.editBtn}
+                disabled={!canEditPrice}
+                onClick={() => setEditingPrice(true)}
+              >
                 Narxni belgilash
               </button>
             </div>
+          )}
+
+          {/* Tugma nega o'chiq ekani darhol tushuntiriladi — aks holda foydalanuvchi
+              buzuq deb o'ylardi. */}
+          {canEdit && !canEditPrice && (
+            <div className={styles.dispatchNote}>
+              Hozir haydovchilarga taklif yuborilmoqda. Narxni o'zgartirish uchun avval
+              qidiruvni to'xtating yoki taymer tugashini kuting.
+            </div>
+          )}
+
+          {dispatchPaused && (
+            <div className={styles.pausedNote}>
+              Qidiruv to'xtatilgan. Endi narxni o'zgartirishingiz mumkin — tayyor
+              bo'lgach qidiruvni davom ettiring.
+            </div>
+          )}
+
+          {canPauseDispatch && (
+            <button
+              className={styles.dispatchBtn}
+              disabled={dispatchBusy}
+              onClick={() => void changeDispatch('pause')}
+            >
+              {dispatchBusy ? 'To’xtatilmoqda...' : 'Qidiruvni to’xtatish'}
+            </button>
+          )}
+
+          {dispatchPaused && (
+            <button
+              className={styles.dispatchBtn}
+              disabled={dispatchBusy}
+              onClick={() => void changeDispatch('resume')}
+            >
+              {dispatchBusy ? 'Davom ettirilmoqda...' : 'Qidiruvni davom ettirish'}
+            </button>
           )}
 
           {canCancel && !confirmingCancel && (
