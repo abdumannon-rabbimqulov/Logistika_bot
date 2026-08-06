@@ -97,6 +97,8 @@ async def create_order(db: AsyncSession, data: OrderCreate, *, customer_id: int)
         weight=data.weight,
         volume=data.volume,
         pickup_at=data.pickup_at,
+        unloading_mode=data.unloading_mode,
+        unloading_wait_hours=data.unloading_wait_hours,
         required_truck_type_id=data.required_truck_type_id,
         price=price,
         base_price=price,

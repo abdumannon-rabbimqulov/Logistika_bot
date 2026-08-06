@@ -173,6 +173,10 @@ export interface OrderListItem {
   completed_at: string | null;
 }
 
+/** Yuk manzilga yetib borgandan keyingi tushirish sharti (order/models.py UnloadingMode).
+ *  Ixtiyoriy — mijoz tanlamasa `null` bo'ladi va hech qanday shart qo'yilmaydi. */
+export type UnloadingMode = 'IMMEDIATE' | 'HOURS' | 'DAY';
+
 export interface Order {
   id: number;
   customer_id: number;
@@ -181,6 +185,8 @@ export interface Order {
   weight: number;
   volume: number | null;
   pickup_at: string;
+  unloading_mode: UnloadingMode | null;
+  unloading_wait_hours: number | null;
   departure_at: string | null;
   required_truck_type_id: number;
   total_distance_km: number | null;
@@ -241,6 +247,9 @@ export interface OrderCreateInput {
   volume?: number;
   pickup_at: string;
   required_truck_type_id: number;
+  unloading_mode?: UnloadingMode;
+  /** Faqat `HOURS` bilan birga yuboriladi — backend aks holda 422 qaytaradi. */
+  unloading_wait_hours?: number;
   waypoints: OrderWaypointInput[];
 }
 

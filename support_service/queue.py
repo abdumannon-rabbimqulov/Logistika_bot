@@ -37,6 +37,7 @@ EVENT_ORDER_STATUS_CHANGED = "order.status_changed"
 EVENT_ORDER_TRUCK_ASSIGNED = "order.truck_assigned"
 EVENT_SUPPORT_TICKET_CREATED = "support.ticket_created"
 EVENT_SUPPORT_TICKET_REPLIED = "support.ticket_replied"
+EVENT_SUPPORT_TICKET_STATUS_CHANGED = "support.ticket_status_changed"
 
 SUPPORT_EVENTS_QUEUE = "support.order_events"
 SUPPORT_EVENTS_PATTERN = "order.*"

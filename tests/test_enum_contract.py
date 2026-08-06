@@ -19,7 +19,14 @@ from pathlib import Path
 import pytest
 
 from order.dispatch_models import DispatchAttemptStatus, DispatchMatchType
-from order.models import Order, OrderStatus, OrderWaypoint, WaypointStatus, WaypointType
+from order.models import (
+    Order,
+    OrderStatus,
+    OrderWaypoint,
+    UnloadingMode,
+    WaypointStatus,
+    WaypointType,
+)
 
 # ── Bazadagi enum tiplari va ularning qiymatlari ────────────────────────────
 DB_ENUMS: dict[str, tuple[type, list[str]]] = {
@@ -29,6 +36,7 @@ DB_ENUMS: dict[str, tuple[type, list[str]]] = {
     ),
     "waypointstatus": (WaypointStatus, ["PENDING", "ARRIVED", "COMPLETED", "SKIPPED"]),
     "waypointtype": (WaypointType, ["PICKUP", "DELIVERY", "TRANSIT"]),
+    "unloadingmode": (UnloadingMode, ["IMMEDIATE", "HOURS", "DAY"]),
     # Dispatch tiplari ATAYLAB kichik harflarda — ular ham shu qoidaga bo'ysunadi.
     "dispatchattemptstatus": (
         DispatchAttemptStatus,

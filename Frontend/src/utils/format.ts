@@ -36,3 +36,22 @@ const STATUS_LABELS: Record<string, string> = {
 export function statusLabel(status: string): string {
   return STATUS_LABELS[status] ?? status;
 }
+
+/** Manzilda yukni tushirish sharti (order/models.py `UnloadingMode`) — mijoz ham,
+ *  haydovchi ham bir xil matnni ko'rishi uchun shu yerda. Shart tanlanmagan bo'lsa
+ *  `null` qaytadi va chaqiruvchi qatorni umuman ko'rsatmaydi. */
+export function unloadingLabel(
+  mode: string | null | undefined,
+  waitHours?: number | null,
+): string | null {
+  switch (mode) {
+    case 'IMMEDIATE':
+      return "O'sha zahoti tushirish";
+    case 'HOURS':
+      return waitHours ? `${waitHours} soat kutish` : 'Bir necha soat kutish';
+    case 'DAY':
+      return 'Kun kutish';
+    default:
+      return null;
+  }
+}

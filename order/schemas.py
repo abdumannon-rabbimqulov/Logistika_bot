@@ -7,7 +7,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from order.dispatch_models import DispatchAttemptStatus, DispatchMatchType
-from order.models import OrderStatus, WaypointStatus, WaypointType
+from order.models import OrderStatus, UnloadingMode, WaypointStatus, WaypointType
 
 
 
@@ -133,6 +133,10 @@ MAX_PICKUP_DAYS_AHEAD = 90
 # Mijoz "hozir" tanlaganda so'rov tarmoqda kechikishi mumkin — shuncha imtiyoz beriladi.
 PICKUP_PAST_TOLERANCE = timedelta(minutes=1)
 
+# Tushirishni "bir necha soat" kutish shu chegaradan oshsa, bu aslida "kun kutish"
+# (`UnloadingMode.DAY`) — shuning uchun soat sifatida qabul qilinmaydi.
+MAX_UNLOADING_WAIT_HOURS = 24
+
 
 def validate_pickup_time(value: datetime) -> datetime:
     """Yuk tayyor bo'lish vaqti o'tmishda ham, juda uzoq kelajakda ham bo'lmasligi kerak.
@@ -169,6 +173,19 @@ class OrderBase(BaseModel):
         ),
     )
     required_truck_type_id: int
+    unloading_mode: Optional[UnloadingMode] = Field(
+        None,
+        description=(
+            "Manzilda yukni tushirish sharti (ixtiyoriy): IMMEDIATE — o'sha zahoti, "
+            "HOURS — bir necha soat kutish, DAY — kun kutish."
+        ),
+    )
+    unloading_wait_hours: Optional[int] = Field(
+        None,
+        ge=1,
+        le=MAX_UNLOADING_WAIT_HOURS,
+        description="Faqat `HOURS` uchun: taxminiy kutish soati.",
+    )
 
 
 class OrderCreate(OrderBase):
@@ -185,6 +202,20 @@ class OrderCreate(OrderBase):
     @classmethod
     def validate_pickup_at(cls, value: datetime) -> datetime:
         return validate_pickup_time(value)
+
+    @model_validator(mode="after")
+    def check_unloading_wait(self) -> "OrderCreate":
+        """Kutish soati faqat "bir necha soat" variantida ma'noga ega.
+
+        Jimgina tashlab yuborilmaydi: mijoz "o'sha zahoti" tanlab, yoniga 5 soat
+        yozib yuborgan bo'lsa — bu ziddiyat, haydovchi qaysi biriga ishonishini
+        bilmaydi.
+        """
+        if self.unloading_wait_hours is not None and self.unloading_mode != UnloadingMode.HOURS:
+            raise ValueError(
+                "Kutish soatini faqat \"bir necha soat kutish\" varianti bilan birga yuborish mumkin"
+            )
+        return self
 
     @field_validator("waypoints")
     @classmethod

@@ -22,6 +22,7 @@ EXPECTED_ROUTING_KEYS = {
     "order.truck_assigned",
     "support.ticket_created",
     "support.ticket_replied",
+    "support.ticket_status_changed",
 }
 
 
@@ -35,6 +36,7 @@ def test_routing_keys_are_stable():
         queue.EVENT_ORDER_TRUCK_ASSIGNED,
         queue.EVENT_SUPPORT_TICKET_CREATED,
         queue.EVENT_SUPPORT_TICKET_REPLIED,
+        queue.EVENT_SUPPORT_TICKET_STATUS_CHANGED,
     }
     assert actual == EXPECTED_ROUTING_KEYS
 
@@ -97,3 +99,7 @@ def test_support_service_uses_same_contract(monkeypatch):
     assert support_queue.EVENT_ORDER_TRUCK_ASSIGNED == queue.EVENT_ORDER_TRUCK_ASSIGNED
     assert support_queue.EVENT_SUPPORT_TICKET_CREATED == queue.EVENT_SUPPORT_TICKET_CREATED
     assert support_queue.EVENT_SUPPORT_TICKET_REPLIED == queue.EVENT_SUPPORT_TICKET_REPLIED
+    assert (
+        support_queue.EVENT_SUPPORT_TICKET_STATUS_CHANGED
+        == queue.EVENT_SUPPORT_TICKET_STATUS_CHANGED
+    )

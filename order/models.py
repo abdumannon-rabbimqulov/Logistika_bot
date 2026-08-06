@@ -32,6 +32,20 @@ class WaypointType(str, enum.Enum):
     TRANSIT = "TRANSIT"          # Oraliq nuqta (Yo'l-yonakay boshqa joydan ham yuk olish yoki tashlash uchun)
 
 
+class UnloadingMode(str, enum.Enum):
+    """Yuk manzilga yetib borgandan keyin qanday tushiriladi (mijoz tanlaydi).
+
+    Haydovchi uchun bu — reysdan keyin mashina qancha band bo'lishini bildiruvchi
+    yagona ma'lumot: "kun kutish" bilan "o'sha zahoti tushirish" bir xil narx va
+    vaqtda bo'lolmaydi. Ixtiyoriy (`nullable`): eski buyurtmalarda ham, mijoz
+    tanlamagan holatda ham bo'sh qoladi va hech qanday shart qo'yilmaydi.
+    """
+
+    IMMEDIATE = "IMMEDIATE"   # O'sha zahoti tushirib olinadi
+    HOURS = "HOURS"           # Bir necha soat kutish kerak (`unloading_wait_hours`)
+    DAY = "DAY"               # Kun kutish kerak
+
+
 class WaypointStatus(str, enum.Enum):
     PENDING = "PENDING"          # Kutilmoqda (Haydovchi hali bu manzilga yetib kelmadi)
     ARRIVED = "ARRIVED"          # Yetib keldi (Haydovchi nuqtaga keldi va "Kelyapman/Kutib turibman" tugmasini bosdi)
@@ -53,6 +67,19 @@ class Order(Base):
         DateTime(timezone=True),
         nullable=False
     )
+
+    # Manzilda yukni tushirish sharti — mijoz ixtiyoriy tanlaydi (bo'sh bo'lishi mumkin).
+    unloading_mode: Mapped[Optional[UnloadingMode]] = mapped_column(
+        SQLEnum(
+            UnloadingMode,
+            name="unloadingmode",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        nullable=True,
+    )
+    # Faqat `HOURS` uchun ma'noga ega: taxminan necha soat kutish kerakligi.
+    # Ko'rsatilmasa "bir necha soat" degan umumiy shart bo'lib qoladi.
+    unloading_wait_hours: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     # Haydovchi yo'lga chiqishi kerak bo'lgan vaqt (Tizim hisoblaydi, boshida bo'sh bo'ladi)
     departure_at: Mapped[Optional[datetime]] = mapped_column(

@@ -7,7 +7,7 @@ import { useLiveLocation } from '../hooks/useLiveLocation';
 import type { OrderDetail, OrderWaypoint, WaypointStatus, WaypointType } from '../types/api';
 import { getCurrentPositionOnce, PositionError } from '../utils/currentPosition';
 import { openTelegramLocationSettings } from '../utils/telegramLocation';
-import { formatPrice, statusLabel } from '../utils/format';
+import { formatPrice, statusLabel, unloadingLabel } from '../utils/format';
 import styles from './DriverActiveOrderPage.module.css';
 
 const WAYPOINT_TYPE_LABEL: Record<WaypointType, string> = {
@@ -161,6 +161,13 @@ export function DriverActiveOrderPage() {
             <span className={styles.metaChip}><WeightIcon /> {order.weight} t</span>
             {order.total_distance_km != null && (
               <span className={styles.metaChip}>≈ {Math.round(order.total_distance_km)} km</span>
+            )}
+            {/* Tushirish sharti — haydovchi uchun reysdan keyin mashina qancha band
+                bo'lishini bildiradi (mijoz tanlamagan bo'lsa ko'rsatilmaydi). */}
+            {unloadingLabel(order.unloading_mode, order.unloading_wait_hours) && (
+              <span className={styles.metaChip}>
+                {unloadingLabel(order.unloading_mode, order.unloading_wait_hours)}
+              </span>
             )}
           </div>
           <div className={styles.priceRow}>

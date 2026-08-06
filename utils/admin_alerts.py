@@ -37,6 +37,23 @@ def _send_sync(chat_id: int, text: str) -> None:
         _ = resp.read()
 
 
+async def _dispatch(message: str, admin_ids: Iterable[int] | None) -> None:
+    """Tayyor matnni har bir adminga yuboradi. Hech qachon exception tashlamaydi."""
+    ids = list(admin_ids if admin_ids is not None else ADMIN_IDS)
+    if not ids:
+        return
+
+    message = _truncate(message, 3500)
+
+    for admin_id in ids:
+        try:
+            await asyncio.to_thread(_send_sync, int(admin_id), message)
+        except (ValueError, error.URLError, error.HTTPError, TimeoutError) as exc:
+            logger.warning("Admin alert send failed for %s: %s", admin_id, exc)
+        except Exception as exc:
+            logger.warning("Unexpected admin alert error for %s: %s", admin_id, exc)
+
+
 async def send_error_to_admins(
     *,
     title: str,
@@ -49,10 +66,6 @@ async def send_error_to_admins(
     admin_ids: Iterable[int] | None = None,
 ) -> None:
     """Xatoni adminlarga yuboradi. Hech qachon exception tashlamaydi."""
-    ids = list(admin_ids if admin_ids is not None else ADMIN_IDS)
-    if not ids:
-        return
-
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     message = (
         f"🚨 Backend Error Alert\n"
@@ -65,15 +78,25 @@ async def send_error_to_admins(
         f"exc_type: {exc_type}\n\n"
         f"details:\n{details}"
     )
-    message = _truncate(message, 3500)
+    await _dispatch(message, admin_ids)
 
-    for admin_id in ids:
-        try:
-            await asyncio.to_thread(_send_sync, int(admin_id), message)
-        except (ValueError, error.URLError, error.HTTPError, TimeoutError) as exc:
-            logger.warning("Admin alert send failed for %s: %s", admin_id, exc)
-        except Exception as exc:
-            logger.warning("Unexpected admin alert error for %s: %s", admin_id, exc)
+
+async def send_notice_to_admins(
+    *,
+    title: str,
+    details: str,
+    admin_ids: Iterable[int] | None = None,
+) -> None:
+    """Oddiy (xato BO'LMAGAN) bildirishnoma — masalan yangi yordam murojaati.
+
+    Nega alohida: ilgari bunday xabarlar ham `send_error_to_admins` orqali ketardi
+    va adminga `🚨 Backend Error Alert` sarlavhasi bilan kelardi — hech narsa
+    yiqilmagan bo'lsa ham. Natijada haqiqiy xatolar oddiy bildirishnomalar orasida
+    ko'zdan qochardi. Bu yerda `request_id`/`exc_type` kabi debug qatorlari ham yo'q:
+    ular faqat xatoni izlashda kerak.
+    """
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    await _dispatch(f"💬 {title}\n{now}\n\n{details}", admin_ids)
 
 
 def format_details_for_alert(exc: Exception, *, max_len: int = 1200) -> str:

@@ -8,6 +8,7 @@ import {
   toDateTimeLocalValue,
   validatePickupAt,
 } from '../utils/pickupTime';
+import type { UnloadingMode } from '../types/api';
 import { BottomSheetModal } from './BottomSheetModal';
 import styles from './CargoDetailsSheet.module.css';
 
@@ -17,6 +18,33 @@ export interface CargoDetails {
   volume?: number;
   /** Yuk tayyor bo'ladigan payt — backendga ISO 8601 bo'lib ketadi (`pickup_at`). */
   pickupAt: Date;
+  /** Manzilda tushirish sharti — ixtiyoriy, tanlanmasa yuborilmaydi. */
+  unloadingMode?: UnloadingMode;
+  /** Faqat "bir necha soat" varianti bilan (backend aks holda 422 qaytaradi). */
+  unloadingWaitHours?: number;
+}
+
+// Tushirish shartlari — mijoz faqat BITTASINI tanlaydi va tanlamasligi ham mumkin.
+// Matnlar haydovchi ko'radigan qilib yozilgan: uning uchun bu reysdan keyin mashina
+// qancha band bo'lishini bildiradi.
+const UNLOADING_OPTIONS: { value: UnloadingMode; label: string }[] = [
+  { value: 'IMMEDIATE', label: "O'sha zahoti tushirish" },
+  { value: 'HOURS', label: 'Bir necha soat kutish' },
+  { value: 'DAY', label: 'Kun kutish' },
+];
+
+// `MAX_UNLOADING_WAIT_HOURS` (order/schemas.py) bilan bir xil: undan oshsa bu
+// allaqachon "kun kutish" varianti.
+const MAX_WAIT_HOURS = 24;
+
+/** Tanlangan shartning qisqa izohi — "Yuk qachon tayyor" qismidagi kabi, foydalanuvchi
+ *  yuborishdan oldin nima tanlaganini bir qatorda ko'rib tursin. */
+function describeUnloading(mode: UnloadingMode, waitHours: string): string {
+  if (mode === 'HOURS') {
+    const hours = waitHours.trim();
+    return hours ? `${hours} soat kutish` : 'Bir necha soat kutish';
+  }
+  return UNLOADING_OPTIONS.find((o) => o.value === mode)?.label ?? '—';
 }
 
 interface Props {
@@ -40,6 +68,18 @@ export function CargoDetailsSheet({ onSubmit, onClose, submitting, apiError }: P
   // Kalendar faqat "Boshqa vaqt" tanlanganda ochiladi — odatiy holat uchun
   // bitta bosish yetarli bo'lsin.
   const [customOpen, setCustomOpen] = useState(false);
+  // Tushirish sharti — ixtiyoriy, shuning uchun standart holat `null` ("tanlanmagan").
+  const [unloadingMode, setUnloadingMode] = useState<UnloadingMode | null>(null);
+  const [waitHours, setWaitHours] = useState('');
+
+  function selectUnloadingMode(mode: UnloadingMode) {
+    // Tanlangan variantni qayta bosish — bekor qilish. Aks holda foydalanuvchi bir
+    // marta bosgandan keyin "hech qanday shart yo'q" holatiga qaytolmasdi.
+    const next = unloadingMode === mode ? null : mode;
+    setUnloadingMode(next);
+    if (next !== 'HOURS') setWaitHours('');
+    setError(null);
+  }
 
   function selectPreset(build: () => Date) {
     setPickupAt(build());
@@ -64,6 +104,14 @@ export function CargoDetailsSheet({ onSubmit, onClose, submitting, apiError }: P
       setError(pickupError);
       return;
     }
+    // Kutish soati ixtiyoriy: bo'sh qoldirilsa shart "bir necha soat" bo'lib qolaveradi.
+    const waitNum = waitHours.trim() ? Number(waitHours.replace(',', '.')) : undefined;
+    if (unloadingMode === 'HOURS' && waitNum !== undefined) {
+      if (!Number.isInteger(waitNum) || waitNum < 1 || waitNum > MAX_WAIT_HOURS) {
+        setError(`Kutish vaqtini 1 dan ${MAX_WAIT_HOURS} soatgacha butun son bilan kiriting`);
+        return;
+      }
+    }
     setError(null);
     const volumeNum = volume ? Number(volume.replace(',', '.')) : undefined;
     onSubmit({
@@ -71,6 +119,8 @@ export function CargoDetailsSheet({ onSubmit, onClose, submitting, apiError }: P
       weight: weightNum,
       volume: volumeNum && volumeNum > 0 ? volumeNum : undefined,
       pickupAt,
+      unloadingMode: unloadingMode ?? undefined,
+      unloadingWaitHours: unloadingMode === 'HOURS' ? waitNum : undefined,
     });
   }
 
@@ -151,6 +201,38 @@ export function CargoDetailsSheet({ onSubmit, onClose, submitting, apiError }: P
         )}
 
         <div className={styles.pickupSummary}>Tanlandi: {describePickupAt(pickupAt)}</div>
+      </div>
+
+      <div className={styles.field}>
+        <label className={styles.label}>Manzilda yukni tushirish (ixtiyoriy)</label>
+        <div className={styles.presets}>
+          {UNLOADING_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={unloadingMode === option.value ? styles.presetActive : styles.preset}
+              onClick={() => selectUnloadingMode(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        {unloadingMode === 'HOURS' && (
+          <input
+            className={styles.input}
+            inputMode="numeric"
+            value={waitHours}
+            onChange={(e) => setWaitHours(e.target.value)}
+            placeholder={`Taxminiy kutish, soat (1–${MAX_WAIT_HOURS}) — ixtiyoriy`}
+          />
+        )}
+
+        <div className={styles.pickupSummary}>
+          {unloadingMode === null
+            ? "Tanlanmagan — haydovchiga qo'shimcha shart qo'yilmaydi"
+            : `Tanlandi: ${describeUnloading(unloadingMode, waitHours)}`}
+        </div>
       </div>
 
       {(error || apiError) && <div className={styles.error}>{error ?? apiError}</div>}

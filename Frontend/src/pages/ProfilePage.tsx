@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getMe, updateMe } from '../api/auth';
 import { ApiError } from '../api/client';
 import { listMyOrders } from '../api/orders';
 import { useAuth } from '../auth/AuthProvider';
 import { AccountSettingsSection } from '../components/AccountSettingsSection';
 import { BottomNav } from '../components/BottomNav';
-import { ChevronRightIcon, PhoneIcon, UserLineIcon, WalletIcon } from '../components/icons';
+import { ChevronRightIcon, MessagesNavIcon, PhoneIcon, UserLineIcon, WalletIcon } from '../components/icons';
 import type { OrderListItem, UserProfile } from '../types/api';
 import { formatPrice } from '../utils/format';
 import { PHONE_PLACEHOLDER } from '../utils/phone';
@@ -13,6 +14,7 @@ import styles from './ProfilePage.module.css';
 
 export function ProfilePage() {
   const { logout } = useAuth();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [orders, setOrders] = useState<OrderListItem[] | null>(null);
   const [fullName, setFullName] = useState('');
@@ -160,6 +162,20 @@ export function ProfilePage() {
           </div>
         )}
         {saved && <div className={styles.savedHint}>Saqlandi</div>}
+
+        {/* Murojaatlar — haydovchi profilidagi bilan bir xil band
+            (`DriverProfilePage.tsx`). Asosiy kirish yuqoridagi qo'ng'iroq tugmasi,
+            bu esa profildan izlaydiganlar uchun ikkinchi yo'l. */}
+        <div className={styles.rows}>
+          <button className={styles.editRow} onClick={() => navigate('/messages')}>
+            <span className={styles.rowIcon}><MessagesNavIcon size={20} /></span>
+            <span className={styles.rowText}>
+              <span className={styles.rowTitle}>Murojaatlar</span>
+              <span className={styles.rowSub}>Yordam xizmatiga savol yoki shikoyat</span>
+            </span>
+            <ChevronRightIcon />
+          </button>
+        </div>
 
         <AccountSettingsSection />
 

@@ -147,6 +147,10 @@ async def add_message(
         queue.EVENT_SUPPORT_TICKET_REPLIED,
         {
             "ticket_id": ticket.id,
+            # Murojaat EGASI — javobni kimga yetkazishni iste'molchi shundan biladi
+            # (`workers/events_worker.py` unga Telegram xabari yuboradi). Muallif
+            # bilan aralashtirmaslik uchun ataylab alohida maydon.
+            "ticket_user_id": ticket.user_id,
             "message_id": message.id,
             "author_user_id": message.author_user_id,
             "author_role": message.author_role,
@@ -169,4 +173,21 @@ async def update_status(
     principal: Principal = Depends(require_staff),
 ):
     ticket = await _get_ticket_for(db, ticket_id, principal)
-    return await crud.set_status(db, ticket, data.status)
+    old_status = ticket.status
+    ticket = await crud.set_status(db, ticket, data.status)
+
+    # Holat o'zgargandagina hodisa: xodim ro'yxatda bir xil holatni qayta tanlasa,
+    # foydalanuvchiga ma'nosiz "holat o'zgardi" xabari bormasin.
+    if old_status != ticket.status:
+        await queue.publish_event(
+            queue.EVENT_SUPPORT_TICKET_STATUS_CHANGED,
+            {
+                "ticket_id": ticket.id,
+                "ticket_user_id": ticket.user_id,
+                "old_status": old_status.value,
+                "new_status": ticket.status.value,
+                "subject": ticket.subject,
+                "order_id": ticket.order_id,
+            },
+        )
+    return ticket

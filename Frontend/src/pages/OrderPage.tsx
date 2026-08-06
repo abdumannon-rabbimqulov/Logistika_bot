@@ -146,6 +146,9 @@ export function OrderPage() {
       // `new Date()` turardi — ya'ni buyurtma DOIM "hozir tayyor" bo'lardi va
       // kelajakka rejalashtirish umuman mumkin emas edi.
       pickup_at: details.pickupAt.toISOString(),
+      // Tushirish sharti ixtiyoriy — tanlanmagan bo'lsa maydonlar umuman yuborilmaydi.
+      unloading_mode: details.unloadingMode,
+      unloading_wait_hours: details.unloadingWaitHours,
       required_truck_type_id: selectedTruckTypeId,
       waypoints: [
         { sequence: 1, type: 'PICKUP', address: origin.address, latitude: origin.latitude, longitude: origin.longitude },

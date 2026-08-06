@@ -4,7 +4,7 @@ import { getOrder, listMyOrders } from '../api/orders';
 import { listTruckTypes } from '../api/truckTypes';
 import { BottomNav } from '../components/BottomNav';
 import { ChevronRightIcon, HomeAddressIcon, InfoIcon, PinIcon, PlusIcon, ProfileIcon, WorkAddressIcon, truckIconFor } from '../components/icons';
-import { BellIcon } from '../components/icons';
+import { SupportBellButton } from '../components/SupportBellButton';
 import { useSavedAddresses } from '../hooks/useSavedAddresses';
 import type { OrderDetail, OrderListItem, TruckType } from '../types/api';
 import type { OrderPrefillState } from '../types/navigation';
@@ -66,9 +66,7 @@ export function HomePage() {
         <div className={styles.topBar}>
           <div className={styles.wordmark}>YUK</div>
           <div className={styles.topActions}>
-            <button className={styles.iconCircle} onClick={() => navigate('/messages')} aria-label="Xabarlar">
-              <BellIcon />
-            </button>
+            <SupportBellButton />
             <button className={styles.iconCircle} onClick={() => navigate('/profile')} aria-label="Profil">
               <ProfileIcon />
             </button>

@@ -40,7 +40,8 @@ import users.models  # noqa: F401
 configure_mappers()
 
 from services import queue  # noqa: E402
-from utils.admin_alerts import send_error_to_admins  # noqa: E402
+from services.notifications import send_telegram_message  # noqa: E402
+from utils.admin_alerts import send_notice_to_admins  # noqa: E402
 
 logger = logging.getLogger("events_worker")
 
@@ -52,6 +53,17 @@ _PRIORITY_LABEL = {
     "high": "yuqori",
     "urgent": "shoshilinch",
 }
+
+# Murojaat holatining foydalanuvchiga ko'rinadigan nomi (support_service/models.py
+# `TicketStatus` qiymatlari). Frontenddagi `TICKET_STATUS_LABELS` bilan bir xil.
+_TICKET_STATUS_LABEL = {
+    "open": "ochiq",
+    "in_progress": "ko'rib chiqilmoqda",
+    "resolved": "hal qilindi",
+    "closed": "yopildi",
+}
+
+STAFF_ROLES = {"admin", "manager"}
 
 
 def _format_ticket_created(data: dict[str, Any]) -> tuple[str, str]:
@@ -77,6 +89,51 @@ def _format_ticket_replied(data: dict[str, Any]) -> tuple[str, str]:
     return "Yordam murojaatiga yangi javob", body
 
 
+async def _notify_user(chat_id: Any, text: str) -> None:
+    """Murojaat egasiga Telegram xabari. Xato bo'lsa faqat logga yoziladi.
+
+    `users.id` ning o'zi Telegram chat id (`users/models.py`) — support xizmati
+    bazasidagi `user_id` ham o'sha, shuning uchun qo'shimcha izlash kerak emas.
+    Foydalanuvchi botni bloklagan bo'lishi mumkin: bu butun hodisani muvaffaqiyatsiz
+    deb hisoblash uchun sabab emas, adminga xabar baribir borishi kerak.
+    """
+    if not chat_id:
+        return
+    try:
+        await send_telegram_message(int(chat_id), text)
+    except Exception:
+        logger.exception("Foydalanuvchiga xabar yuborilmadi (chat_id=%s)", chat_id)
+
+
+def _user_text_ticket_created(data: dict[str, Any]) -> str:
+    return (
+        f"✅ Murojaatingiz qabul qilindi — #{data.get('ticket_id')}\n"
+        f"Mavzu: {data.get('subject')}\n\n"
+        f"Operatorlarimiz tez orada javob beradi. Javob shu yerga va ilovadagi "
+        f"\"Murojaatlar\" bo'limiga keladi."
+    )
+
+
+def _user_text_ticket_replied(data: dict[str, Any]) -> str:
+    return (
+        f"💬 Murojaatingizga javob keldi — #{data.get('ticket_id')}\n\n"
+        f"{(data.get('message') or '')[:1500]}\n\n"
+        f"Javob yozish uchun ilovadagi \"Murojaatlar\" bo'limini oching."
+    )
+
+
+def _user_text_status_changed(data: dict[str, Any]) -> str:
+    new_status = str(data.get("new_status", ""))
+    label = _TICKET_STATUS_LABEL.get(new_status, new_status)
+    text = (
+        f"ℹ️ Murojaat #{data.get('ticket_id')} holati o'zgardi: {label}\n"
+        f"Mavzu: {data.get('subject')}"
+    )
+    if new_status in {"resolved", "closed"}:
+        text += "\n\nSavolingiz qolgan bo'lsa, yangi murojaat oching."
+    return text
+
+
 async def _handle_message(message: AbstractIncomingMessage) -> None:
     async with message.process(requeue=False):
         try:
@@ -87,29 +144,35 @@ async def _handle_message(message: AbstractIncomingMessage) -> None:
             logger.exception("Yaroqsiz hodisa tashlab yuborildi: %r", message.body[:200])
             return
 
+        # Har bir hodisa ikki tomonga borishi mumkin: adminlarga (nazorat uchun) va
+        # murojaat egasiga (u javobni kutayotgan odam). Ikkalasi mustaqil: biri
+        # yuborilmasa ham ikkinchisi ketaveradi.
+        title: Optional[str] = None
+        body = ""
+
         if event == queue.EVENT_SUPPORT_TICKET_CREATED:
             title, body = _format_ticket_created(data)
+            await _notify_user(data.get("user_id"), _user_text_ticket_created(data))
         elif event == queue.EVENT_SUPPORT_TICKET_REPLIED:
-            # Foydalanuvchi javobi adminni qiziqtiradi; adminning o'z javobi emas.
-            if str(data.get("author_role")) in {"admin", "manager"}:
-                return
-            title, body = _format_ticket_replied(data)
+            if str(data.get("author_role")) in STAFF_ROLES:
+                # Xodimning javobi — adminlarga qaytarib xabar berishning ma'nosi yo'q,
+                # lekin murojaat egasi aynan shuni kutib turibdi.
+                await _notify_user(
+                    data.get("ticket_user_id"), _user_text_ticket_replied(data)
+                )
+            else:
+                title, body = _format_ticket_replied(data)
+        elif event == queue.EVENT_SUPPORT_TICKET_STATUS_CHANGED:
+            await _notify_user(data.get("ticket_user_id"), _user_text_status_changed(data))
         else:
             logger.debug("E'tiborsiz hodisa: %s", event)
             return
 
+        if title is None:
+            return
+
         try:
-            # `send_error_to_admins` — mavjud yagona "adminlarga yetkaz" kanali
-            # (Telegram Bot API). Nomi "error" bo'lsa ham u umumiy xabar yuboruvchi.
-            await send_error_to_admins(
-                title=title,
-                request_id=str(envelope.get("event_id", "-")),
-                method="EVENT",
-                path=event,
-                client="support-service",
-                exc_type="-",
-                details=body,
-            )
+            await send_notice_to_admins(title=title, details=body)
         except Exception:
             logger.exception("Adminlarga bildirishnoma yuborilmadi: %s", event)
 

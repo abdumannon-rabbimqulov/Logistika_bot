@@ -57,7 +57,7 @@ export function MessagesPage() {
   return (
     <div className={styles.page}>
       <div className={styles.topBar}>
-        <div className={styles.title}>Xabarlar</div>
+        <div className={styles.title}>Murojaatlar</div>
         <button className={styles.newBtn} onClick={() => setSheetOpen(true)}>
           Yangi murojaat
         </button>

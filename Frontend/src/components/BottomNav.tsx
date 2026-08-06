@@ -1,11 +1,14 @@
 import { NavLink } from 'react-router-dom';
 import styles from './BottomNav.module.css';
-import { HomeNavIcon, MessagesNavIcon, OrdersNavIcon, ProfileIcon } from './icons';
+import { HomeNavIcon, OrdersNavIcon, ProfileIcon } from './icons';
 
+// Murojaatlar (`/messages`) ATAYLAB bu yerda yo'q: unga kirish yuqori o'ng
+// burchakdagi qo'ng'iroq tugmasi orqali beriladi (`TopBarActions`). Shu bilan
+// haydovchi menyusi bilan ham bir xil bo'ladi — u yerda ham pastda "Xabarlar"
+// yo'q (`DriverBottomNav.tsx`), murojaatlar profil ichidan ochiladi.
 const ITEMS = [
   { to: '/', label: 'Bosh sahifa', Icon: HomeNavIcon, exact: true },
   { to: '/orders', label: 'Buyurtmalar', Icon: OrdersNavIcon, exact: false },
-  { to: '/messages', label: 'Xabarlar', Icon: MessagesNavIcon, exact: false },
   { to: '/profile', label: 'Profil', Icon: ProfileIcon, exact: false },
 ];
 

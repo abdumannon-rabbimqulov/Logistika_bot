@@ -9,7 +9,7 @@ import { BackIcon, PhoneIcon, SendIcon, StarIcon } from '../components/icons';
 import { YandexMap } from '../components/YandexMap';
 import { useOrderDriverLocation } from '../hooks/useOrderDriverLocation';
 import type { OrderDetail, QuickPriceOption, WaypointStatus, WaypointType } from '../types/api';
-import { formatPrice, routeLabel, statusLabel } from '../utils/format';
+import { formatPrice, routeLabel, statusLabel, unloadingLabel } from '../utils/format';
 import { describePickupAt } from '../utils/pickupTime';
 import styles from './OrderTrackingPage.module.css';
 
@@ -487,6 +487,12 @@ export function OrderTrackingPage() {
               <dt>Yuklash vaqti</dt>
               <dd>{formatDateTime(order.pickup_at)}</dd>
             </div>
+            {unloadingLabel(order.unloading_mode, order.unloading_wait_hours) && (
+              <div className={styles.detailRow}>
+                <dt>Tushirish</dt>
+                <dd>{unloadingLabel(order.unloading_mode, order.unloading_wait_hours)}</dd>
+              </div>
+            )}
             {order.original_price != null && order.original_price !== order.price && (
               <div className={styles.detailRow}>
                 <dt>Dastlabki narx</dt>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listMyOrders } from '../api/orders';
 import { BottomNav } from '../components/BottomNav';
+import { SupportBellButton } from '../components/SupportBellButton';
 import type { OrderListItem } from '../types/api';
 import { formatPrice, formatRelativeDate, statusLabel } from '../utils/format';
 import styles from './OrdersListPage.module.css';
@@ -20,6 +21,7 @@ export function OrdersListPage() {
     <div className={styles.page}>
       <div className={styles.topBar}>
         <div className={styles.title}>Buyurtmalar</div>
+        <SupportBellButton />
       </div>
 
       {orders === null && <div className={styles.empty}>Yuklanmoqda...</div>}
