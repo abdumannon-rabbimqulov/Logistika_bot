@@ -1,0 +1,140 @@
+# Monitoring stack — Netdata (kuzatish) + Dockge (boshqarish).
+#
+# ATAYLAB ALOHIDA FAYL: `make up` / `make prod-up` ga qo'shilmaydi. Monitoring
+# ilovaning bir qismi emas — u ilova yiqilganda ham ishlab turishi kerak, shuning
+# uchun mustaqil stack sifatida ko'tariladi:
+#
+#     make mon-up      # yoki: docker compose -f docker-compose.monitoring.yml up -d
+#
+# XAVFSIZLIK: ikkala panel ham FAQAT `127.0.0.1` ga bog'lanadi — server IP'sidan
+# yoki internetdan ochilmaydi. Kirish SSH tunnel orqali (docs/MONITORING.md):
+#     ssh -L 19999:localhost:19999 -L 5002:localhost:5002 user@server-ip
+#
+# KONFIGURATSIYA: `monitoring/netdata/**` git'da (shablon), `monitoring/.rendered/**`
+# esa `.env` bilan to'ldirilgan tayyor nusxa (git'da yo'q). Mount aynan `.rendered/`
+# dan bo'ladi, shuning uchun `make mon-up` avval `monitoring/render-config.py` ni
+# chaqiradi — faylni qo'lda o'zgartirsangiz `make mon-restart` qiling.
+
+# MAJBURIY: compose loyiha nomi. Usiz nom papkadan olinardi (`logistika_bot`) va bu
+# stack ilova bilan BITTA loyiha hisoblanardi — natijada `make mon-down` ilovaning
+# konteynerlarini ham "ortiqcha" deb topib o'chirib yuborishi mumkin edi.
+name: logistika_monitoring
+
+services:
+  # ── Netdata — real vaqtdagi metrikalar ────────────────────────────────────
+  #
+  # Nima ko'rsatadi:
+  #   • Host: CPU, RAM, swap, disk (I/O va bo'sh joy), tarmoq, load average
+  #   • Har bir konteyner: CPU, xotira, tarmoq, disk (cgroups plagini)
+  #   • PostgreSQL, Redis, RabbitMQ metrikalari (go.d kollektorlari)
+  #   • web / support / osrm HTTP endpoint'lari javob berayaptimi (httpcheck)
+  netdata:
+    image: netdata/netdata:stable
+    container_name: logistika_netdata
+    # Panelda mashina shu nom bilan ko'rinadi — bir nechta server bo'lsa ajratish uchun.
+    hostname: ${MONITORING_HOSTNAME:-logistika-server}
+    restart: unless-stopped
+
+    # Host jarayonlarini nom bilan ko'rsatish uchun (apps plagini).
+    pid: host
+    # Netdata host darajasidagi metrikalarni o'qishi uchun zarur imtiyozlar.
+    # Hammasi FAQAT O'QISH uchun — netdata hech narsani o'zgartirmaydi.
+    cap_add:
+      - SYS_PTRACE
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+
+    ports:
+      # 127.0.0.1 prefiksi MAJBURIY. Usiz Docker iptables qoidasini yozib, portni
+      # ufw'dan ham o'tkazib yuboradi va panel butun internetga ochilib qoladi.
+      - "127.0.0.1:${NETDATA_PORT:-19999}:19999"
+
+    environment:
+      - TZ=Asia/Tashkent
+      # docker.sock ni o'qish uchun netdata foydalanuvchisi docker guruhiga qo'shiladi.
+      # Serverdagi aniq raqamni bilish uchun:  stat -c '%g' /var/run/docker.sock
+      - PGID=${DOCKER_GID:-999}
+      # Netdata Cloud'ga ulanmaymiz — hamma narsa shu serverda qoladi.
+      - NETDATA_CLAIM_TOKEN=
+      - DO_NOT_TRACK=1
+
+    volumes:
+      # Konfiguratsiya — `.rendered/` dan, faqat o'qish uchun (git'dagi manba:
+      # monitoring/netdata/**).
+      - ./monitoring/.rendered/netdata/netdata.conf:/etc/netdata/netdata.conf:ro
+      - ./monitoring/.rendered/netdata/go.d:/etc/netdata/go.d:ro
+      - ./monitoring/.rendered/netdata/health.d:/etc/netdata/health.d:ro
+      - ./monitoring/.rendered/netdata/health_alarm_notify.conf:/etc/netdata/health_alarm_notify.conf:ro
+
+      # Metrikalar tarixi (netdata.conf'da 256 MB bilan cheklangan).
+      - netdata_lib:/var/lib/netdata
+      - netdata_cache:/var/cache/netdata
+
+      # Host tizimini o'qish — barchasi `:ro`.
+      - /etc/os-release:/host/etc/os-release:ro
+      - /etc/passwd:/host/etc/passwd:ro
+      - /etc/group:/host/etc/group:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /var/log:/host/var/log:ro
+      # Disk bo'sh joyi (`df`) shu mount orqali o'qiladi.
+      # Netdata hujjatlarida `ro,rslave` tavsiya etiladi (konteyner ishlab turganda
+      # QO'SHILGAN yangi disklarni ham ko'rish uchun), lekin Docker Desktop uni
+      # qabul qilmaydi ("path / is not a shared or slave mount") va stack umuman
+      # ko'tarilmaydi. Oddiy `:ro` ikkala muhitda ham ishlaydi; yagona farq —
+      # keyinchalik ulangan yangi disk `make mon-restart` dan keyin ko'rinadi.
+      - /:/host/root:ro
+      # Konteynerlarni nomi bilan ko'rish uchun (cgroups + docker kollektori).
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+    networks:
+      # Ilova tarmog'i — netdata `db`, `logistika-redis`, `rabbitmq`, `web`,
+      # `support`, `osrm` xizmatlariga xizmat nomi orqali boradi.
+      - app
+      - monitoring
+
+    # Ilova tarmog'i topilmagan holat uchun (masalan db/redis host mashinada
+    # o'rnatilgan bo'lsa) — go.d konfiguratsiyalarida `host.docker.internal` ga
+    # o'tish mumkin, docs/MONITORING.md ga qarang.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ── Dockge — konteynerlarni brauzerdan boshqarish ─────────────────────────
+  #
+  # Monitoring EMAS, boshqaruv: restart, to'xtatish, loglarni jonli ko'rish.
+  # Netdata "nima bo'lyapti" ni ko'rsatadi, Dockge esa "tuzatish" imkonini beradi —
+  # SSH ochmasdan, telefondan ham (tunnel orqali).
+  dockge:
+    image: louislam/dockge:1
+    container_name: logistika_dockge
+    restart: unless-stopped
+    ports:
+      # 5001 BAND — uni docker-compose.yml dagi `osrm` olgan (5001:5000).
+      - "127.0.0.1:${DOCKGE_PORT:-5002}:5001"
+    environment:
+      - TZ=Asia/Tashkent
+      - DOCKGE_STACKS_DIR=/opt/stacks
+    volumes:
+      # Dockge konteynerlarni boshqarishi kerak, shuning uchun bu yerda `:ro` YO'Q.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - dockge_data:/app/data
+      - ${DOCKGE_STACKS_DIR:-/opt/stacks}:/opt/stacks
+    networks:
+      - monitoring
+
+volumes:
+  netdata_lib:
+  netdata_cache:
+  dockge_data:
+
+networks:
+  # Ilovaning mavjud tarmog'i — bu fayl uni YARATMAYDI, faqat ulanadi.
+  # Nomi loyiha papkasidan kelib chiqadi (`logistika_bot` → `logistika_bot_default`).
+  # Boshqacha bo'lsa .env da MONITORING_APP_NETWORK ni to'g'rilang; aniq nomni
+  # `docker network ls` ko'rsatadi.
+  app:
+    external: true
+    name: ${MONITORING_APP_NETWORK:-logistika_bot_default}
+  monitoring:
+    driver: bridge

@@ -25,3 +25,8 @@ osrm-data/*
 *.osrm.*
 # Lokal compose override (dev uchun --reload va h.k.) — serverga tushmasligi kerak.
 docker-compose.override.yml
+
+# Monitoring: `.env` dagi parollar bilan to'ldirilgan netdata konfiguratsiyalari.
+# Manba shablonlar `monitoring/netdata/` da va ular git'da kuzatiladi; bu papka
+# har `make mon-up` da `monitoring/render-config.py` tomonidan qayta yaratiladi.
+monitoring/.rendered/

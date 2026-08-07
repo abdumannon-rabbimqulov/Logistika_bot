@@ -9,10 +9,13 @@
 
 COMPOSE      := docker compose
 COMPOSE_PROD := docker compose -f docker-compose.yml -f docker-compose.prod.yml
+# Monitoring ATAYLAB alohida stack: ilova yiqilganda ham ishlab turishi kerak.
+COMPOSE_MON  := docker compose -f docker-compose.monitoring.yml
 
 .DEFAULT_GOAL := help
 .PHONY: help fe dev up down logs ps fe-logs fe-restart fe-rebuild fe-install fe-add fe-shell fe-build fe-lint prod-up prod-down \
-        worker-logs worker-restart worker-scale mq-ui support-logs support-ui support-db events-logs migrate test
+        worker-logs worker-restart worker-scale mq-ui support-logs support-ui support-db events-logs migrate test \
+        mon-up mon-down mon-restart mon-ps mon-logs mon-collectors mon-alert-test mon-tunnel
 
 help: ## Shu ro'yxatni ko'rsatadi
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -109,3 +112,42 @@ prod-up: ## Prod stack (frontend = nginx + statik dist, :8080)
 
 prod-down: ## Prod stack'ni to'xtatish
 	$(COMPOSE_PROD) down
+
+# ── Monitoring (Netdata + Dockge) ───────────────────────────────────────────
+#
+# To'liq qo'llanma: docs/MONITORING.md
+# Panellar faqat 127.0.0.1 da — serverdan foydalanish uchun `make mon-tunnel`.
+
+mon-up: ## Monitoring stack (Netdata :19999 + Dockge :5002)
+	@python3 monitoring/render-config.py
+	$(COMPOSE_MON) up -d
+
+mon-down: ## Monitoring stack'ni to'xtatish (metrikalar tarixi saqlanadi)
+	$(COMPOSE_MON) down
+
+mon-restart: ## Konfiguratsiyani qayta render qilib, Netdata'ni yangilash
+	@python3 monitoring/render-config.py
+	$(COMPOSE_MON) up -d --force-recreate netdata
+
+mon-ps: ## Monitoring xizmatlari holati
+	$(COMPOSE_MON) ps
+
+mon-logs: ## Netdata loglari (kollektor xatolari shu yerda)
+	$(COMPOSE_MON) logs -f netdata
+
+mon-collectors: ## Qaysi kollektorlar ulandi / ulanmadi
+	@docker exec logistika_netdata bash -c \
+		'grep -E "(postgres|redis|rabbitmq|docker|httpcheck)" /var/log/netdata/collector.log | tail -30' \
+		2>/dev/null || $(COMPOSE_MON) logs --tail=100 netdata | grep -iE "go.d|collector"
+
+mon-alert-test: ## Telegram alert sozlamasini tekshirish (test xabari yuboradi)
+	docker exec logistika_netdata /usr/libexec/netdata/plugins.d/alarm-notify.sh test
+
+mon-tunnel: ## Serverdan panellarni ochish uchun SSH tunnel buyrug'ini ko'rsatadi
+	@echo "Kompyuteringizda (serverda EMAS) shuni ishga tushiring:"
+	@echo ""
+	@echo "  ssh -N -L 19999:localhost:19999 -L 5002:localhost:5002 FOYDALANUVCHI@SERVER_IP"
+	@echo ""
+	@echo "So'ng brauzerda:"
+	@echo "  Netdata → http://localhost:19999"
+	@echo "  Dockge  → http://localhost:5002"
