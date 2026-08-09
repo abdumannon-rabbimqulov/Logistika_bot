@@ -74,11 +74,70 @@
 }
 
 /* ── Yuk kartasi ── */
+/* ── Marshrut xaritasi ────────────────────────────────────────────────────────
+   Sender sahifasidan farqli o'laroq bu yerda xarita FON EMAS: haydovchi sahifasi
+   aylanadigan tartibda, shuning uchun xarita belgilangan balandlikdagi kartochka.
+   Leaflet konteynerni `height: 100%` bilan to'ldiradi, ya'ni balandlikni aynan shu
+   blok belgilaydi — `overflow: hidden` esa plitkalarni yumaloq burchakka qirqadi. */
+.mapCard {
+  height: 200px;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  /* Xarita ichida sudrash sahifani aylantirib yubormasligi uchun. */
+  touch-action: none;
+}
+
+/* Ortiqcha yuk ogohlantirishi. `.errorBanner` (qizil) dan ATAYLAB alohida: bu xato
+   emas — buyurtma yaroqli, haydovchi shunchaki bilib turishi kerak. */
+.warningBanner {
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  background: #FEF3C7;
+  color: #92400E;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .cargoCard {
   background: var(--color-bg);
   border-radius: var(--radius-xl);
   padding: 18px;
   box-shadow: var(--shadow-sm);
+}
+
+/* ── Vaqt qatorlari (yuk ortish / jo'nash) ───────────────────────────────── */
+
+.timeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: var(--border-w) solid var(--color-border);
+}
+
+/* Faqat BIRINCHI vaqt qatorida ajratuvchi chiziq bo'lsin — ikkinchisi (jo'nash)
+   birinchisiga yopishib tursin, ular bitta guruh. */
+.timeRow + .timeRow {
+  margin-top: 6px;
+  padding-top: 0;
+  border-top: none;
+}
+
+.timeLabel {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+/* `margin-left: auto` qiymatni o'ng chekkaga suradi — ikkala qatorda vaqtlar
+   bir vertikal chiziqda turadi va taqqoslash oson bo'ladi. */
+.timeValue {
+  margin-left: auto;
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
 }
 
 .cargoName {
@@ -87,8 +146,12 @@
   font-size: 19px;
 }
 
+/* `flex-wrap` MAJBURIY: hajm chipi qo'shilgach chiplar to'rtta bo'ldi va bitta
+   qatorga sig'may qoladi. Usiz ular siqilib, ichidagi matn ikki qatorga bo'linib
+   ketardi ("6.00" va "t" alohida qatorda). */
 .cargoMeta {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 10px;
 }
@@ -103,6 +166,8 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--color-text-secondary);
+  /* Chip butun holda o'ralsin — ichidagi matn bo'linmasin. */
+  white-space: nowrap;
 }
 
 .priceRow {
@@ -228,15 +293,43 @@
   margin-top: 2px;
 }
 
+/* Nuqta ostidagi tugmalar qatori: "qo'ng'iroq" va "yo'l ko'rsat".
+   Tor ekranda ular ostma-ost tushadi (`flex-wrap`). */
+.checkpointActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+}
+
 .miniCall {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  margin-top: 7px;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--color-accent-pressed);
   text-decoration: none;
+}
+
+/* "Yo'l ko'rsat" — `.miniCall` dan farqli ravishda fonli, chunki bu asosiy amal:
+   haydovchi ekranga qarab birinchi navbatda shuni qidiradi. */
+.navBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-tint);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-accent-pressed);
+  text-decoration: none;
+}
+
+.navBtn:active {
+  filter: brightness(0.95);
 }
 
 /* ── Mijoz kartasi ── */
@@ -255,9 +348,19 @@
   font-size: 15px;
 }
 
+/* `<a>` bo'lgani uchun `display: block` va `text-decoration: none` kerak —
+   ko'rinishi ilgarigi `<div>` bilan bir xil qoladi, lekin endi bosiladi. */
 .customerPhone {
+  display: block;
   font-size: 13px;
   color: var(--color-text-secondary);
+  margin-top: 2px;
+  text-decoration: none;
+}
+
+.customerUsername {
+  font-size: 12.5px;
+  color: var(--color-accent-pressed);
   margin-top: 2px;
 }
 

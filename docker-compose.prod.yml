@@ -1,49 +1,113 @@
+# Ishlab chiqarish (server) overlay'i.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#   yoki qisqacha:  make prod-up      (lokal sinov uchun: make prod-local)
+#
+# Bazaviy `docker-compose.yml` dagi barcha xizmatlar meros qilib olinadi va shu
+# yerda faqat FARQLAR yoziladi. Ikki tegni bilish shart, chunki compose overlay'ni
+# odatda QO'SHIB birlashtiradi (almashtirib emas):
+#   `!reset`    — qiymatni butunlay olib tashlaydi (masalan port ochilmasin)
+#   `!override` — ro'yxatni qo'shmasdan ALMASHTIRADI (masalan boshqa port)
+#
+# ── Xavfsizlik: tashqariga faqat 80/443 ochiladi ────────────────────────────
+# Bazaviy faylda db (5432), redis (6380), rabbitmq (5672/15672) va osrm (5001)
+# portlari 0.0.0.0 ga ochilgan — lokalda qulay, ochiq serverda esa xavfli
+# (RabbitMQ standart guest/guest bilan keladi). Shuning uchun bu yerda ularning
+# hammasi 127.0.0.1 ga qaytariladi yoki umuman yopiladi. Serverda ularga kirish
+# SSH tunnel orqali (docs/DEPLOY.md, `make mon-tunnel` shabloni bo'yicha).
+
 services:
+  db:
+    # Faqat serverning o'zidan (psql, zaxira nusxa). Tashqi tarmoqdan ko'rinmaydi.
+    # Host porti sozlanuvchi: ishlab chiquvchining mashinasida ko'pincha o'z
+    # Postgres'i 5432 da turadi va prod stack'ni lokalda sinash mumkin bo'lmasdi
+    # (`DB_HOST_PORT=5433 make prod-local`).
+    ports: !override
+      - "127.0.0.1:${DB_HOST_PORT:-5432}:5432"
+
+  logistika-redis:
+    ports: !override
+      - "127.0.0.1:6380:6379"
+
+  rabbitmq:
+    # 15672 — boshqaruv UI. SSH tunnel orqali ochiladi:
+    #   ssh -N -L 15672:localhost:15672 FOYDALANUVCHI@SERVER_IP
+    ports: !override
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+
   # OSRM — marshrut/masofa hisoblash. Busiz narx hisoblash umuman ishlamaydi
   # (`POST /orders/estimate-price` va buyurtma yaratish 503 qaytaradi).
   #
-  # db va redis bu faylda ataylab yo'q — ular holatli (stateful) xizmatlar va
-  # odatda host'da yoki alohida boshqariladi (shuning uchun `extra_hosts` bor).
-  # OSRM esa holatsiz: u faqat `osrm-data/` ni o'qiydi, shuning uchun konteynerda
-  # turgani ma'qul — dev bilan prod bir xil bo'ladi.
+  # Brauzer OSRM'ga to'g'ridan-to'g'ri emas, frontend nginx'idagi tor va tezlik
+  # cheklangan `/osrm/route/v1/driving/...` yo'li orqali boradi — shuning uchun
+  # bu yerda port umuman ochilmaydi.
   osrm:
-    image: osrm/osrm-backend
     container_name: logistika_osrm_prod
-    volumes:
-      - ./osrm-data:/data:ro
-    command: osrm-routed --algorithm mld /data/uzbekistan.osrm
-    restart: always
-    # Tashqariga port ochilmaydi — faqat web/bot ichki tarmoq orqali murojaat qiladi.
+    ports: !reset null
     expose:
       - "5000"
-    # HTTP/1.1 + "Connection: close" — OSRM aks holda ulanishni ~5s keep-alive bilan
-    # ochiq ushlab turadi va healthcheck timeout'ga uchraydi (docker-compose.yml'da batafsil).
-    healthcheck:
-      test:
-        - CMD
-        - bash
-        - -c
-        - 'exec 3<>/dev/tcp/127.0.0.1/5000 && printf "GET /route/v1/driving/69.24,41.31;69.28,41.33?overview=false HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3 && grep -q ''"code":"Ok"'' <&3'
-      interval: 30s
-      timeout: 5s
-      start_period: 60s
-      retries: 3
+    # DIQQAT: bazaviy faylda `platform: linux/amd64` bor — u Apple Silicon Mac
+    # uchun. amd64 serverda zararsiz. ARM serverda (Ampere, Graviton) esa OSRM
+    # emulyatsiyada sekin ishlaydi; u holda bazaviy fayldagi `platform` qatorini
+    # olib tashlash kerak.
 
-  web:
+  # ── Migratsiya: bir martalik, boshqa hamma narsadan oldin ──────────────────
+  #
+  # Alohida xizmat sifatida ajratilgani muhim: `web` ning o'zida ishga tushirilsa,
+  # bir nechta nusxa (yoki `web` qayta ishga tushganda) alembic'ni bir vaqtda
+  # yugurtirib bir-biriga xalaqit berardi. Bu yerda esa u bir marta bajarilib
+  # tugaydi, `web` esa uning MUVAFFAQIYATLI yakunlanishini kutadi.
+  migrate:
     build: .
-    container_name: logistika_web_prod
-    ports:
-      - "8003:8000"
-    volumes:
-      - .:/app
+    image: logistika_backend:latest
+    container_name: logistika_migrate
     env_file:
       - .env
     environment:
       - TZ=Asia/Tashkent
-      - FORCE_COLOR=1
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      # Faqat shu yerda 1 — entrypoint aynan shundan alembic'ni ishga tushiradi.
+      - RUN_MIGRATIONS=1
+    command: ["python", "-c", "print('[migrate] tayyor')"]
+    restart: "no"
     depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build: .
+    image: logistika_backend:latest
+    container_name: logistika_web_prod
+    # Kod IMAGE ichida — bazaviy fayldagi `.:/app` bind-mount olib tashlanadi.
+    # Sabab: image o'zgarmas (immutable) bo'lishi kerak, aks holda serverdagi
+    # ishchi papkadagi tasodifiy o'zgarish ishlab turgan ilovaga darhol tushadi
+    # va rollback ("oldingi image'ga qayt") hech narsani qaytarmaydi.
+    #
+    # `uploads/` esa aksincha — konteynerdan uzoq yashashi kerak (yuklangan
+    # rasmlar), shuning uchun named volume.
+    volumes: !override
+      - uploads_data:/app/uploads
+    # Faqat serverning o'zidan (nosozlikni tekshirish uchun). Tashqi trafik
+    # frontend nginx → web zanjiri orqali keladi.
+    ports: !override
+      - "127.0.0.1:8003:8000"
+    # host.docker.internal endi kerak emas: hamma narsa compose tarmog'ida.
+    extra_hosts: !reset null
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+      logistika-redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
       osrm:
         condition: service_healthy
     command:
@@ -55,17 +119,81 @@ services:
       - "8000"
       - --log-config
       - config/uvicorn_logging.json
+      # Nginx/Caddy ortida turgani uchun mijozning haqiqiy IP'si va protokoli
+      # X-Forwarded-* sarlavhalaridan olinadi.
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - "*"
     restart: always
+
+  bot:
+    build: .
+    image: logistika_backend:latest
+    container_name: logistika_bot_prod
+    volumes: !reset null
+    extra_hosts: !reset null
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+      logistika-redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      osrm:
+        condition: service_healthy
+    command: python main.py
+    restart: always
+
+  dispatch-worker:
+    build: .
+    image: logistika_backend:latest
+    container_name: logistika_dispatch_worker_prod
+    volumes: !reset null
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+      logistika-redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      osrm:
+        condition: service_healthy
+    restart: always
+
+  events-worker:
+    build: .
+    image: logistika_backend:latest
+    container_name: logistika_events_worker_prod
+    volumes: !reset null
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: always
+
+  support:
+    container_name: logistika_support_prod
+    ports: !override
+      - "127.0.0.1:8010:8000"
 
   # Frontend — ishlab chiqarish rejimi: nginx + `npm run build` bergan statik `dist/`.
   # Bazaviy docker-compose.yml dagi SHU NOMLI dev xizmati (Vite, port 5173) ustiga
-  # yoziladi. `!reset` teglari majburiy: compose overlay'ni odatda QO'SHIB birlashtiradi,
-  # ya'ni ularsiz dev portlari (5173) va bind-mount volume'lari prod'da ham qolib ketardi.
+  # yoziladi.
   #
   # VITE_API_BASE_URL build vaqtida JS bundle'ga "quyiladi" (Vite env'lari runtime'da
   # o'qilmaydi) — backend manzili o'zgarsa image qayta build qilinishi shart.
-  # Standart `/api`: nginx (Frontend/nginx.conf) uni host'dagi backendga proxy qiladi,
-  # shunda frontend va API brauzer uchun bitta origin'da bo'ladi (CORS'siz).
+  # Standart `/api`: nginx (Frontend/nginx.conf) uni compose tarmog'idagi `web`
+  # xizmatiga proxy qiladi, shunda frontend va API brauzer uchun bitta origin'da
+  # bo'ladi (CORS'siz, Telegram WebApp uchun shart).
+  #
+  # Tashqariga port ochmaydi — oldida Caddy turadi (HTTPS).
   frontend:
     build:
       dockerfile: Dockerfile
@@ -74,31 +202,53 @@ services:
     # Dev image'idan (yuk_frontend_dev) ALOHIDA teg — ikkalasi bir-birini almashtirmasin.
     image: yuk_frontend:latest
     container_name: yuk_frontend
-    volumes: !reset []
+    volumes: !reset null
     environment: !reset null
-    # `!override` (`!reset` emas): `!reset` qiymatni butunlay olib tashlaydi, bu yerda esa
-    # dev portini (5173) prod porti bilan ALMASHTIRISH kerak — tegsiz compose ikkalasini
-    # qo'shib yuborardi.
-    ports: !override
-      - "${FRONTEND_PORT:-8080}:80"
-    healthcheck: !reset null
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    ports: !reset null
+    expose:
+      - "80"
+    healthcheck: !override
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    extra_hosts: !reset null
     restart: always
 
-  bot:
-    build: .
-    container_name: logistika_bot_prod
+  # ── Caddy: HTTPS terminatori, yagona ochiq eshik ───────────────────────────
+  #
+  # Let's Encrypt sertifikatini o'zi oladi va o'zi yangilaydi (certbot/cron
+  # kerak emas). Sozlamalar ildizdagi `Caddyfile` da.
+  #
+  # TALAB: DOMAIN uchun DNS A-yozuvi shu server IP'siga yo'naltirilgan bo'lsin,
+  # aks holda sertifikat berilmaydi (docs/DEPLOY.md).
+  # Lokal sinovda `DOMAIN=localhost` — Caddy ichki sertifikat beradi.
+  caddy:
+    image: caddy:2-alpine
+    container_name: logistika_caddy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
     volumes:
-      - .:/app
-    env_file:
-      - .env
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Sertifikatlar shu volume'da. YO'QOTMANG: Let's Encrypt yangi sertifikat
+      # so'rovlariga haftalik limit qo'yadi, volume o'chsa qayta olinadi.
+      - caddy_data:/data
+      - caddy_config:/config
     environment:
+      # Tirnoq SHART: xato matnida ":" bor va tirnoqsiz YAML uni kalit deb o'qiydi.
+      - "DOMAIN=${DOMAIN:?DOMAIN .env faylida belgilanishi shart. Lokal sinov uchun localhost}"
+      # Hech qachon BO'SH bo'lmasligi kerak — Caddy'ning `email` direktivasi
+      # argumentsiz qolsa konfiguratsiya xatosi beradi.
+      - ACME_EMAIL=${ACME_EMAIL:-admin@${DOMAIN}}
       - TZ=Asia/Tashkent
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     depends_on:
-      osrm:
-        condition: service_healthy
-    command: python main.py
+      - frontend
     restart: always
+
+volumes:
+  uploads_data:
+  caddy_data:
+  caddy_config:

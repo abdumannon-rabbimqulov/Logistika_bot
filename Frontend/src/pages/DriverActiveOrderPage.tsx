@@ -2,12 +2,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError, type ApiProblem } from '../api/client';
 import { getOrder, updateWaypoint } from '../api/orders';
-import { BackIcon, PhoneIcon, SendIcon, WeightIcon } from '../components/icons';
+import { BackIcon, ClockIcon, PhoneIcon, RouteIcon, SendIcon, WeightIcon } from '../components/icons';
+import { OrderRouteMap } from '../components/OrderRouteMap';
 import { useLiveLocation } from '../hooks/useLiveLocation';
 import type { OrderDetail, OrderWaypoint, WaypointStatus, WaypointType } from '../types/api';
 import { getCurrentPositionOnce, PositionError } from '../utils/currentPosition';
 import { openTelegramLocationSettings } from '../utils/telegramLocation';
 import { formatPrice, statusLabel, unloadingLabel } from '../utils/format';
+import { describePickupAt } from '../utils/pickupTime';
+import { buildYandexPointUrl, buildYandexRouteUrl } from '../utils/yandexRoute';
 import styles from './DriverActiveOrderPage.module.css';
 
 const WAYPOINT_TYPE_LABEL: Record<WaypointType, string> = {
@@ -50,6 +53,38 @@ function currentWaypointOf(order: OrderDetail): OrderWaypoint | null {
   return order.waypoints.find((w) => w.status !== 'COMPLETED' && w.status !== 'SKIPPED') ?? null;
 }
 
+/** Nuqta yakunlanganmi (o'tib bo'lingan). */
+function isWaypointDone(waypoint: OrderWaypoint): boolean {
+  return waypoint.status === 'COMPLETED' || waypoint.status === 'SKIPPED';
+}
+
+/**
+ * Nuqtagacha "Yo'l ko'rsat" havolasi (Yandex Maps / Navigator).
+ *
+ * Boshlanish nuqtasi uchun zaxira zanjiri:
+ *   1. haydovchining JORIY joylashuvi — eng foydalisi, "shu yerdan borish"
+ *   2. joylashuv yo'q bo'lsa (ruxsat berilmagan) — oldingi nuqta, ya'ni marshrutning
+ *      shu bo'lagi ko'rinadi
+ *   3. birinchi nuqta bo'lsa boshlanish yo'q — marshrut o'rniga NUQTANING O'ZI
+ *      xaritada ochiladi (`buildYandexPointUrl`), haydovchi navigatsiyani Yandex
+ *      ichida boshlaydi
+ *
+ * Nima uchun imkon boricha marshrut: haydovchiga "qayerda" emas, "qanday borish"
+ * kerak — marshrutli havola telefonda darhol navigatsiyani boshlaydi.
+ */
+function navigationUrlFor(
+  order: OrderDetail,
+  waypoint: OrderWaypoint,
+  driverCoords: { latitude: number; longitude: number } | null,
+): string | null {
+  const index = order.waypoints.indexOf(waypoint);
+  const previous = index > 0 ? order.waypoints[index - 1] : null;
+  const start = driverCoords ?? previous;
+  // `start` yo'q bo'lsa marshrut qurib bo'lmaydi. `buildYandexRouteUrl` boshlanish
+  // va tugash bir xil bo'lgan holatni ham o'zi nuqta havolasiga aylantiradi.
+  return start ? buildYandexRouteUrl(start, waypoint) : buildYandexPointUrl(waypoint);
+}
+
 export function DriverActiveOrderPage() {
   const { orderId } = useParams();
   const navigate = useNavigate();
@@ -65,7 +100,10 @@ export function DriverActiveOrderPage() {
   // jonli xaritasida haydovchi ko'rinib tursin. Ilgari uzatish faqat bosh sahifada
   // va faqat "liniyada" holatida ishlagan, ya'ni yuk yo'ldaligida umuman to'xtardi.
   const isTracking = Boolean(order && order.status !== 'COMPLETED' && order.status !== 'CANCELLED');
-  useLiveLocation({ broadcast: isTracking });
+  // `coords` — haydovchining joriy joylashuvi. Ilgari hook'ning qaytargan qiymati
+  // tashlab yuborilardi (faqat uzatish uchun chaqirilgan edi); endi u ikki joyda
+  // ishlatiladi: xaritadagi "men" nuqtasi va "Yo'l ko'rsat" havolasining boshlanishi.
+  const { coords } = useLiveLocation({ broadcast: isTracking });
 
   const load = useCallback(async () => {
     if (!orderId) return;
@@ -144,6 +182,17 @@ export function DriverActiveOrderPage() {
   const isDone = order.status === 'COMPLETED';
   const isCancelled = order.status === 'CANCELLED';
 
+  // Xarita uchun koordinatalar. `OrderRouteMap` `{latitude, longitude}` kutadi,
+  // waypoint'da esa ular `null` bo'lishi mumkin (manzil qo'lda kiritilgan bo'lsa).
+  const mapOrigin =
+    order.origin?.latitude != null && order.origin.longitude != null
+      ? { latitude: order.origin.latitude, longitude: order.origin.longitude }
+      : null;
+  const mapDestination =
+    order.destination?.latitude != null && order.destination.longitude != null
+      ? { latitude: order.destination.latitude, longitude: order.destination.longitude }
+      : null;
+
   return (
     <div className={styles.page}>
       <div className={styles.scroll}>
@@ -151,14 +200,41 @@ export function DriverActiveOrderPage() {
           <button className={styles.iconBtn} onClick={() => navigate('/')} aria-label="Orqaga">
             <BackIcon />
           </button>
-          <div className={styles.topTitle}>Faol buyurtma</div>
+          {/* Buyurtma raqami — haydovchi qo'llab-quvvatlash xizmatiga yozganda yoki
+              nizo bo'lganda aynan shu raqamni aytadi. Ilgari ekranda umuman yo'q edi. */}
+          <div className={styles.topTitle}>Buyurtma #{order.id}</div>
           <div className={styles.statusPill}>{statusLabel(order.status)}</div>
         </div>
+
+        {/* Marshrut xaritasi — ilgari haydovchi faqat manzil MATNINI ko'rardi.
+            Sender sahifasidan farqli o'laroq bu yerda xarita fon emas: sahifa
+            aylanadi, shuning uchun xarita belgilangan balandlikdagi blok
+            (`.mapCard`) ichida. Koordinata bo'lmasa umuman ko'rsatilmaydi. */}
+        {mapOrigin && (
+          <div className={styles.mapCard}>
+            <OrderRouteMap
+              origin={mapOrigin}
+              destination={mapDestination}
+              driverLocation={coords}
+            />
+          </div>
+        )}
+
+        {/* Mashina sig'imidan oshgani — buyurtmani yaratishda hisoblanadi
+            (`overload_warning`). Haydovchi yo'lga chiqishdan OLDIN bilishi kerak:
+            ortiqcha yuk bilan yo'l nazoratida muammo bo'ladi. */}
+        {order.overload_warning && (
+          <div className={styles.warningBanner}>{order.overload_warning}</div>
+        )}
 
         <div className={styles.cargoCard}>
           <div className={styles.cargoName}>{order.cargo_name}</div>
           <div className={styles.cargoMeta}>
             <span className={styles.metaChip}><WeightIcon /> {order.weight} t</span>
+            {/* Hajm — og'irlik yetarli bo'lsa ham yuk kuzovga sig'masligi mumkin. */}
+            {order.volume != null && (
+              <span className={styles.metaChip}>{order.volume} m³</span>
+            )}
             {order.total_distance_km != null && (
               <span className={styles.metaChip}>≈ {Math.round(order.total_distance_km)} km</span>
             )}
@@ -170,6 +246,30 @@ export function DriverActiveOrderPage() {
               </span>
             )}
           </div>
+          {/* Yuk ortish vaqti — haydovchi uchun eng muhim ma'lumot va shu paytgacha
+              ekranda UMUMAN yo'q edi. `describePickupAt` "Bugun 14:30" / "Ertaga
+              09:00" ko'rinishida beradi (utils/pickupTime.ts) — sana o'rniga shu
+              yozuv bir qarashda tushunarli. */}
+          <div className={styles.timeRow}>
+            <ClockIcon size={15} color="var(--color-accent-pressed)" />
+            <span className={styles.timeLabel}>Yuk ortish</span>
+            <span className={styles.timeValue}>
+              {describePickupAt(new Date(order.pickup_at))}
+            </span>
+          </div>
+
+          {/* Jo'nash vaqti odatda yuk ortish vaqti bilan bir xil; farq qilgandagina
+              ko'rsatiladi, aks holda bir xil vaqt ikki marta yozilib chalkashtirardi. */}
+          {order.departure_at && order.departure_at !== order.pickup_at && (
+            <div className={styles.timeRow}>
+              <RouteIcon size={15} color="var(--color-text-secondary)" />
+              <span className={styles.timeLabel}>Jo'nash</span>
+              <span className={styles.timeValue}>
+                {describePickupAt(new Date(order.departure_at))}
+              </span>
+            </div>
+          )}
+
           <div className={styles.priceRow}>
             <span className={styles.priceLabel}>To'lov</span>
             <span className={styles.price}>{formatPrice(order.price)} {order.currency}</span>
@@ -195,11 +295,32 @@ export function DriverActiveOrderPage() {
                     )}
                   </div>
                   <div className={styles.checkpointAddress}>{wp.address ?? 'Manzil ko’rsatilmagan'}</div>
-                  {wp.contact_phone && (
-                    <a className={styles.miniCall} href={`tel:${wp.contact_phone}`}>
-                      <PhoneIcon size={13} color="var(--color-accent-pressed)" /> {wp.contact_name ?? wp.contact_phone}
-                    </a>
-                  )}
+
+                  <div className={styles.checkpointActions}>
+                    {wp.contact_phone && (
+                      <a className={styles.miniCall} href={`tel:${wp.contact_phone}`}>
+                        <PhoneIcon size={13} color="var(--color-accent-pressed)" /> {wp.contact_name ?? wp.contact_phone}
+                      </a>
+                    )}
+                    {/* "Yo'l ko'rsat" — faqat hali borilmagan nuqtalarda. O'tib
+                        bo'lingan nuqtaga navigatsiyaning ma'nosi yo'q va tugmalar
+                        ro'yxatni keraksiz to'ldirardi. */}
+                    {!isWaypointDone(wp) && !isDone && !isCancelled && (() => {
+                      const url = navigationUrlFor(order, wp, coords);
+                      if (!url) return null;
+                      return (
+                        <a
+                          className={styles.navBtn}
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <RouteIcon size={13} color="var(--color-accent-pressed)" /> Yo'l ko'rsat
+                        </a>
+                      );
+                    })()}
+                  </div>
+
                   {/* Tasdiqlangan qadamlar: qachon va qanchalik yaqindan belgilangani —
                       haydovchi uchun ham, nizo holatida admin uchun ham ochiq ma'lumot. */}
                   {wp.completed_at && (
@@ -224,9 +345,24 @@ export function DriverActiveOrderPage() {
             <div className={styles.customerCard}>
               <div className={styles.customerInfo}>
                 <div className={styles.customerName}>{order.sender_contact.full_name}</div>
-                <div className={styles.customerPhone}>
-                  {order.sender_contact.phone_number ?? 'Telefon ko’rsatilmagan'}
-                </div>
+                {/* Telefon raqamining O'ZI ham bosiladigan bo'ldi — ilgari faqat
+                    yondagi ikonka ishlardi va raqamni bosgan haydovchi hech narsa
+                    bo'lmaganidan hayron qolardi. */}
+                {order.sender_contact.phone_number ? (
+                  <a
+                    className={styles.customerPhone}
+                    href={`tel:${order.sender_contact.phone_number}`}
+                  >
+                    {order.sender_contact.phone_number}
+                  </a>
+                ) : (
+                  <div className={styles.customerPhone}>Telefon ko’rsatilmagan</div>
+                )}
+                {/* Telegram username — ilgari faqat ikonka bor edi, ya'ni haydovchi
+                    kimga yozayotganini ko'rmasdi. */}
+                {order.sender_contact.username && (
+                  <div className={styles.customerUsername}>@{order.sender_contact.username}</div>
+                )}
               </div>
               <div className={styles.customerActions}>
                 {order.sender_contact.phone_number && (

@@ -15,7 +15,8 @@ COMPOSE_MON  := docker compose -f docker-compose.monitoring.yml
 .DEFAULT_GOAL := help
 .PHONY: help fe dev up down logs ps fe-logs fe-restart fe-rebuild fe-install fe-add fe-shell fe-build fe-lint prod-up prod-down \
         worker-logs worker-restart worker-scale mq-ui support-logs support-ui support-db events-logs migrate test \
-        mon-up mon-down mon-restart mon-ps mon-logs mon-collectors mon-alert-test mon-tunnel
+        mon-up mon-down mon-restart mon-ps mon-logs mon-collectors mon-alert-test mon-tunnel \
+        prod-local prod-smoke prod-logs prod-ps prod-migrate prod-shell deploy
 
 help: ## Shu ro'yxatni ko'rsatadi
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -107,11 +108,38 @@ fe-lint: ## oxlint (host'da)
 
 # ── Ishlab chiqarish ────────────────────────────────────────────────────────
 
-prod-up: ## Prod stack (frontend = nginx + statik dist, :8080)
+prod-up: ## Prod stack (Caddy HTTPS + nginx + statik dist). .env da DOMAIN kerak
 	$(COMPOSE_PROD) up -d --build
 
-prod-down: ## Prod stack'ni to'xtatish
+prod-down: ## Prod stack'ni to'xtatish (volume'lar saqlanadi)
 	$(COMPOSE_PROD) down
+
+prod-local: ## AYNAN prod stack'ni lokalda sinash (DOMAIN=localhost, o'z-o'zini imzolagan TLS)
+	@echo "Caddy 'localhost' uchun ichki sertifikat beradi — brauzer/curl da -k kerak."
+	# 5433: ishlab chiquvchining mashinasida ko'pincha o'z Postgres'i 5432 da turadi.
+	DOMAIN=localhost DB_HOST_PORT=$(if $(db_port),$(db_port),5433) $(COMPOSE_PROD) up -d --build
+	@echo ""
+	@echo "  https://localhost/            — SPA"
+	@echo "  https://localhost/api/health  — backend"
+	@echo "  Tekshirish:  make prod-smoke"
+
+prod-smoke: ## Ko'tarilgan prod stack'ni tashqaridan tekshirish (curl)
+	@bash scripts/prod-smoke.sh
+
+prod-ps: ## Prod xizmatlari holati (qaysi portlar ochiq ekanini ham ko'rsatadi)
+	$(COMPOSE_PROD) ps
+
+prod-logs: ## Prod loglari (Ctrl-C bilan chiqish)
+	$(COMPOSE_PROD) logs -f
+
+prod-migrate: ## Migratsiyani qayta ishga tushirish (odatda deploy'da o'zi bajariladi)
+	$(COMPOSE_PROD) run --rm migrate
+
+prod-shell: ## Prod backend konteyneri ichiga kirish
+	$(COMPOSE_PROD) exec web bash
+
+deploy: ## Serverda deploy/yangilash (tekshiruvlar + build + up + healthcheck)
+	@./scripts/server-deploy.sh
 
 # ── Monitoring (Netdata + Dockge) ───────────────────────────────────────────
 #

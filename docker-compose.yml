@@ -194,6 +194,10 @@ services:
       # Support alohida mikroservis — compose tarmog'ida "support" nomi bilan 8000-portda
       # (tashqariga 8010 sifatida chiqadi). Vite `/support` ni shu manzilga uzatadi.
       - VITE_DEV_SUPPORT_TARGET=http://support:8000
+      # Buyurtma sahifasidagi Leaflet xaritasi marshrutni brauzerdan so'raydi
+      # (`/osrm/...`), Vite esa uni OSRM konteyneriga uzatadi. Konteyner ichida
+      # port 5000 (tashqi 5001 emas).
+      - VITE_DEV_OSRM_TARGET=http://osrm:5000
       - VITE_API_BASE_URL=/api
       - TZ=Asia/Tashkent
     restart: unless-stopped

@@ -219,11 +219,14 @@ Qo'shilgan proxy:
 ```nginx
 # Frontend/nginx.conf — prod
 location /support/ {
-    proxy_pass http://host.docker.internal:8010/support/;
+    # Upstream compose tarmog'idagi xizmat nomi orqali beriladi. `$request_uri`
+    # SHART: proxy_pass'da o'zgaruvchi bo'lganda nginx location prefiksini
+    # almashtirmaydi va URI yozib qo'yilsa yo'lning qolgan qismi yo'qoladi.
+    proxy_pass $support_backend$request_uri;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Proto $fwd_proto;
 }
 ```
 
@@ -308,7 +311,7 @@ flowchart TB
     BR["Brauzer / Mini App"]
   end
 
-  EDGE["frontend konteyneri<br/>nginx (prod :8080) yoki Vite (dev :5173)"]
+  EDGE["frontend konteyneri<br/>nginx (prod, oldida Caddy :443) yoki Vite (dev :5173)"]
 
   subgraph yadro ["Asosiy image (bitta Dockerfile)"]
     WEB["web :8000 — FastAPI<br/>/auth /orders /drivers /manager /system"]
@@ -474,8 +477,11 @@ cp .env.example .env      # BOT_TOKEN, SECRET_KEY, DB_PASSWORD, ADMIN to'ldirila
 make up                   # hamma konteynerlar
 make migrate              # alembic upgrade head
 make fe                   # faqat frontend (dev)
-make prod-up              # prod rejim (nginx + statik build)
+make prod-local           # AYNAN prod stack'ni lokalda sinash (Caddy + HTTPS)
+make prod-smoke           # ko'tarilgan prod stack'ni tashqaridan tekshirish
 ```
+
+Serverga chiqarish → **[docs/DEPLOY.md](DEPLOY.md)** (`make deploy`).
 
 Foydali: `make logs`, `make worker-logs`, `make support-logs`, `make events-logs`,
 `make mq-ui` (RabbitMQ boshqaruvi :15672), `make test`.
@@ -522,7 +528,11 @@ Shu bilan birga ikkita infratuzilma xatosi tuzatildi:
   `tests/test_event_contract.py` yiqiladi. Bu ataylab.
 - `support_service/` ichidan asosiy loyihaning modullarini import qilmang — Docker
   image'da ular yo'q.
-- `nginx.conf` `host.docker.internal:8000` ga boradi, ya'ni **host mashinadagi**
-  backendga. Shuning uchun prod compose faylida `extra_hosts: host-gateway` bor.
+- `nginx.conf` upstream'lari compose tarmog'idagi xizmat nomlari (`web:8000`,
+  `support:8000`, `osrm:5000`) va hammasi **o'zgaruvchi + `resolver`** orqali
+  beriladi — shunda xizmat hali ko'tarilmagan bo'lsa ham nginx yiqilmaydi.
+  O'zgaruvchi ishlatilganda `proxy_pass` ga URI yozib bo'lmaydi (nginx location
+  prefiksini almashtirmay qo'yadi va yo'l yo'qoladi) — shuning uchun
+  `$request_uri`. Buni `scripts/prod-smoke.sh` alohida tekshiradi.
 - Menejer roli uchun `b2f7c1a94d03_manager_role` migratsiyasi qo'llanilgan bo'lishi
   shart (`userrole` enum'iga `manager` qo'shadi).

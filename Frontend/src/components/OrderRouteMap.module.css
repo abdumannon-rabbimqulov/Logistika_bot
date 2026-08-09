@@ -1,0 +1,79 @@
+.container {
+  width: 100%;
+  height: 100%;
+  /* Leaflet plitkalar yuklanguncha kulrang fon — oq "miltillash" bo'lmasin. */
+  background: var(--color-gray-50);
+}
+
+/* Leaflet Routing Machine standart holda xaritaning o'ng tomonida "yo'nalishlar"
+   ro'yxatini (har bir burilish uchun matn) ko'rsatadi. Bizga faqat chiziq kerak:
+   sahifada allaqachon bosqichlar ro'yxati bor va telefon ekranida bu panel
+   xaritaning yarmini yopib qo'yardi. `show: false` bilan birga CSS ham beriladi —
+   ba'zi hodisalarda (masalan marshrut qayta hisoblanganda) panel o'zini qayta
+   ko'rsatib yuboradi. */
+.container :global(.leaflet-routing-container) {
+  display: none;
+}
+
+/* Yuk ortish / yetkazish belgilari. `L.divIcon` ishlatilgani uchun bular oddiy
+   div — Leaflet'ning standart PNG belgisi EMAS. Sabab: standart belgi rasm
+   yo'lini `L.Icon.Default` ichida qattiq yozadi va Vite bundle'ida u 404 beradi
+   (klassik "marker-icon.png topilmadi" muammosi). divIcon bu muammoni butunlay
+   chetlab o'tadi va sahifa ranglariga mos tushadi. */
+.marker {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-sizing: border-box;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 35%);
+}
+
+.markerOrigin {
+  background: #15803d;
+}
+
+.markerDestination {
+  background: #dc2626;
+}
+
+/* Haydovchining jonli nuqtasi — atrofida "puls" halqasi bilan, shunda statik
+   A/B belgilaridan darhol ajralib turadi. */
+.markerDriver {
+  background: #2563eb;
+  animation: pulse 1.8s ease-out infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 1px 4px rgb(0 0 0 / 35%), 0 0 0 0 rgb(37 99 235 / 45%);
+  }
+  70% {
+    box-shadow: 0 1px 4px rgb(0 0 0 / 35%), 0 0 0 12px rgb(37 99 235 / 0%);
+  }
+  100% {
+    box-shadow: 0 1px 4px rgb(0 0 0 / 35%), 0 0 0 0 rgb(37 99 235 / 0%);
+  }
+}
+
+/* Harakatni o'chirishni so'ragan foydalanuvchilar uchun (tizim sozlamasi). */
+@media (prefers-reduced-motion: reduce) {
+  .markerDriver {
+    animation: none;
+  }
+}
+
+.error {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 1000;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 95%);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  text-align: center;
+}

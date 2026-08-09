@@ -28,3 +28,19 @@ osrm-data/
 **/node_modules/
 **/dist/
 **/build/
+
+# ── Backend image'iga kerak bo'lmagan katta/begona papkalar ──────────────────
+# `.claude/` ichida loyihaning to'liq git worktree NUSXASI bor (o'nlab MB) —
+# u build context'ga tushsa image ikki marta kattalashadi.
+.claude/
+# Frontend butunlay alohida image (Frontend/Dockerfile, o'z konteksti bilan).
+Frontend/
+docs/
+tests/
+monitoring/
+design_handoff_yuk_asosiy_ekranlar/
+# Prod'da bu papkaga named volume ulanadi; image ichidagi nusxa baribir yopiladi,
+# lekin build context'ni bekorga ~7 MB ga oshiradi.
+uploads/
+.pytest_cache/
+scripts/__pycache__/

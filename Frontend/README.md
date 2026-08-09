@@ -24,7 +24,7 @@ Vite `/api` so'rovlarini `web:8000` ga proxy qiladi, shuning uchun backendni key
 | Rejim | Buyruq | Port | Nima beradi | Kod o'zgarganda |
 |-------|--------|------|-------------|-----------------|
 | **dev** | `make fe` | **5173** | Vite dev serveri | **HMR — darhol aks etadi** |
-| prod | `make prod-up` | 8080 | nginx + statik `dist/` | qayta build kerak |
+| prod | `make prod-up` | — (oldida Caddy: 443) | nginx + statik `dist/` | qayta build kerak |
 
 Ikkalasi ham bitta `frontend` xizmatining ikki rejimi (`docker-compose.yml` va uning ustidagi
 `docker-compose.prod.yml`), shuning uchun ular bir vaqtda ishlamaydi — chalkashlik yo'q.
@@ -85,13 +85,20 @@ npm run build          # yoki host'da
 Server uchun repo ildizidan:
 
 ```bash
-make prod-up           # docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+make deploy            # serverda: tekshiruvlar + build + up + healthcheck
+make prod-local        # kompyuterda: aynan o'sha stack, DOMAIN=localhost
 ```
 
-Bu `frontend` xizmatini nginx rejimida quradi (`Frontend/Dockerfile`) va `${FRONTEND_PORT:-8080}`
-da ochadi. `VITE_API_BASE_URL` build vaqtida bundle'ga "quyiladi" (Vite env'lari runtime'da
-o'qilmaydi) — backend manzili o'zgarsa `--build` bilan qayta quring. Qiymatlar repo ildizidagi
-`.env` dan olinadi (`FRONTEND_PORT`, `VITE_API_BASE_URL` — namuna `.env.example` da).
+To'liq qo'llanma: [docs/DEPLOY.md](../docs/DEPLOY.md).
+
+Bu `frontend` xizmatini nginx rejimida quradi (`Frontend/Dockerfile`). Konteyner
+tashqariga port ochmaydi — oldida Caddy turadi va HTTPS'ni (Let's Encrypt, avtomatik)
+u ta'minlaydi. nginx esa `/api`, `/support`, `/static` va `/osrm` ni compose
+tarmog'idagi tegishli xizmatlarga uzatadi.
+
+`VITE_API_BASE_URL` build vaqtida bundle'ga "quyiladi" (Vite env'lari runtime'da
+o'qilmaydi) — backend manzili o'zgarsa `--build` bilan qayta quring. Qiymatlar repo
+ildizidagi `.env` dan olinadi (namuna `.env.example` da).
 
 Frontend HTTPS orqali ochilishi va bot'dagi `WEBAPP_URL` (`.env`, repo ildizida) o'sha manzilga
 ishora qilishi kerak — Telegram WebApp tugmasi faqat HTTPS bilan ishlaydi.

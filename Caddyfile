@@ -1,0 +1,46 @@
+# Caddy — HTTPS terminatori (docker-compose.prod.yml dagi `caddy` xizmati).
+#
+# Nima uchun kerak: Telegram Mini App faqat HTTPS manzilni qabul qiladi
+# (main.py `_setup_menu_button` WEBAPP_URL https bo'lmasa menyu tugmasini
+# umuman o'rnatmaydi). Caddy Let's Encrypt sertifikatini o'zi oladi va
+# muddati tugashidan oldin o'zi yangilaydi — certbot/cron kerak emas.
+#
+# TALAB: {$DOMAIN} uchun DNS A-yozuvi shu serverning IP manziliga
+# yo'naltirilgan bo'lishi SHART, aks holda Let's Encrypt tekshiruvi
+# (HTTP-01) o'tmaydi va domen ochilmaydi. Batafsil: docs/DEPLOY.md
+#
+# LOKAL SINOV: `DOMAIN=localhost` bo'lsa Caddy Let's Encrypt'ga umuman
+# chiqmaydi — o'zining ichki CA'si bilan sertifikat beradi. Shuning uchun
+# `make prod-local` hech qanday qo'shimcha sozlashsiz https'da ishlaydi
+# (brauzer/curl uchun `-k` kerak bo'ladi).
+# Global sozlamalar. Pochta ATAYLAB shu yerda, sayt bloki ichidagi `tls`
+# direktivasida emas: `tls <email>` ACME'ni MAJBURAN yoqadi va `DOMAIN=localhost`
+# bilan lokal sinov buzilardi. Global `email` esa shunchaki qayd bo'lib qoladi —
+# Caddy `localhost` uchun baribir o'zining ichki CA'sini tanlaydi.
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode gzip zstd
+
+	# Butun trafik frontend konteyneriga (nginx + statik dist) beriladi.
+	# API, /support, /static va /osrm marshrutlash o'sha yerda, bitta joyda
+	# hal qilinadi (Frontend/nginx.conf) — bu yerda takrorlash shart emas.
+	#
+	# WebSocket (haydovchi GPS oqimi, jonli xarita) alohida sozlashsiz ishlaydi:
+	# Caddy Upgrade so'rovlarini avtomatik uzatadi.
+	#
+	# `X-Forwarded-For` / `X-Forwarded-Proto` sarlavhalarini ham Caddy o'zi qo'yadi.
+	reverse_proxy frontend:80 {
+		# Jonli oqimlar (WS) uzoq ochiq turadi — standart timeout ularni uzmasin.
+		transport http {
+			read_timeout 3600s
+		}
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

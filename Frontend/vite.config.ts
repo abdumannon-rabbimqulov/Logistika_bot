@@ -10,6 +10,12 @@ const API_TARGET = process.env.VITE_DEV_API_TARGET || 'http://localhost:8000'
 // "support" nomi bilan 8000-portda, host'dan esa 8010-portda ochiq (SUPPORT_SERVICE_PORT).
 const SUPPORT_TARGET = process.env.VITE_DEV_SUPPORT_TARGET || 'http://localhost:8010'
 
+// OSRM — marshrut hisoblash. Buyurtma sahifasidagi Leaflet xaritasi (Leaflet Routing
+// Machine) OSRM'ni BRAUZERDAN chaqiradi, shuning uchun unga nisbiy `/osrm` yo'li
+// kerak. Docker tarmog'ida "osrm" nomi bilan 5000-portda, host'dan esa 5001-portda
+// ochiq (docker-compose.yml da AirPlay bilan urishmasligi uchun 5001 qilingan).
+const OSRM_TARGET = process.env.VITE_DEV_OSRM_TARGET || 'http://localhost:5001'
+
 // ngrok orqali ishlatishda `VITE_TUNNEL=1 npm run dev` deb yoqiladi. Faqat shu holatda
 // HMR websocket'i 443-portga (ngrok HTTPS) yo'naltiriladi. Oddiy local `npm run dev` da
 // buni YOQMASLIK kerak — aks holda brauzer wss://localhost:443 ga urinib, HMR buziladi.
@@ -60,6 +66,15 @@ export default defineConfig({
       '/static': {
         target: API_TARGET,
         changeOrigin: true,
+      },
+      // Leaflet Routing Machine `/osrm/route/v1/driving/<koordinatalar>` ni so'raydi.
+      // OSRM esa yo'lni prefiksiz kutadi (`/route/v1/driving/...`), shuning uchun
+      // `/osrm` bo'lagi olib tashlanadi. Prod'da xuddi shu ish nginx'da qilinadi
+      // (Frontend/nginx.conf) — ikkala muhitda frontend uchun yo'l bir xil.
+      '/osrm': {
+        target: OSRM_TARGET,
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/osrm/, ''),
       },
     },
     // Docker'da fayl hodisalari uchun polling (yuqoridagi izohga qarang).
